@@ -2,6 +2,7 @@ Package for building and querying FastBit indexes for the Iris toolkit.
 
 INSTALLATION
 ============
+git submodule update
 ./configure
 make
 make install

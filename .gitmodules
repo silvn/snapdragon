@@ -1,0 +1,3 @@
+[submodule "src/fastbit"]
+	path = src/fastbit
+	url = https://github.com/gingi/fastbit

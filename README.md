@@ -1,9 +1,8 @@
-Package for building and querying FastBit indexes for the Iris toolkit.
+FastBit tools for biological applications.
 
 INSTALLATION
 ============
-git submodule init
-git submodule update
-./configure --prefix `pwd`/bin
-make
-make install
+	git submodule update --init
+	./configure
+	make
+	make install

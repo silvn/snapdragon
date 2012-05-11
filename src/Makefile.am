@@ -4,4 +4,4 @@ SUFFIXES = .cpp
 CC = g++
 CPPFLAGS = -Ifastbit/src
 LDFLAGS  = -Lfastbit/src/.libs -Wl,-rpath,$(libdir)
-LIBS = -lfastbit -lm
+LIBS = -lfastbit -lm -lboost_thread-mt

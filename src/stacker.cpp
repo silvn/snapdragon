@@ -3,6 +3,8 @@
 #include <boost/thread.hpp>
 using namespace std;
 
+boost::thread_group g;
+
 // printout the usage string
 static void usage(const char* name) {
   cout << "usage:\n" << name << endl
@@ -79,32 +81,38 @@ const char* listToStr(ibis::array_t<const char*> list) {
 	return str.c_str();
 }
 
-ibis::table* pSelect(const char* sel, const char* from, const char* qcnd) {
+void pSelect(const char* sel, const char* from, const char* qcnd) {
 	ibis::table* tbl = ibis::table::create(from);
 	if ((qcnd == 0 || *qcnd == 0))
 		qcnd = "1=1";
 	if ((sel == 0 || *sel == 0))
 		sel = listToStr(tbl->columnNames());
-	cout << "select " << sel << " from " << tbl->name() << " where " << qcnd << endl;
+	cout << "select " << sel << " from " << from << " where " << qcnd << endl;
 
 	ibis::table* res = tbl->select(sel,qcnd);
 	delete tbl;
-	return res;
+	delete res;
 }
 
 void pSelect(const char* sel, const char* from, const char* qcnd, int threads) {
-	ibis::table* tbl = ibis::table::create(from);
+	ibis::table* ftbl = ibis::table::create(from);
+	if ((qcnd == 0 || *qcnd == 0))
+		qcnd = "1=1";
+	if ((sel == 0 || *sel == 0))
+		sel = listToStr(ftbl->columnNames());
 	vector<const ibis::part*> parts;
-	tbl->getPartitions(parts);
+	ftbl->getPartitions(parts);
 	for(size_t i= 0; i< parts.size(); ++i) {
 		string part_dir = from;
 		part_dir.append("/");
 		part_dir.append(parts[i]->getMetaTag("FBchr"));
-		ibis::table* part_res = pSelect(sel, part_dir.c_str(), qcnd);
-		delete part_res;
+		cout << "calling pSelect sel='" << sel <<"', from='" << part_dir.c_str() << "', qcnd='" << qcnd << "'" << endl;
+//		pSelect(sel, part_dir.c_str(), qcnd);
+		g.create_thread(boost::bind(pSelect, sel, part_dir.c_str(), qcnd)); 
 	}
+	g.join_all();
 	
-	delete tbl;
+	delete ftbl;
 }
 
 int main(int argc, char** argv) {
@@ -121,10 +129,8 @@ int main(int argc, char** argv) {
 		pSelect(sel1,tbl1,qcnd1,threads);
 		pSelect(sel2,tbl2,qcnd2,threads);
 	} else {
-		ibis::table* res1 = pSelect(sel1,tbl1,qcnd1);
-		ibis::table* res2 = pSelect(sel2,tbl2,qcnd2);
-		delete res1;
-		delete res2;
+		pSelect(sel1,tbl1,qcnd1);
+		pSelect(sel2,tbl2,qcnd2);
 	}
     return 0;
 } // main

@@ -5,6 +5,7 @@ AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 AC_LANG_PUSH([C++])
 AC_CHECK_HEADERS([boost/foreach.hpp], [],
     [AC_MSG_ERROR(You need the Boost libraries.)])
+AM_CONDITIONAL([MACOS], [test "$(uname -s)" = "Darwin"])
 AC_LANG_POP([C++])
 # Options to configure.
 # Boost

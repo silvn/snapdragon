@@ -4,4 +4,9 @@ SUFFIXES = .cpp
 CC = g++
 CPPFLAGS = -Ifastbit/src
 LDFLAGS  = -Lfastbit/src/.libs -Wl,-rpath,$(libdir)
-LIBS = -lfastbit -lm -lboost_thread-mt
+LIBS = -lfastbit -lm
+if MACOS
+stacker_LIBS = $(LIBS) -lboost_thread-mt
+else
+stacker_LIBS = $(LIBS) -lboost_thread
+endif

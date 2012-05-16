@@ -120,7 +120,7 @@ INSTALL_SCRIPT = @INSTALL_SCRIPT@
 INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
 LDFLAGS = -Lfastbit/src/.libs -Wl,-rpath,$(libdir)
 LIBOBJS = @LIBOBJS@
-LIBS = -lfastbit -lm -lboost_thread-mt
+LIBS = -lfastbit -lm
 LTLIBOBJS = @LTLIBOBJS@
 MAKEINFO = @MAKEINFO@
 MKDIR_P = @MKDIR_P@
@@ -181,6 +181,8 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 SUBDIRS = fastbit
 SUFFIXES = .cpp
+@MACOS_FALSE@stacker_LIBS = $(LIBS) -lboost_thread
+@MACOS_TRUE@stacker_LIBS = $(LIBS) -lboost_thread-mt
 all: all-recursive
 
 .SUFFIXES:

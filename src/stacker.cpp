@@ -156,7 +156,7 @@ void parse_args(int argc, char** argv) {
 	  << std::endl;
 } // parse_args
 
-void Stacker(ibis::part* Apart, ibis::part* Bpart, ibis::bitvector Amask, ibis::bitvector Bmask, int before, int after) {
+void Stacker(const ibis::part* Apart, const ibis::part* Bpart, ibis::bitvector Amask, ibis::bitvector Bmask, int before, int after) {
 	// by the time this function is called it doesn't have to worry about
 	// strand, just intervals
 	
@@ -181,7 +181,7 @@ void Stacker(ibis::part* Apart, ibis::part* Bpart, ibis::bitvector Amask, ibis::
 
 }
 
-void getHits(ibis::part* part, ibis::bitvector* mask,
+void getHits(const ibis::part* part, ibis::bitvector* mask,
 	 const ibis::qExpr* cond, const char* colName) {
 	if (cond != 0) {
 		ibis::countQuery que(part);
@@ -195,7 +195,7 @@ void getHits(ibis::part* part, ibis::bitvector* mask,
 	}
 }
 
-void splitByStrand(ibis::part* part, ibis::bitvector* mask, ibis::bitvector* plus, ibis::bitvector* minus) {
+void splitByStrand(const ibis::part* part, ibis::bitvector* mask, ibis::bitvector* plus, ibis::bitvector* minus) {
 	ibis::countQuery que(part);
 	int ierr = que.setWhereClause(senseExpr);
 	ierr = que.evaluate();
@@ -206,26 +206,18 @@ void splitByStrand(ibis::part* part, ibis::bitvector* mask, ibis::bitvector* plu
 	*minus &= *mask;
 }
 
-void setupStacker(const char* chr) {
+void setupStacker(const ibis::part* Apart, const ibis::part* Bpart) {
 	// do some checks
 	// count hits to A and B on this chr
 	// make masks based on Aqcnd and Bqcnd
- 	std::string Apart_dir = Afrom;
- 	Apart_dir.append("/");
- 	Apart_dir.append(chr);
- 	ibis::part Apart(Apart_dir.c_str(),false);
     ibis::bitvector Amask;
-	getHits(&Apart, &Amask, Acond, Astart);
+	getHits(Apart, &Amask, Acond, Astart);
 	
 	std::cerr << "Amask.cnt() = " << Amask.cnt() << std::endl;
 	if (Amask.cnt() == 0) return;
 	
- 	std::string Bpart_dir = Bfrom;
- 	Bpart_dir.append("/");
- 	Bpart_dir.append(chr);
- 	ibis::part Bpart(Bpart_dir.c_str(),false);
     ibis::bitvector Bmask;
-	getHits(&Bpart, &Bmask, Bcond, Bstart);
+	getHits(Bpart, &Bmask, Bcond, Bstart);
 
 	std::cerr << "Bmask.cnt() = " << Bmask.cnt() << std::endl;
 	if (Bmask.cnt() == 0) return;
@@ -236,18 +228,18 @@ void setupStacker(const char* chr) {
 		// update the masks (Aplus, Aminus, Bplus, Bminus)
 		ibis::bitvector Aplus;
 		ibis::bitvector Aminus;
-		splitByStrand(&Apart, &Amask, &Aplus, &Aminus);
+		splitByStrand(Apart, &Amask, &Aplus, &Aminus);
 		
 		ibis::bitvector Bplus;
 		ibis::bitvector Bminus;
-		splitByStrand(&Bpart, &Bmask, &Bplus, &Bminus);
+		splitByStrand(Bpart, &Bmask, &Bplus, &Bminus);
 
-		Stacker(&Apart, &Bpart, Aplus, Bplus, left, right);
+		Stacker(Apart, Bpart, Aplus, Bplus, left, right);
 		if (stranded_windows>0) {
-			Stacker(&Apart, &Bpart, Aminus, Bminus, right, left);
+			Stacker(Apart, Bpart, Aminus, Bminus, right, left);
 		}
 		else {
-			Stacker(&Apart, &Bpart, Aminus, Bminus, left, right);
+			Stacker(Apart, Bpart, Aminus, Bminus, left, right);
 		}
 	}
 	else {
@@ -257,12 +249,12 @@ void setupStacker(const char* chr) {
 			// update the masks (Aplus, Aminus)
 			ibis::bitvector Aplus;
 			ibis::bitvector Aminus;
-			splitByStrand(&Apart, &Amask, &Aplus, &Aminus);
-			Stacker(&Apart, &Bpart, Aplus, Bmask, left, right);
-			Stacker(&Apart, &Bpart, Aminus, Bmask, right, left);
+			splitByStrand(Apart, &Amask, &Aplus, &Aminus);
+			Stacker(Apart, Bpart, Aplus, Bmask, left, right);
+			Stacker(Apart, Bpart, Aminus, Bmask, right, left);
 		}
 		else {
-			Stacker(&Apart, &Bpart, Amask, Bmask, left, right);
+			Stacker(Apart, Bpart, Amask, Bmask, left, right);
 		}
 	}
 }
@@ -289,7 +281,28 @@ int main(int argc, char** argv) {
     for (size_t i = 0; i < Bnames.size(); ++ i) {
 		Bnaty.insert(std::pair<const char*,ibis::TYPE_T>(Bnames[i],Btypes[i]));
 	}
+	std::vector<const ibis::part*> Bparts;
+	B->getPartitions(Bparts);
 
+	std::map<const char*,const ibis::part*> Bpartmap;	
+	for(size_t i=0; i<Bparts.size(); ++ i)
+		Bpartmap.insert(std::pair<const char*,const ibis::part*>(Bparts[i]->getMetaTag("FBchr"),Bparts[i]));
+	std::vector<const ibis::part*> Aparts;
+	A->getPartitions(Aparts);
+	boost::thread_group g;
+	for(size_t i=0; i<Aparts.size(); ++ i) {
+		const char* chr = Aparts[i]->getMetaTag("FBchr");
+		if (Bpartmap.count(chr)>0) {
+			if (parallelize > 0)
+				g.create_thread(boost::bind(setupStacker, Aparts[i], Bpartmap.find(chr)->second));
+			else
+				setupStacker(Aparts[i],Bpartmap.find(chr)->second);
+		}
+	}
+	if (parallelize > 0)
+		g.join_all();
+	
+/*
 	// fetch all the FBchr names from table A
 	ibis::table* FBchr = A->select("FBchr,count(*)",Acond);
 	const size_t nr = static_cast<size_t>(FBchr->nRows());
@@ -310,12 +323,12 @@ int main(int argc, char** argv) {
 	}
 	if (parallelize > 0)
 		g.join_all();
+*/
 	// concatenate each part into one table?
 	// orderby()
 
 	// write the table out - need to generate a FBchr metaTag based on FBset l, r, sw, sm
 	
-	delete FBchr;
 	delete A;
 	delete B;
     return 0;

@@ -1,32 +1,60 @@
 #include "ibis.h"
+#include <map>
 #include <string>
 #include <boost/thread.hpp>
 
-// had to make these global because boost::bind is limited to 9 args
+// had to make these global
 const char* Afrom = 0;
 const char* Aqcnd="1=1";
-const char* Asel="start,end,strand";
+const char* Asel="";
+const char* Astart="start";
+const char* Aend = "end";
+ibis::table::stringList Anames;
+ibis::table::typeList Atypes;
+std::map<const char*,ibis::TYPE_T> Anaty;
+ibis::qExpr* Acond=0;
+
 const char* Bfrom = 0;
 const char* Bqcnd="1=1";
-const char* Bsel="start,end,strand";
+const char* Bsel="";
+const char* Bstart="start";
+const char* Bend = "end";
+ibis::table::stringList Bnames;
+ibis::table::typeList Btypes;
+std::map<const char*,ibis::TYPE_T> Bnaty;
+ibis::qExpr* Bcond=0;
+
 int left=1000;
 int right=1000;
 int same_strand=0;
 int stranded_windows=0;
+int bins=0;
+
+int parallelize=0;
+
+ibis::whereClause senseWhere = ibis::whereClause("strand == 1");
+ibis::qExpr* senseExpr = senseWhere.getExpr();
+
 
 // printout the usage string
 static void usage(const char* name) {
   std::cout << "usage:\n" << name << std::endl
 	    << "[-d1 directory containing A dataset] " << std::endl
-	    << "[-s1 select string for A]" << std::endl
+	    << "[-c1 columns from A]" << std::endl
 	    << "[-w1 where-clause for A]" << std::endl
+		<< "[-s1 start column from A]" << std::endl
+		<< "[-e1 end column from A]" << std::endl
 	    << "[-d2 directory containing B dataset] " << std::endl
-	    << "[-s2 select string for B]" << std::endl
+	    << "[-c2 columns from B]" << std::endl
 	    << "[-w2 where-clause for B]" << std::endl
+		<< "[-s2 start column from B]" << std::endl
+		<< "[-e2 end column from B]" << std::endl
 		<< "[-l bases to the left of A features]" << std::endl
 		<< "[-r bases to the right of A features]" << std::endl
 		<< "[-sm only report hits in B that overlap A on the same strand]" << std::endl
-		<< "[-sw define -l and -r based on strand]" << std::endl;
+		<< "[-sw define -l and -r based on strand]" << std::endl
+		<< "[-b number of bins to use for normalization after stacking. default: don't normalize]" << std::endl
+		<< "[-p parallelize using threads]" << std::endl;
 } // usage
 
 // function to parse the command line arguments
@@ -40,6 +68,15 @@ void parse_args(int argc, char** argv) {
 	      case 'H':
 			usage(*argv);
 			exit(0);
+		  case 'p':
+			  parallelize=1;
+			  break;
+  		  case 'b':
+  			  if(i+1 < argc) {
+  				  ++i;
+  				  bins = atoi(argv[i]);
+  			  }
+  			  break;
 		  case 'l':
 			  if(i+1 < argc) {
 				  ++i;
@@ -55,132 +92,231 @@ void parse_args(int argc, char** argv) {
 	      case 'd':
 	      case 'D':
 			if (i+1 < argc) {
-			  if (argv[i++][2] == '1')
-				  Afrom = argv[i];
+			  if (argv[i][2] == '1')
+				  Afrom = argv[++i];
 			  else
-				  Bfrom = argv[i];
+				  Bfrom = argv[++i];
 			}
 			break;
-	      case 's':
+  	      case 'c':
+  			if (i+1 < argc) {
+  				if (argv[i][2] == '1')
+					Asel = argv[++i];
+				else
+					Bsel = argv[++i];
+				break;
+			}
+			break;
+	      case 'e':
 			if (i+1 < argc) {
-				i++;
-				switch (argv[i][2]) {
-					case '1':
-						Asel = argv[i];
-					case '2':
-						Bsel = argv[i];
-					case 'm':
-						same_strand = 1;
-					case 'w':
-						stranded_windows = 1;
-				}
+				if (argv[i][2] == '1')
+					Aend = argv[++i];
+				else
+					Bend = argv[++i];
+  				break;
+  			}
+  			break;
+	      case 's':
+			switch (argv[i][2]) {
+				case '1':
+					Astart = argv[++i];
+					break;
+				case '2':
+					Bstart = argv[++i];
+					break;
+				case 'm':
+					same_strand = 1;
+					break;
+				case 'w':
+					stranded_windows = 1;
+					break;
 			}
 			break;
 	      case 'w':
 	      case 'W':
 			if (i+1 < argc) {
-			  if (argv[i++][2] == '1')
-				  Aqcnd = argv[i];
+			  if (argv[i][2] == '1')
+				  Aqcnd = argv[++i];
 			  else
-				  Bqcnd = argv[i];
+				  Bqcnd = argv[++i];
 			}
 			break;
       } // switch (argv[i][1])
     } // normal arguments
   } // for (inti=1; ...)
+
+  std::cerr << *argv << " -d1 " << Afrom << " -d2 " << Bfrom
+	  << " -s1 " << Astart << " -s2 " << Bstart
+	  << " -e1 " << Aend << " -e2 " << Bend
+	  << " -w1 " << Aqcnd << " -w2 " << Bqcnd
+	  << " -c1 " << Asel << " -c2 " << Bsel
+	  << " -r " << right << " -l " << left
+	  << " -b " << bins << " -p " << parallelize
+	  << " -sm " << same_strand << " -sw " << stranded_windows
+	  << std::endl;
 } // parse_args
 
-/*
-
-const char* listToStr(ibis::array_t<const char*> list) {
-	std::string str = list[0];
-	for(size_t i = 1; i < list.size(); ++i) {
-		str.append(",");
-		str.append(list[i]);
-	}
-	return str.c_str();
-}
-
-void pSelect(const char* sel, const char* from, const char* qcnd) {
-	ibis::table* tbl = ibis::table::create(from);
-	if ((qcnd == 0 || *qcnd == 0))
-		qcnd = "1=1";
-	if ((sel == 0 || *sel == 0))
-		sel = listToStr(tbl->columnNames());
-
-	ibis::table* res = tbl->select(sel,qcnd);
-	delete tbl;
-	delete res;
-}
-
-void pSelect(const char* sel, const char* from, const char* qcnd, int threads) {
-	ibis::table* ftbl = ibis::table::create(from);
-	if ((qcnd == 0 || *qcnd == 0))
-		qcnd = "1=1";
-	if ((sel == 0 || *sel == 0))
-		sel = listToStr(ftbl->columnNames());
-	boost::thread_group g;
-	std::vector<const ibis::part*> parts;
-	ftbl->getPartitions(parts);
-	for(size_t i= 0; i< parts.size(); ++i) {
-		std::string part_dir = from;
-		part_dir.append("/");
-		part_dir.append(parts[i]->getMetaTag("FBchr"));
-		std::cout << "calling pSelect sel='" << sel <<"', from='" << part_dir.c_str() << "', qcnd='" << qcnd << "'" << std::endl;
-//		pSelect(sel, part_dir.c_str(), qcnd);
-		g.create_thread(boost::bind(pSelect, sel, part_dir.c_str(), qcnd)); 
-	}
-	g.join_all();
+void Stacker(ibis::part* Apart, ibis::part* Bpart, ibis::bitvector Amask, ibis::bitvector Bmask, int before, int after) {
+	// by the time this function is called it doesn't have to worry about
+	// strand, just intervals
 	
-	delete ftbl;
+	// fetch [Astart-before,Aend+after]
+	// fetch [Bstart,Bend]
+	// iterate and report overlaps
+	// consult jRange.cpp
+	ibis::column *Astart_col = Apart->getColumn(Astart);
+	ibis::column *Aend_col = Apart->getColumn(Aend);
+	ibis::column *Bstart_col = Bpart->getColumn(Bstart);
+	ibis::column *Bend_col = Bpart->getColumn(Bend);
+
+	ibis::array_t<unsigned int> *Astart_val = Astart_col->selectUInts(Amask);
+	ibis::array_t<unsigned int> *Aend_val = Aend_col->selectUInts(Amask);
+	ibis::array_t<unsigned int> *Bstart_val = Bstart_col->selectUInts(Bmask);
+	ibis::array_t<unsigned int> *Bend_val = Bend_col->selectUInts(Bmask);
+
+	std::cerr << "stacker() Astart_val: " << Astart_val->size() << std::endl;
+	std::cerr << "stacker() Aend_val: " << Aend_val->size() << std::endl;
+	std::cerr << "stacker() Bstart_val: " << Bstart_val->size() << std::endl;
+	std::cerr << "stacker() Bend_val: " << Bend_val->size() << std::endl;
+
 }
 
-*/
-
-void Selector(ibis::table*& res, const char* path, const char* dir, const char* qcnd, const char* sel) {
-	std::string part_dir = path;
-	part_dir.append("/");
-	part_dir.append(dir);
-	ibis::table* tbl = ibis::table::create(part_dir.c_str());
-	if (tbl == 0) {
-		std::cerr << "missing partition: " << part_dir.c_str() << std::endl;
-		return;
+void getHits(ibis::part* part, ibis::bitvector* mask,
+	 const ibis::qExpr* cond, const char* colName) {
+	if (cond != 0) {
+		ibis::countQuery que(part);
+		int ierr = que.setWhereClause(cond);
+		ierr = que.evaluate();
+		mask->copy(*que.getHitVector());
 	}
-	ibis::table* r = tbl->select(sel,qcnd);
-	res = r;
-	delete tbl;
+	else {
+		ibis::column *c = part->getColumn(colName);
+		c->getNullMask(*mask);
+	}
 }
 
+void splitByStrand(ibis::part* part, ibis::bitvector* mask, ibis::bitvector* plus, ibis::bitvector* minus) {
+	ibis::countQuery que(part);
+	int ierr = que.setWhereClause(senseExpr);
+	ierr = que.evaluate();
+	plus->copy(*que.getHitVector());
+	minus->copy(*que.getHitVector());
+	minus->flip();
+	*plus &= *mask;
+	*minus &= *mask;
+}
 
-void Stacker(const char* chr) {
-	// fetch results from the FBchr matched pair of partitions from A and B
-	ibis::table* A=0;
-	boost::thread Athread(Selector, boost::ref(A), Afrom, chr, Aqcnd, Asel);
-	ibis::table* B=0;
-	Selector(B, Bfrom, chr, Bqcnd, Bsel);
-	Athread.join();
-	// iterate over A and B and do the join
-	// generate a new part to hold the results 
-	// sort the partition by start,end (here if doing multithreaded merge?)
+void setupStacker(const char* chr) {
+	// do some checks
+	// count hits to A and B on this chr
+	// make masks based on Aqcnd and Bqcnd
+ 	std::string Apart_dir = Afrom;
+ 	Apart_dir.append("/");
+ 	Apart_dir.append(chr);
+ 	ibis::part Apart(Apart_dir.c_str(),false);
+    ibis::bitvector Amask;
+	getHits(&Apart, &Amask, Acond, Astart);
+	
+	std::cerr << "Amask.cnt() = " << Amask.cnt() << std::endl;
+	if (Amask.cnt() == 0) return;
+	
+ 	std::string Bpart_dir = Bfrom;
+ 	Bpart_dir.append("/");
+ 	Bpart_dir.append(chr);
+ 	ibis::part Bpart(Bpart_dir.c_str(),false);
+    ibis::bitvector Bmask;
+	getHits(&Bpart, &Bmask, Bcond, Bstart);
+
+	std::cerr << "Bmask.cnt() = " << Bmask.cnt() << std::endl;
+	if (Bmask.cnt() == 0) return;
+	
+	if(same_strand == 1 && (Anaty.count("strand") > 0) && (Bnaty.count("strand") > 0)) {
+		std::cerr << "1" << std::endl;
+		// split into subproblems for each strand
+		// update the masks (Aplus, Aminus, Bplus, Bminus)
+		ibis::bitvector Aplus;
+		ibis::bitvector Aminus;
+		splitByStrand(&Apart, &Amask, &Aplus, &Aminus);
+		
+		ibis::bitvector Bplus;
+		ibis::bitvector Bminus;
+		splitByStrand(&Bpart, &Bmask, &Bplus, &Bminus);
+
+		Stacker(&Apart, &Bpart, Aplus, Bplus, left, right);
+		if (stranded_windows>0) {
+			Stacker(&Apart, &Bpart, Aminus, Bminus, right, left);
+		}
+		else {
+			Stacker(&Apart, &Bpart, Aminus, Bminus, left, right);
+		}
+	}
+	else {
+		std::cerr << "2" << std::endl;
+		if (stranded_windows>0 && left != right and Anaty.count("strand")>0) {
+			// split into subproblems
+			// update the masks (Aplus, Aminus)
+			ibis::bitvector Aplus;
+			ibis::bitvector Aminus;
+			splitByStrand(&Apart, &Amask, &Aplus, &Aminus);
+			Stacker(&Apart, &Bpart, Aplus, Bmask, left, right);
+			Stacker(&Apart, &Bpart, Aminus, Bmask, right, left);
+		}
+		else {
+			Stacker(&Apart, &Bpart, Amask, Bmask, left, right);
+		}
+	}
 }
 
 int main(int argc, char** argv) {
     parse_args(argc, argv);
 
+	// parse qExpr once so it can be reused in each partition
+	ibis::whereClause Awhere = ibis::whereClause(Aqcnd);
+	Acond = Awhere.getExpr();
+	ibis::whereClause Bwhere = ibis::whereClause(Bqcnd);
+	Bcond = Bwhere.getExpr();
+
+	// populate column name => type map
 	ibis::table* A = ibis::table::create(Afrom);
-	
-	// for each FBchr, build a table/partition with the stacked features
-	std::vector<const ibis::part*> parts;
-	A->getPartitions(parts);
-	boost::thread_group g;
-	for(int i=0; i< parts.size(); ++i) {
-		const char* chr = parts[i]->getMetaTag("FBchr");
-		g.create_thread(boost::bind(Stacker, chr));
+	Anames = A->columnNames();
+	Atypes = A->columnTypes();
+    for (size_t i = 0; i < Anames.size(); ++ i) {
+		Anaty.insert(std::pair<const char*,ibis::TYPE_T>(Anames[i],Atypes[i]));
+	}	
+	ibis::table* B = ibis::table::create(Bfrom);
+	Bnames = B->columnNames();
+	Btypes = B->columnTypes();
+    for (size_t i = 0; i < Bnames.size(); ++ i) {
+		Bnaty.insert(std::pair<const char*,ibis::TYPE_T>(Bnames[i],Btypes[i]));
 	}
-	g.join_all();
-	// merge the sorted result partitions using multiple threads?
-	// write the table out - need to generate a FBchr name based on FBset l, r, sw, sm ?
-	// if you didn't do the fancy sort just call orderby() before saving the table
+
+	// fetch all the FBchr names from table A
+	ibis::table* FBchr = A->select("FBchr,count(*)",Acond);
+	const size_t nr = static_cast<size_t>(FBchr->nRows());
+	std::vector<std::string>* chrList = new std::vector<std::string>();
+	int64_t ierr = FBchr->getColumnAsStrings("FBchr", *chrList);
+	if (ierr < 0 || ((size_t) ierr) < nr) {
+		return -1;
+	}
+
+	// for each FBchr, build a partition with the stacked features
+	boost::thread_group g;
+	for(int i=0; i<nr; ++i) {
+		std::cerr << "calling setupStacker(" << (*chrList)[i] << ")" << std::endl;
+		if (parallelize > 0)
+			g.create_thread(boost::bind(setupStacker, (*chrList)[i].c_str()));
+		else
+			setupStacker((*chrList)[i].c_str());
+	}
+	if (parallelize > 0)
+		g.join_all();
+	// concatenate each part into one table?
+	// orderby()
+
+	// write the table out - need to generate a FBchr metaTag based on FBset l, r, sw, sm
 	
+	delete FBchr;
+	delete A;
+	delete B;
     return 0;
 } // main

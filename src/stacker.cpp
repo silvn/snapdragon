@@ -301,33 +301,12 @@ int main(int argc, char** argv) {
 	}
 	if (parallelize > 0)
 		g.join_all();
-	
-/*
-	// fetch all the FBchr names from table A
-	ibis::table* FBchr = A->select("FBchr,count(*)",Acond);
-	const size_t nr = static_cast<size_t>(FBchr->nRows());
-	std::vector<std::string>* chrList = new std::vector<std::string>();
-	int64_t ierr = FBchr->getColumnAsStrings("FBchr", *chrList);
-	if (ierr < 0 || ((size_t) ierr) < nr) {
-		return -1;
-	}
 
-	// for each FBchr, build a partition with the stacked features
-	boost::thread_group g;
-	for(int i=0; i<nr; ++i) {
-		std::cerr << "calling setupStacker(" << (*chrList)[i] << ")" << std::endl;
-		if (parallelize > 0)
-			g.create_thread(boost::bind(setupStacker, (*chrList)[i].c_str()));
-		else
-			setupStacker((*chrList)[i].c_str());
-	}
-	if (parallelize > 0)
-		g.join_all();
-*/
 	// concatenate each part into one table?
 	// orderby()
 
-	// write the table out - need to generate a FBchr metaTag based on FBset l, r, sw, sm
+	// write the table out - user supplied outdir
+	// create one subdirectory partition with FBchr = stacked
 	
 	delete A;
 	delete B;

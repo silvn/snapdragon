@@ -157,27 +157,72 @@ void parse_args(int argc, char** argv) {
 } // parse_args
 
 void Stacker(const ibis::part* Apart, const ibis::part* Bpart, ibis::bitvector Amask, ibis::bitvector Bmask, int before, int after) {
-	// by the time this function is called it doesn't have to worry about
-	// strand, just intervals
-	
-	// fetch [Astart-before,Aend+after]
-	// fetch [Bstart,Bend]
-	// iterate and report overlaps
-	// consult jRange.cpp
+	if (Amask.cnt() == 0 || Bmask.cnt() == 0)
+		return;
+
 	ibis::column *Astart_col = Apart->getColumn(Astart);
 	ibis::column *Aend_col = Apart->getColumn(Aend);
 	ibis::column *Bstart_col = Bpart->getColumn(Bstart);
 	ibis::column *Bend_col = Bpart->getColumn(Bend);
 
-	ibis::array_t<unsigned int> *Astart_val = Astart_col->selectUInts(Amask);
-	ibis::array_t<unsigned int> *Aend_val = Aend_col->selectUInts(Amask);
-	ibis::array_t<unsigned int> *Bstart_val = Bstart_col->selectUInts(Bmask);
-	ibis::array_t<unsigned int> *Bend_val = Bend_col->selectUInts(Bmask);
+	ibis::array_t<ibis::rid_t> *Arids = Apart->getRIDs(Amask);
+	ibis::array_t<ibis::rid_t> *Brids = Bpart->getRIDs(Bmask);
+	ibis::array_t<uint32_t> *Astart_val = Astart_col->selectUInts(Amask);
+	ibis::array_t<uint32_t> *Aend_val = Aend_col->selectUInts(Amask);
+	ibis::array_t<uint32_t> *Bstart_val = Bstart_col->selectUInts(Bmask);
+	ibis::array_t<uint32_t> *Bend_val = Bend_col->selectUInts(Bmask);
 
-	std::cerr << "stacker() Astart_val: " << Astart_val->size() << std::endl;
-	std::cerr << "stacker() Aend_val: " << Aend_val->size() << std::endl;
-	std::cerr << "stacker() Bstart_val: " << Bstart_val->size() << std::endl;
-	std::cerr << "stacker() Bend_val: " << Bend_val->size() << std::endl;
+	// iterate over the intervals and identify features that overlap
+	// set bits in Amatch and Bmatch so we can fetch only elements that overlap
+	// also fill two arrays of indexes that say what rows to take from selected columns of A and B
+	
+	ibis::bitvector Amatch;
+	ibis::bitvector Bmatch;
+	const uint32_t nA = Amask.cnt();
+	const uint32_t nB = Bmask.cnt();
+	std::vector<uint32_t> Aidx;
+	std::vector<uint32_t> Bidx;
+	std::cerr << "stacker() nA: " << nA << " nB: " << nB << std::endl;
+	uint32_t iA=0;
+	uint32_t iB=0;
+	uint32_t mA=0;
+	uint32_t mB=0;
+	std::cerr << "before Amask.cnt() = " << Amask.cnt() << std::endl;
+	std::cerr << "before Bmask.cnt() = " << Bmask.cnt() << std::endl;
+	while (iA < nA && iB < nB) {
+		uint32_t before_ = (*Astart_val)[iA] - before;
+		uint32_t after_ = (*Aend_val)[iA] + after;
+		if ((*Bend_val)[iB] < before_) // B comes first
+			iB++;
+		else if (after_ < (*Bstart_val)[iB]) // A comes first
+			iA++;
+		else {
+			// found a match
+			Aidx.push_back(mA);
+			Bidx.push_back(mB);
+			Amatch.setBit((const uint32_t) (*Arids)[iA].value, 1);
+			Bmatch.setBit((const uint32_t) (*Brids)[iB].value, 1);
+			mA = Amatch.cnt();
+			mB = Bmatch.cnt();
+			// report all the matches of B within this A interval
+			// then increment iA
+			uint32_t iiB=iB+1;
+			while (iiB < nB && (*Bstart_val)[iiB] <= after_) {
+				if ((*Bend_val)[iiB] >= before_) {
+					// overlap
+					Aidx.push_back(mA);
+					Bidx.push_back(mB);
+					Bmatch.setBit((const uint32_t) (*Brids)[iiB].value, 1);
+					mB = Bmatch.cnt();
+				}
+				iiB++;
+			}
+			iA++;
+		}
+	}
+
+	std::cerr << "after Amatch.cnt() = " << Amatch.cnt() << std::endl;
+	std::cerr << "after Bmatch.cnt() = " << Bmatch.cnt() << std::endl;
 
 }
 
@@ -213,17 +258,14 @@ void setupStacker(const ibis::part* Apart, const ibis::part* Bpart) {
     ibis::bitvector Amask;
 	getHits(Apart, &Amask, Acond, Astart);
 	
-	std::cerr << "Amask.cnt() = " << Amask.cnt() << std::endl;
 	if (Amask.cnt() == 0) return;
 	
     ibis::bitvector Bmask;
 	getHits(Bpart, &Bmask, Bcond, Bstart);
 
-	std::cerr << "Bmask.cnt() = " << Bmask.cnt() << std::endl;
 	if (Bmask.cnt() == 0) return;
 	
 	if(same_strand == 1 && (Anaty.count("strand") > 0) && (Bnaty.count("strand") > 0)) {
-		std::cerr << "1" << std::endl;
 		// split into subproblems for each strand
 		// update the masks (Aplus, Aminus, Bplus, Bminus)
 		ibis::bitvector Aplus;
@@ -243,7 +285,6 @@ void setupStacker(const ibis::part* Apart, const ibis::part* Bpart) {
 		}
 	}
 	else {
-		std::cerr << "2" << std::endl;
 		if (stranded_windows>0 && left != right and Anaty.count("strand")>0) {
 			// split into subproblems
 			// update the masks (Aplus, Aminus)

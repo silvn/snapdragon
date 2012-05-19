@@ -1,6 +1,6 @@
 AC_COPYRIGHT((c) 2012 Cold Spring Harbor Laboratory)
 
-AC_INIT([shanje],[1.0],[olson@warelab.org])
+AC_INIT([snapdragon],[1.0],[olson@warelab.org])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 AC_LANG_PUSH([C++])
 AC_CHECK_HEADERS([boost/foreach.hpp], [],

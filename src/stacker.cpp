@@ -166,10 +166,10 @@ template <typename T>
 void meorder(ibis::array_t<T> &res, ibis::array_t<T> &arr,
 	const ibis::array_t<uint32_t>& ind)
 {
-	ibis::array_t<T> tmp(ind.size());
+	// ibis::array_t<T> tmp(ind.size()); // wasn't res allocated earlier?
 	for (uint32_t i = 0; i < ind.size(); ++ i)
 	    res[i] = arr[ind[i]];
-	res.swap(tmp);
+	// res.swap(tmp);
 }
 
 // string version of meorder
@@ -177,10 +177,11 @@ void meorder(std::vector<std::string> &res,
 	std::vector<std::string> &arr,
 	const ibis::array_t<uint32_t>& ind)
 {
-	std::vector<std::string> tmp(ind.size());
+	std::cerr << "meorder(strings)" << std::endl;
+	// std::vector<std::string> tmp(ind.size());
 	for(uint32_t i = 0; i < ind.size(); ++ i)
-		tmp[i].swap(arr[ind[i]]);
-	res.swap(tmp);
+		res[i] = arr[ind[i]];
+	// res.swap(tmp);
 }
 
 // given a column, a bitvector mask, and an index
@@ -189,43 +190,55 @@ void meorder(std::vector<std::string> &res,
 void fillColumn(const ibis::column* col, ibis::bitvector* mask,
 	std::vector<uint32_t> idx, void* result)
 {
+	std::cerr << "fillColumn()" << std::endl;
 	switch(col->type()) {
 		case ibis::BYTE:
-		meorder(*static_cast<ibis::array_t<signed char>*>(result),
-				*static_cast<ibis::array_t<signed char>*>(col->selectBytes(*mask)),idx);
+			meorder(*static_cast<ibis::array_t<signed char>*>(result),
+					*static_cast<ibis::array_t<signed char>*>(col->selectBytes(*mask)),idx);
+			break;
 		case ibis::UBYTE:
-		meorder(*static_cast<ibis::array_t<unsigned char>*>(result),
-				*static_cast<ibis::array_t<unsigned char>*>(col->selectUBytes(*mask)),idx);
+			meorder(*static_cast<ibis::array_t<unsigned char>*>(result),
+					*static_cast<ibis::array_t<unsigned char>*>(col->selectUBytes(*mask)),idx);
+			break;
 		case ibis::SHORT:
-		meorder(*static_cast<ibis::array_t<int16_t>*>(result),
-				*static_cast<ibis::array_t<int16_t>*>(col->selectShorts(*mask)),idx);
+			meorder(*static_cast<ibis::array_t<int16_t>*>(result),
+					*static_cast<ibis::array_t<int16_t>*>(col->selectShorts(*mask)),idx);
+			break;
 		case ibis::USHORT:
-		meorder(*static_cast<ibis::array_t<uint16_t>*>(result),
-				*static_cast<ibis::array_t<uint16_t>*>(col->selectUShorts(*mask)),idx);
+			meorder(*static_cast<ibis::array_t<uint16_t>*>(result),
+					*static_cast<ibis::array_t<uint16_t>*>(col->selectUShorts(*mask)),idx);
+			break;
 		case ibis::INT:
-		meorder(*static_cast<ibis::array_t<int32_t>*>(result),
-				*static_cast<ibis::array_t<int32_t>*>(col->selectInts(*mask)),idx);
+			meorder(*static_cast<ibis::array_t<int32_t>*>(result),
+					*static_cast<ibis::array_t<int32_t>*>(col->selectInts(*mask)),idx);
+			break;
 		case ibis::UINT:
-		meorder(*static_cast<ibis::array_t<uint32_t>*>(result),
-				*static_cast<ibis::array_t<uint32_t>*>(col->selectUInts(*mask)),idx);
+			meorder(*static_cast<ibis::array_t<uint32_t>*>(result),
+					*static_cast<ibis::array_t<uint32_t>*>(col->selectUInts(*mask)),idx);
+			break;
 		case ibis::LONG:
-		meorder(*static_cast<ibis::array_t<int64_t>*>(result),
-				*static_cast<ibis::array_t<int64_t>*>(col->selectLongs(*mask)),idx);
+			meorder(*static_cast<ibis::array_t<int64_t>*>(result),
+					*static_cast<ibis::array_t<int64_t>*>(col->selectLongs(*mask)),idx);
+			break;
 		case ibis::ULONG:
-		meorder(*static_cast<ibis::array_t<uint64_t>*>(result),
-				*static_cast<ibis::array_t<uint64_t>*>(col->selectULongs(*mask)),idx);
+			meorder(*static_cast<ibis::array_t<uint64_t>*>(result),
+					*static_cast<ibis::array_t<uint64_t>*>(col->selectULongs(*mask)),idx);
+			break;
 		case ibis::FLOAT:
-		meorder(*static_cast<ibis::array_t<float>*>(result),
-				*static_cast<ibis::array_t<float>*>(col->selectFloats(*mask)),idx);
+			meorder(*static_cast<ibis::array_t<float>*>(result),
+					*static_cast<ibis::array_t<float>*>(col->selectFloats(*mask)),idx);
+			break;
 		case ibis::DOUBLE:
-		meorder(*static_cast<ibis::array_t<double>*>(result),
-				*static_cast<ibis::array_t<double>*>(col->selectDoubles(*mask)),idx);
+			meorder(*static_cast<ibis::array_t<double>*>(result),
+					*static_cast<ibis::array_t<double>*>(col->selectDoubles(*mask)),idx);
+			break;
 		case ibis::TEXT:
 		case ibis::CATEGORY:
-		meorder(*static_cast<std::vector<std::string>*>(result),
-				*static_cast<std::vector<std::string>*>(col->selectStrings(*mask)),idx);
+			meorder(*static_cast<std::vector<std::string>*>(result),
+					*static_cast<std::vector<std::string>*>(col->selectStrings(*mask)),idx);
+			break;
 		default:
-		break;
+			break;
 	}
 }
 
@@ -238,8 +251,9 @@ ibis::table* fillResult(const ibis::part* Apart, const ibis::part* Bpart,
 	ibis::bitvector* Amatch, ibis::bitvector* Bmatch,
 	std::vector<uint32_t>& Aidx, std::vector<uint32_t>& Bidx)
 {
+	std::cerr << "fillResult()" << std::endl;
 	size_t nrows = Aidx.size();
-	int ncols = Acols.size() + Bcols.size() + 2;
+	int ncols = Acols.size() + Bcols.size();
 	ibis::table::bufferList tbuff(ncols);
 	ibis::table::typeList ttypes(ncols);
 	IBIS_BLOCK_GUARD(ibis::table::freeBuffers, ibis::util::ref(tbuff), ibis::util::ref(ttypes));
@@ -249,20 +263,22 @@ ibis::table* fillResult(const ibis::part* Apart, const ibis::part* Bpart,
 	boost::thread_group tg;
 	int j=0;
 	for(int i=0; i<Acols.size(); i++) {
+		std::cerr << Acols[i] << std::endl;
 		ibis::column* col = Apart->getColumn(Acols[i]);
 		ttypes[j] = col->type();
 		tbuff[j] = ibis::table::allocateBuffer(col->type(),nrows);
-		if(parallelize > 1)
+		if(parallelize > 0)
 			tg.create_thread(boost::bind(fillColumn,col,Amatch,Aidx,tbuff[j]));
 		else
 			fillColumn(col,Amatch,Aidx,tbuff[j]);
 		j++;
 	}
 	for(int i=0; i<Bcols.size(); i++) {
+		std::cerr << Bcols[i] << std::endl;
 		ibis::column* col = Bpart->getColumn(Bcols[i]);
 		ttypes[j] = col->type();
 		tbuff[j] = ibis::table::allocateBuffer(col->type(),nrows);
-		if(parallelize > 1)
+		if(parallelize > 0)
 			tg.create_thread(boost::bind(fillColumn,col,Bmatch,Bidx,tbuff[j]));
 		else
 			fillColumn(col,Bmatch,Bidx,tbuff[j]);
@@ -271,7 +287,6 @@ ibis::table* fillResult(const ibis::part* Apart, const ibis::part* Bpart,
 	if(parallelize > 0)
 		tg.join_all();
 
-	// do the binned relative start and end columns
 }
 
 // fetch intervals from the partitions to be joined
@@ -306,8 +321,8 @@ void Stacker(const ibis::part* Apart, const ibis::part* Bpart,
 	uint32_t iB=0;
 	uint32_t mA=0;
 	uint32_t mB=0;
-	std::cerr << "before Amask->cnt() = " << Amask->cnt() << std::endl;
-	std::cerr << "before Bmask->cnt() = " << Bmask->cnt() << std::endl;
+	std::cerr << "before Amask->cnt() = " << Amask->cnt() << " Astart_val->size() = " << Astart_val->size() << std::endl;
+	std::cerr << "before Bmask->cnt() = " << Bmask->cnt() << " Bstart_val->size() = " << Bstart_val->size() <<  std::endl;
 	std::map<uint32_t,bool> Bseen;
 	while (iA < nA && iB < nB) {
 		uint32_t before_ = (*Astart_val)[iA] - before;
@@ -337,7 +352,7 @@ void Stacker(const ibis::part* Apart, const ibis::part* Bpart,
 					Bidx.push_back(mB);
 					if (Bseen.count(mB) == 0) {
 						Bseen.insert(std::pair<uint32_t,bool>(mB,true));
-						Bmatch.setBit((const uint32_t) (*Brids)[iB].value, 1);
+						Bmatch.setBit((const uint32_t) (*Brids)[iiB].value, 1);
 						mB++;
 					}
 				}
@@ -347,8 +362,8 @@ void Stacker(const ibis::part* Apart, const ibis::part* Bpart,
 		}
 	}
 
-	std::cerr << "after Amatch.cnt() = " << Amatch.cnt() << std::endl;
-	std::cerr << "after Bmatch.cnt() = " << Bmatch.cnt() << std::endl;
+	std::cerr << "after Amatch.cnt() = " << Amatch.cnt() << " mA = " << mA  << std::endl;
+	std::cerr << "after Bmatch.cnt() = " << Bmatch.cnt() << " mB = " << mB << std::endl;
 
 	if (Amatch.cnt() == 0 || Bmatch.cnt() == 0)
 		return;

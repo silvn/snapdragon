@@ -159,6 +159,76 @@ void parse_args(int argc, char** argv)
 	  << std::endl;
 }
 
+// function to fill an array with values from an input array based on a list of indices
+// Similar to ibis::util::reorder, but ind.size() can be > arr.size()
+// because indices can be repeated.
+template <typename T>
+void meorder(ibis::array_t<T> &res, ibis::array_t<T> &arr,
+	const ibis::array_t<uint32_t>& ind)
+{
+	ibis::array_t<T> tmp(ind.size());
+	for (uint32_t i = 0; i < ind.size(); ++ i)
+	    res[i] = arr[ind[i]];
+	res.swap(tmp);
+}
+
+// string version of meorder
+void meorder(std::vector<std::string> &res,
+	std::vector<std::string> &arr,
+	const ibis::array_t<uint32_t>& ind)
+{
+	std::vector<std::string> tmp(ind.size());
+	for(uint32_t i = 0; i < ind.size(); ++ i)
+		tmp[i].swap(arr[ind[i]]);
+	res.swap(tmp);
+}
+
+// given a column, a bitvector mask, and an index
+// fetch the relevant rows in the matching format
+// and store in result
+void fillColumn(const ibis::column* col, ibis::bitvector* mask,
+	std::vector<uint32_t> idx, void* result)
+{
+	switch(col->type()) {
+		case ibis::BYTE:
+		meorder(*static_cast<ibis::array_t<signed char>*>(result),
+				*static_cast<ibis::array_t<signed char>*>(col->selectBytes(*mask)),idx);
+		case ibis::UBYTE:
+		meorder(*static_cast<ibis::array_t<unsigned char>*>(result),
+				*static_cast<ibis::array_t<unsigned char>*>(col->selectUBytes(*mask)),idx);
+		case ibis::SHORT:
+		meorder(*static_cast<ibis::array_t<int16_t>*>(result),
+				*static_cast<ibis::array_t<int16_t>*>(col->selectShorts(*mask)),idx);
+		case ibis::USHORT:
+		meorder(*static_cast<ibis::array_t<uint16_t>*>(result),
+				*static_cast<ibis::array_t<uint16_t>*>(col->selectUShorts(*mask)),idx);
+		case ibis::INT:
+		meorder(*static_cast<ibis::array_t<int32_t>*>(result),
+				*static_cast<ibis::array_t<int32_t>*>(col->selectInts(*mask)),idx);
+		case ibis::UINT:
+		meorder(*static_cast<ibis::array_t<uint32_t>*>(result),
+				*static_cast<ibis::array_t<uint32_t>*>(col->selectUInts(*mask)),idx);
+		case ibis::LONG:
+		meorder(*static_cast<ibis::array_t<int64_t>*>(result),
+				*static_cast<ibis::array_t<int64_t>*>(col->selectLongs(*mask)),idx);
+		case ibis::ULONG:
+		meorder(*static_cast<ibis::array_t<uint64_t>*>(result),
+				*static_cast<ibis::array_t<uint64_t>*>(col->selectULongs(*mask)),idx);
+		case ibis::FLOAT:
+		meorder(*static_cast<ibis::array_t<float>*>(result),
+				*static_cast<ibis::array_t<float>*>(col->selectFloats(*mask)),idx);
+		case ibis::DOUBLE:
+		meorder(*static_cast<ibis::array_t<double>*>(result),
+				*static_cast<ibis::array_t<double>*>(col->selectDoubles(*mask)),idx);
+		case ibis::TEXT:
+		case ibis::CATEGORY:
+		meorder(*static_cast<std::vector<std::string>*>(result),
+				*static_cast<std::vector<std::string>*>(col->selectStrings(*mask)),idx);
+		default:
+		break;
+	}
+}
+
 // Build a table to represent the interval-join of two partitions
 // using two bitvector masks and two arrays of offsets into the matching rows
 // New columns for relative start and end are included (possibly binned)
@@ -168,16 +238,40 @@ ibis::table* fillResult(const ibis::part* Apart, const ibis::part* Bpart,
 	ibis::bitvector* Amatch, ibis::bitvector* Bmatch,
 	std::vector<uint32_t>& Aidx, std::vector<uint32_t>& Bidx)
 {
-	std::cerr << "fillResult() part A:";
+	size_t nrows = Aidx.size();
+	int ncols = Acols.size() + Bcols.size() + 2;
+	ibis::table::bufferList tbuff(ncols);
+	ibis::table::typeList ttypes(ncols);
+	IBIS_BLOCK_GUARD(ibis::table::freeBuffers, ibis::util::ref(tbuff), ibis::util::ref(ttypes));
+
+	const size_t Anr = static_cast<size_t>(Amatch->cnt());
+	const size_t Bnr = static_cast<size_t>(Bmatch->cnt());
+	boost::thread_group tg;
+	int j=0;
 	for(int i=0; i<Acols.size(); i++) {
-		std::cerr << " " << Acols[i];
+		ibis::column* col = Apart->getColumn(Acols[i]);
+		ttypes[j] = col->type();
+		tbuff[j] = ibis::table::allocateBuffer(col->type(),nrows);
+		if(parallelize > 1)
+			tg.create_thread(boost::bind(fillColumn,col,Amatch,Aidx,tbuff[j]));
+		else
+			fillColumn(col,Amatch,Aidx,tbuff[j]);
+		j++;
 	}
-	std::cerr << std::endl;
-	std::cerr << "fillResult() part B:";
 	for(int i=0; i<Bcols.size(); i++) {
-		std::cerr << " " << Bcols[i];
+		ibis::column* col = Bpart->getColumn(Bcols[i]);
+		ttypes[j] = col->type();
+		tbuff[j] = ibis::table::allocateBuffer(col->type(),nrows);
+		if(parallelize > 1)
+			tg.create_thread(boost::bind(fillColumn,col,Bmatch,Bidx,tbuff[j]));
+		else
+			fillColumn(col,Bmatch,Bidx,tbuff[j]);
+		j++;
 	}
-	std::cerr << std::endl;
+	if(parallelize > 0)
+		tg.join_all();
+
+	// do the binned relative start and end columns
 }
 
 // fetch intervals from the partitions to be joined
@@ -284,7 +378,8 @@ int countHits(const ibis::part* part, ibis::bitvector* mask,
 
 // populate bitvectors for hits to the sense and antisense strands
 // Behold the beauty of WAH bitwise operations!
-void splitByStrand(const ibis::part* part, ibis::bitvector* mask, ibis::bitvector* plus, ibis::bitvector* minus)
+void splitByStrand(const ibis::part* part, ibis::bitvector* mask,
+	ibis::bitvector* plus, ibis::bitvector* minus)
 {
 	ibis::countQuery que(part);
 	int ierr = que.setWhereClause(senseExpr);
@@ -348,8 +443,10 @@ void setupStacker(const ibis::part* Apart, const ibis::part* Bpart)
 	}
 }
 
-
-void fillColumnLists(char * sel, std::map<const char*,ibis::TYPE_T>* naty, ibis::table::stringList* cols) {
+// make a list of valid column names from the given select string
+void fillColumnLists(char * sel, std::map<const char*,ibis::TYPE_T>* naty,
+	ibis::table::stringList* cols)
+{
 	cols->clear();
 	char * pch;
 	pch = strtok (sel, " ,.-");

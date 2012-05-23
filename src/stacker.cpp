@@ -163,19 +163,19 @@ void parse_args(int argc, char** argv)
 // Similar to ibis::util::reorder, but ind.size() can be > arr.size()
 // because indices can be repeated.
 template <typename T>
-void meorder(ibis::array_t<T> &res, ibis::array_t<T>* arr, ibis::array_t<uint32_t>& ind)
+void meorder(ibis::array_t<T> &res, ibis::array_t<T> &arr, ibis::array_t<uint32_t>& ind)
 {
 	for (size_t i = 0; i < ind.size(); ++ i)
-	    res[i] = (*arr)[ind[i]];
+	    res[i] = arr[ind[i]];
 }
 
 // string version of meorder
 void meorder(std::vector<std::string> &res,
-	std::vector<std::string>* arr,
+	std::vector<std::string> &arr,
 	ibis::array_t<uint32_t>& ind)
 {
 	for(size_t i = 0; i < ind.size(); ++ i)
-		res[i] = (*arr)[ind[i]];
+		res[i] = arr[ind[i]];
 }
 
 // given a column, a bitvector mask, and an index
@@ -189,68 +189,68 @@ void fillColumn(ibis::column* col, ibis::bitvector* mask,
 		case ibis::BYTE:
 		{
 			ibis::array_t<signed char> *values = col->selectBytes(*mask);
-			meorder(*static_cast<ibis::array_t<signed char>*>(result),values,idx);
+			meorder(*static_cast<ibis::array_t<signed char>*>(result),*values,idx);
 			break;
 		}
 		case ibis::UBYTE:
 		{
 			ibis::array_t<unsigned char> *values = col->selectUBytes(*mask);
-			meorder(*static_cast<ibis::array_t<unsigned char>*>(result),values,idx);
+			meorder(*static_cast<ibis::array_t<unsigned char>*>(result),*values,idx);
 			break;
 		}
 		case ibis::SHORT:
 		{
 			ibis::array_t<int16_t> *values = col->selectShorts(*mask);
-			meorder(*static_cast<ibis::array_t<int16_t>*>(result),values,idx);
+			meorder(*static_cast<ibis::array_t<int16_t>*>(result),*values,idx);
 			break;
 		}
 		case ibis::USHORT:
 		{
 			ibis::array_t<uint16_t> *values = col->selectUShorts(*mask);
-			meorder(*static_cast<ibis::array_t<uint16_t>*>(result),values,idx);
+			meorder(*static_cast<ibis::array_t<uint16_t>*>(result),*values,idx);
 			break;
 		}
 		case ibis::INT:
 		{
 			ibis::array_t<int32_t> *values = col->selectInts(*mask);
-			meorder(*static_cast<ibis::array_t<int32_t>*>(result),values,idx);
+			meorder(*static_cast<ibis::array_t<int32_t>*>(result),*values,idx);
 			break;
 		}
 		case ibis::UINT:
 		{
 			ibis::array_t<uint32_t> *values = col->selectUInts(*mask);
-			meorder(*static_cast<ibis::array_t<uint32_t>*>(result),values,idx);
+			meorder(*static_cast<ibis::array_t<uint32_t>*>(result),*values,idx);
 			break;
 		}
 		case ibis::LONG:
 		{
 			ibis::array_t<int64_t> *values = col->selectLongs(*mask);
-			meorder(*static_cast<ibis::array_t<int64_t>*>(result),values,idx);
+			meorder(*static_cast<ibis::array_t<int64_t>*>(result),*values,idx);
 			break;
 		}
 		case ibis::ULONG:
 		{
 			ibis::array_t<uint64_t> *values = col->selectULongs(*mask);
-			meorder(*static_cast<ibis::array_t<uint64_t>*>(result),values,idx);
+			meorder(*static_cast<ibis::array_t<uint64_t>*>(result),*values,idx);
 			break;
 		}
 		case ibis::FLOAT:
 		{
 			ibis::array_t<float> *values = col->selectFloats(*mask);
-			meorder(*static_cast<ibis::array_t<float>*>(result),values,idx);
+			meorder(*static_cast<ibis::array_t<float>*>(result),*values,idx);
 			break;
 		}
 		case ibis::DOUBLE:
 		{
 			ibis::array_t<double> *values = col->selectDoubles(*mask);
-			meorder(*static_cast<ibis::array_t<double>*>(result),values,idx);
+			meorder(*static_cast<ibis::array_t<double>*>(result),*values,idx);
 			break;
 		}
 		case ibis::TEXT:
 		case ibis::CATEGORY:
 		{
 			std::vector<std::string> *values = col->selectStrings(*mask);
-			meorder(*static_cast<std::vector<std::string>*>(result),values,idx);
+			meorder(*static_cast<std::vector<std::string>*>(result),*values,idx);
 			break;
 		}
 		default:

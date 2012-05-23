@@ -163,80 +163,96 @@ void parse_args(int argc, char** argv)
 // Similar to ibis::util::reorder, but ind.size() can be > arr.size()
 // because indices can be repeated.
 template <typename T>
-void meorder(ibis::array_t<T> &res, ibis::array_t<T> &arr,
-	const ibis::array_t<uint32_t>& ind)
+void meorder(ibis::array_t<T> &res, ibis::array_t<T>* arr, ibis::array_t<uint32_t>& ind)
 {
-	// ibis::array_t<T> tmp(ind.size()); // wasn't res allocated earlier?
-	for (uint32_t i = 0; i < ind.size(); ++ i)
-	    res[i] = arr[ind[i]];
-	// res.swap(tmp);
+	for (size_t i = 0; i < ind.size(); ++ i)
+	    res[i] = (*arr)[ind[i]];
 }
 
 // string version of meorder
 void meorder(std::vector<std::string> &res,
-	std::vector<std::string> &arr,
-	const ibis::array_t<uint32_t>& ind)
+	std::vector<std::string>* arr,
+	ibis::array_t<uint32_t>& ind)
 {
-	std::cerr << "meorder(strings)" << std::endl;
-	// std::vector<std::string> tmp(ind.size());
-	for(uint32_t i = 0; i < ind.size(); ++ i)
-		res[i] = arr[ind[i]];
-	// res.swap(tmp);
+	for(size_t i = 0; i < ind.size(); ++ i)
+		res[i] = (*arr)[ind[i]];
 }
 
 // given a column, a bitvector mask, and an index
 // fetch the relevant rows in the matching format
 // and store in result
-void fillColumn(const ibis::column* col, ibis::bitvector* mask,
-	std::vector<uint32_t> idx, void* result)
+void fillColumn(ibis::column* col, ibis::bitvector* mask,
+	ibis::array_t<uint32_t> &idx, void* result)
 {
-	std::cerr << "fillColumn()" << std::endl;
+	// std::cerr << "fillColumn() mask->cnt()=" << mask->cnt() << std::endl;
 	switch(col->type()) {
 		case ibis::BYTE:
-			meorder(*static_cast<ibis::array_t<signed char>*>(result),
-					*static_cast<ibis::array_t<signed char>*>(col->selectBytes(*mask)),idx);
+		{
+			ibis::array_t<signed char> *values = col->selectBytes(*mask);
+			meorder(*static_cast<ibis::array_t<signed char>*>(result),values,idx);
 			break;
+		}
 		case ibis::UBYTE:
-			meorder(*static_cast<ibis::array_t<unsigned char>*>(result),
-					*static_cast<ibis::array_t<unsigned char>*>(col->selectUBytes(*mask)),idx);
+		{
+			ibis::array_t<unsigned char> *values = col->selectUBytes(*mask);
+			meorder(*static_cast<ibis::array_t<unsigned char>*>(result),values,idx);
 			break;
+		}
 		case ibis::SHORT:
-			meorder(*static_cast<ibis::array_t<int16_t>*>(result),
-					*static_cast<ibis::array_t<int16_t>*>(col->selectShorts(*mask)),idx);
+		{
+			ibis::array_t<int16_t> *values = col->selectShorts(*mask);
+			meorder(*static_cast<ibis::array_t<int16_t>*>(result),values,idx);
 			break;
+		}
 		case ibis::USHORT:
-			meorder(*static_cast<ibis::array_t<uint16_t>*>(result),
-					*static_cast<ibis::array_t<uint16_t>*>(col->selectUShorts(*mask)),idx);
+		{
+			ibis::array_t<uint16_t> *values = col->selectUShorts(*mask);
+			meorder(*static_cast<ibis::array_t<uint16_t>*>(result),values,idx);
 			break;
+		}
 		case ibis::INT:
-			meorder(*static_cast<ibis::array_t<int32_t>*>(result),
-					*static_cast<ibis::array_t<int32_t>*>(col->selectInts(*mask)),idx);
+		{
+			ibis::array_t<int32_t> *values = col->selectInts(*mask);
+			meorder(*static_cast<ibis::array_t<int32_t>*>(result),values,idx);
 			break;
+		}
 		case ibis::UINT:
-			meorder(*static_cast<ibis::array_t<uint32_t>*>(result),
-					*static_cast<ibis::array_t<uint32_t>*>(col->selectUInts(*mask)),idx);
+		{
+			ibis::array_t<uint32_t> *values = col->selectUInts(*mask);
+			meorder(*static_cast<ibis::array_t<uint32_t>*>(result),values,idx);
 			break;
+		}
 		case ibis::LONG:
-			meorder(*static_cast<ibis::array_t<int64_t>*>(result),
-					*static_cast<ibis::array_t<int64_t>*>(col->selectLongs(*mask)),idx);
+		{
+			ibis::array_t<int64_t> *values = col->selectLongs(*mask);
+			meorder(*static_cast<ibis::array_t<int64_t>*>(result),values,idx);
 			break;
+		}
 		case ibis::ULONG:
-			meorder(*static_cast<ibis::array_t<uint64_t>*>(result),
-					*static_cast<ibis::array_t<uint64_t>*>(col->selectULongs(*mask)),idx);
+		{
+			ibis::array_t<uint64_t> *values = col->selectULongs(*mask);
+			meorder(*static_cast<ibis::array_t<uint64_t>*>(result),values,idx);
 			break;
+		}
 		case ibis::FLOAT:
-			meorder(*static_cast<ibis::array_t<float>*>(result),
-					*static_cast<ibis::array_t<float>*>(col->selectFloats(*mask)),idx);
+		{
+			ibis::array_t<float> *values = col->selectFloats(*mask);
+			meorder(*static_cast<ibis::array_t<float>*>(result),values,idx);
 			break;
+		}
 		case ibis::DOUBLE:
-			meorder(*static_cast<ibis::array_t<double>*>(result),
-					*static_cast<ibis::array_t<double>*>(col->selectDoubles(*mask)),idx);
+		{
+			ibis::array_t<double> *values = col->selectDoubles(*mask);
+			meorder(*static_cast<ibis::array_t<double>*>(result),values,idx);
 			break;
+		}
 		case ibis::TEXT:
 		case ibis::CATEGORY:
-			meorder(*static_cast<std::vector<std::string>*>(result),
-					*static_cast<std::vector<std::string>*>(col->selectStrings(*mask)),idx);
+		{
+			std::vector<std::string> *values = col->selectStrings(*mask);
+			meorder(*static_cast<std::vector<std::string>*>(result),values,idx);
 			break;
+		}
 		default:
 			break;
 	}
@@ -249,22 +265,25 @@ void fillColumn(const ibis::column* col, ibis::bitvector* mask,
 // When Bstart == Bend you don't add an end column
 ibis::table* fillResult(const ibis::part* Apart, const ibis::part* Bpart,
 	ibis::bitvector* Amatch, ibis::bitvector* Bmatch,
-	std::vector<uint32_t>& Aidx, std::vector<uint32_t>& Bidx)
+	ibis::array_t<uint32_t>& Aidx, ibis::array_t<uint32_t>& Bidx)
 {
-	std::cerr << "fillResult()" << std::endl;
+/*
+	std::cerr << "fillResult() Aidx.size=" << Aidx.size();
+	std::cerr << " Bidx.size=" << Bidx.size();
+	std::cerr << " Amatch->cnt()=" << Amatch->cnt();
+	std::cerr << " Bmatch->cnt()=" << Bmatch->cnt() << std::endl;
+*/
 	size_t nrows = Aidx.size();
-	int ncols = Acols.size() + Bcols.size();
+	size_t ncols = Acols.size() + Bcols.size();
 	ibis::table::bufferList tbuff(ncols);
 	ibis::table::typeList ttypes(ncols);
 	IBIS_BLOCK_GUARD(ibis::table::freeBuffers, ibis::util::ref(tbuff), ibis::util::ref(ttypes));
 
-	const size_t Anr = static_cast<size_t>(Amatch->cnt());
-	const size_t Bnr = static_cast<size_t>(Bmatch->cnt());
 	boost::thread_group tg;
-	int j=0;
-	for(int i=0; i<Acols.size(); i++) {
-		std::cerr << Acols[i] << std::endl;
-		ibis::column* col = Apart->getColumn(Acols[i]);
+	size_t j=0;
+	for(size_t i=0; i<Acols.size(); i++) {
+		// std::cerr << Acols[i] << std::endl;
+		ibis::column *col = Apart->getColumn(Acols[i]);
 		ttypes[j] = col->type();
 		tbuff[j] = ibis::table::allocateBuffer(col->type(),nrows);
 		if(parallelize > 0)
@@ -273,9 +292,9 @@ ibis::table* fillResult(const ibis::part* Apart, const ibis::part* Bpart,
 			fillColumn(col,Amatch,Aidx,tbuff[j]);
 		j++;
 	}
-	for(int i=0; i<Bcols.size(); i++) {
-		std::cerr << Bcols[i] << std::endl;
-		ibis::column* col = Bpart->getColumn(Bcols[i]);
+	for(size_t i=0; i<Bcols.size(); i++) {
+		// std::cerr << Bcols[i] << std::endl;
+		ibis::column *col = Bpart->getColumn(Bcols[i]);
 		ttypes[j] = col->type();
 		tbuff[j] = ibis::table::allocateBuffer(col->type(),nrows);
 		if(parallelize > 0)
@@ -294,9 +313,9 @@ ibis::table* fillResult(const ibis::part* Apart, const ibis::part* Bpart,
 // set bits in Amatch and Bmatch so we can fetch only elements that overlap
 // fill two arrays of indexes that say what rows to take from selected columns of A and B
 void Stacker(const ibis::part* Apart, const ibis::part* Bpart,
-	ibis::bitvector* Amask, ibis::bitvector* Bmask, int before, int after)
+	ibis::bitvector &Amask, ibis::bitvector &Bmask, int before, int after)
 {
-	if (Amask->cnt() == 0 || Bmask->cnt() == 0)
+	if (Amask.cnt() == 0 || Bmask.cnt() == 0)
 		return;
 
 	ibis::column *Astart_col = Apart->getColumn(Astart);
@@ -304,106 +323,122 @@ void Stacker(const ibis::part* Apart, const ibis::part* Bpart,
 	ibis::column *Bstart_col = Bpart->getColumn(Bstart);
 	ibis::column *Bend_col = Bpart->getColumn(Bend);
 
-	ibis::array_t<ibis::rid_t> *Arids = Apart->getRIDs(*Amask);
-	ibis::array_t<ibis::rid_t> *Brids = Bpart->getRIDs(*Bmask);
-	ibis::array_t<uint32_t> *Astart_val = Astart_col->selectUInts(*Amask);
-	ibis::array_t<uint32_t> *Aend_val = Aend_col->selectUInts(*Amask);
-	ibis::array_t<uint32_t> *Bstart_val = Bstart_col->selectUInts(*Bmask);
-	ibis::array_t<uint32_t> *Bend_val = Bend_col->selectUInts(*Bmask);
+	ibis::array_t<ibis::rid_t> *Arids = Apart->getRIDs(Amask);
+	ibis::array_t<ibis::rid_t> *Brids = Bpart->getRIDs(Bmask);
+	ibis::array_t<uint32_t> *Astart_val = Astart_col->selectUInts(Amask);
+	ibis::array_t<uint32_t> *Aend_val = Aend_col->selectUInts(Amask);
+	ibis::array_t<uint32_t> *Bstart_val = Bstart_col->selectUInts(Bmask);
+	ibis::array_t<uint32_t> *Bend_val = Bend_col->selectUInts(Bmask);
 	
-	ibis::bitvector Amatch;
-	ibis::bitvector Bmatch;
-	const uint32_t nA = Amask->cnt();
-	const uint32_t nB = Bmask->cnt();
-	std::vector<uint32_t> Aidx;
-	std::vector<uint32_t> Bidx;
+	ibis::bitvector* Amatch;
+	ibis::bitvector* Bmatch;
+	Amatch = new ibis::bitvector;
+	Bmatch = new ibis::bitvector;
+	const uint32_t nA = Amask.cnt();
+	const uint32_t nB = Bmask.cnt();
+	ibis::array_t<uint32_t> Aidx;
+	ibis::array_t<uint32_t> Bidx;
 	uint32_t iA=0;
 	uint32_t iB=0;
 	uint32_t mA=0;
 	uint32_t mB=0;
-	std::cerr << "before Amask->cnt() = " << Amask->cnt() << " Astart_val->size() = " << Astart_val->size() << std::endl;
-	std::cerr << "before Bmask->cnt() = " << Bmask->cnt() << " Bstart_val->size() = " << Bstart_val->size() <<  std::endl;
+/*
+	std::cerr << "before Amask->cnt() = " << Amask.cnt() << " Astart_val->size() = " << Astart_val->size() << std::endl;
+	std::cerr << "before Bmask->cnt() = " << Bmask.cnt() << " Bstart_val->size() = " << Bstart_val->size() <<  std::endl;
+*/
 	std::map<uint32_t,bool> Bseen;
 	while (iA < nA && iB < nB) {
 		uint32_t before_ = (*Astart_val)[iA] - before;
 		uint32_t after_ = (*Aend_val)[iA] + after;
-		if ((*Bend_val)[iB] < before_) // B comes first
+		if ((*Bend_val)[iB] < before_) {// B comes first
+			if(Bseen.count(iB)>0)
+				mB++;
 			iB++;
+		}
 		else if (after_ < (*Bstart_val)[iB]) // A comes first
 			iA++;
 		else {
 			// found a match
 			Aidx.push_back(mA);
 			Bidx.push_back(mB);
-			Amatch.setBit((const uint32_t) (*Arids)[iA].value, 1);
-			mA++;
-			if (Bseen.count(mB) == 0) {
-				Bseen.insert(std::pair<uint32_t,bool>(mB,true));
-				Bmatch.setBit((const uint32_t) (*Brids)[iB].value, 1);
-				mB++;
+			// std::cerr << "A.setBit(" << (*Arids)[iA].value << ") iA= " << iA << " mA= " << mA << std::endl;
+			Amatch->setBit((*Arids)[iA].value, 1);
+			if (Bseen.count(iB) == 0) {
+				Bseen.insert(std::pair<uint32_t,bool>(iB,true));
+				// std::cerr << "B.setBit(" << (*Brids)[iB].value << ") iB= " << iB << " mB= " << mB << std::endl;
+				Bmatch->setBit((*Brids)[iB].value, 1);
 			}
 			// report all the matches of B within this A interval
 			// then increment iA
 			uint32_t iiB=iB+1;
+			uint32_t mmB=mB+1;
 			while (iiB < nB && (*Bstart_val)[iiB] <= after_) {
 				if ((*Bend_val)[iiB] >= before_) {
 					// overlap
 					Aidx.push_back(mA);
-					Bidx.push_back(mB);
-					if (Bseen.count(mB) == 0) {
-						Bseen.insert(std::pair<uint32_t,bool>(mB,true));
-						Bmatch.setBit((const uint32_t) (*Brids)[iiB].value, 1);
-						mB++;
+					Bidx.push_back(mmB);
+					if (Bseen.count(iiB) == 0) {
+						Bseen.insert(std::pair<uint32_t,bool>(iiB,true));
+						// std::cerr << "B.setBit(" << (*Brids)[iiB].value << ") iiB= " << iiB << " mmB= " << mmB << std::endl;
+						Bmatch->setBit((*Brids)[iiB].value, 1);
 					}
+					mmB++;
 				}
 				iiB++;
 			}
+			mA++;
 			iA++;
 		}
 	}
 
-	std::cerr << "after Amatch.cnt() = " << Amatch.cnt() << " mA = " << mA  << std::endl;
-	std::cerr << "after Bmatch.cnt() = " << Bmatch.cnt() << " mB = " << mB << std::endl;
+	Amatch->adjustSize(0,Apart->nRows());
+	Bmatch->adjustSize(0,Bpart->nRows());
 
-	if (Amatch.cnt() == 0 || Bmatch.cnt() == 0)
+/*
+	std::cerr << "after Amatch.cnt() = " << Amatch->cnt() << " mA = " << mA  << std::endl;
+	std::cerr << "after Bmatch.cnt() = " << Bmatch->cnt() << " mB = " << mB << std::endl;
+*/
+	Amatch->compress();
+	Bmatch->compress();
+	if (Amatch->cnt() == 0 || Bmatch->cnt() == 0)
 		return;
 
-	ibis::table *jtable = fillResult(Apart,Bpart,&Amatch,&Bmatch,Aidx,Bidx);
+	ibis::table *jtable = fillResult(Apart,Bpart,Amatch,Bmatch,Aidx,Bidx);
 
 }
 
 // apply the user supplied query expression to the given part
 // populate a bitvector mask that corresponds to the matching rows
 // return the number of rows that match
-int countHits(const ibis::part* part, ibis::bitvector* mask,
+int countHits(const ibis::part* part, ibis::bitvector &mask,
 	 const ibis::qExpr* cond, const char* colName)
 {
 	if (cond != 0) {
 		ibis::countQuery que(part);
 		int ierr = que.setWhereClause(cond);
 		ierr = que.evaluate();
-		mask->copy(*que.getHitVector());
+		mask.copy(*que.getHitVector());
 	}
 	else {
 		ibis::column *c = part->getColumn(colName);
-		c->getNullMask(*mask);
+		c->getNullMask(mask);
 	}
-	return mask->cnt();
+	return mask.cnt();
 }
 
 // populate bitvectors for hits to the sense and antisense strands
 // Behold the beauty of WAH bitwise operations!
-void splitByStrand(const ibis::part* part, ibis::bitvector* mask,
-	ibis::bitvector* plus, ibis::bitvector* minus)
+void splitByStrand(const ibis::part* part, ibis::bitvector &mask,
+	ibis::bitvector &plus, ibis::bitvector &minus)
 {
 	ibis::countQuery que(part);
 	int ierr = que.setWhereClause(senseExpr);
 	ierr = que.evaluate();
-	plus->copy(*que.getHitVector());
-	minus->copy(*que.getHitVector());
-	minus->flip();
-	*plus &= *mask;
-	*minus &= *mask;
+	plus.copy(*que.getHitVector());
+	minus.copy(*que.getHitVector());
+	minus.flip();
+	plus &= mask;
+	minus &= mask;
 }
 
 // intersecting genomic intervals are always on the same chromsome
@@ -416,11 +451,11 @@ void setupStacker(const ibis::part* Apart, const ibis::part* Bpart)
 	// count hits to A and B on this chr
 	// make masks based on Aqcnd and Bqcnd
     ibis::bitvector Amask;
-	int Arows = countHits(Apart, &Amask, Acond, Astart);	
+	int Arows = countHits(Apart, Amask, Acond, Astart);	
 	if (Arows == 0) return;
 	
     ibis::bitvector Bmask;
-	int Brows = countHits(Bpart, &Bmask, Bcond, Bstart);
+	int Brows = countHits(Bpart, Bmask, Bcond, Bstart);
 	if (Brows == 0) return;
 	
 	if(same_strand == 1 && (Anaty.count("strand") > 0) && (Bnaty.count("strand") > 0)) {
@@ -428,18 +463,18 @@ void setupStacker(const ibis::part* Apart, const ibis::part* Bpart)
 		// update the masks (Aplus, Aminus, Bplus, Bminus)
 		ibis::bitvector Aplus;
 		ibis::bitvector Aminus;
-		splitByStrand(Apart, &Amask, &Aplus, &Aminus);
+		splitByStrand(Apart, Amask, Aplus, Aminus);
 		
 		ibis::bitvector Bplus;
 		ibis::bitvector Bminus;
-		splitByStrand(Bpart, &Bmask, &Bplus, &Bminus);
+		splitByStrand(Bpart, Bmask, Bplus, Bminus);
 
-		Stacker(Apart, Bpart, &Aplus, &Bplus, left, right);
+		Stacker(Apart, Bpart, Aplus, Bplus, left, right);
 		if (stranded_windows>0) {
-			Stacker(Apart, Bpart, &Aminus, &Bminus, right, left);
+			Stacker(Apart, Bpart, Aminus, Bminus, right, left);
 		}
 		else {
-			Stacker(Apart, Bpart, &Aminus, &Bminus, left, right);
+			Stacker(Apart, Bpart, Aminus, Bminus, left, right);
 		}
 	}
 	else {
@@ -448,26 +483,26 @@ void setupStacker(const ibis::part* Apart, const ibis::part* Bpart)
 			// update the masks (Aplus, Aminus)
 			ibis::bitvector Aplus;
 			ibis::bitvector Aminus;
-			splitByStrand(Apart, &Amask, &Aplus, &Aminus);
-			Stacker(Apart, Bpart, &Aplus, &Bmask, left, right);
-			Stacker(Apart, Bpart, &Aminus, &Bmask, right, left);
+			splitByStrand(Apart, Amask, Aplus, Aminus);
+			Stacker(Apart, Bpart, Aplus, Bmask, left, right);
+			Stacker(Apart, Bpart, Aminus, Bmask, right, left);
 		}
 		else {
-			Stacker(Apart, Bpart, &Amask, &Bmask, left, right);
+			Stacker(Apart, Bpart, Amask, Bmask, left, right);
 		}
 	}
 }
 
 // make a list of valid column names from the given select string
-void fillColumnLists(char * sel, std::map<const char*,ibis::TYPE_T>* naty,
-	ibis::table::stringList* cols)
+void fillColumnLists(char * sel, std::map<const char*,ibis::TYPE_T> &naty,
+	ibis::table::stringList &cols)
 {
-	cols->clear();
+	cols.clear();
 	char * pch;
 	pch = strtok (sel, " ,.-");
 	while (pch != NULL) {
-		if (naty->count(pch) > 0)
-			cols->push_back(pch);
+		if (naty.count(pch) > 0)
+			cols.push_back(pch);
 		pch = strtok (NULL, " ,.-");
 	}
 }
@@ -500,9 +535,9 @@ int main(int argc, char** argv)
 
 	// parse Asel and Bsel columns
 	if (Asel != 0 && *Asel != 0)
-		fillColumnLists(Asel,&Anaty,&Acols);
+		fillColumnLists(Asel,Anaty,Acols);
 	if (Bsel != 0 && *Bsel != 0)
-		fillColumnLists(Bsel,&Bnaty,&Bcols);
+		fillColumnLists(Bsel,Bnaty,Bcols);
 
 	std::vector<const ibis::part*> Bparts;
 	B->getPartitions(Bparts);

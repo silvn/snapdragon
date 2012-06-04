@@ -3,6 +3,7 @@
 #include <map>
 #include <string>
 #include <boost/thread.hpp>
+#include "resource.h"	// ibis::gParameters
 
 // had to make these global
 const char* Afrom = 0;
@@ -65,6 +66,7 @@ static void usage(const char* name)
 // function to parse the command line arguments
 void parse_args(int argc, char** argv)
 {
+	// ibis::gVerbose = 3;
 	for (size_t i=1; i<argc; ++i) {
 	    if (*argv[i] == '-') { // arguments starting with -
 	      switch (argv[i][1]) {
@@ -266,25 +268,25 @@ void fillColumn(ibis::column* col, ibis::bitvector* mask,
 void fillResult(const ibis::part* Apart, const ibis::part* Bpart,
 	ibis::bitvector* Amatch, ibis::bitvector* Bmatch,
 	ibis::array_t<uint32_t>& Aidx, ibis::array_t<uint32_t>& Bidx,
-	ibis::array_t<int32_t> &relativeStart, ibis::array_t<int32_t> &relativeEnd)
+	ibis::array_t<int32_t> &relativeStart, ibis::array_t<int32_t> &relativeEnd, uint32_t thread_id)
 {
 	size_t nrows = Aidx.size();
 	size_t ncols = Acols.size() + Bcols.size() + 2;
 	ibis::table::bufferList * tbuff = new ibis::table::bufferList(ncols);
-	part_results.push_back(tbuff);
+	part_results[thread_id]=tbuff;
 	ibis::table::typeList ttypes(ncols);
 
 	(*tbuff)[0] = &relativeStart;
 	(*tbuff)[1] = &relativeEnd;
 
-	boost::thread_group tg;
+	boost::thread_group g1;
 	size_t j=2;
 	for(size_t i=0; i<Acols.size(); i++) {
 		ibis::column *col = Apart->getColumn(Acols[i]);
 		ttypes[j] = col->type();
 		(*tbuff)[j] = ibis::table::allocateBuffer(col->type(),nrows);
 		if(parallelize > 0)
-			tg.create_thread(boost::bind(fillColumn,col,Amatch,Aidx,(*tbuff)[j]));
+			g1.create_thread(boost::bind(fillColumn,col,Amatch,Aidx,(*tbuff)[j]));
 		else
 			fillColumn(col,Amatch,Aidx,(*tbuff)[j]);
 		j++;
@@ -294,13 +296,13 @@ void fillResult(const ibis::part* Apart, const ibis::part* Bpart,
 		ttypes[j] = col->type();
 		(*tbuff)[j] = ibis::table::allocateBuffer(col->type(),nrows);
 		if(parallelize > 0)
-			tg.create_thread(boost::bind(fillColumn,col,Bmatch,Bidx,(*tbuff)[j]));
+			g1.create_thread(boost::bind(fillColumn,col,Bmatch,Bidx,(*tbuff)[j]));
 		else
 			fillColumn(col,Bmatch,Bidx,(*tbuff)[j]);
 		j++;
 	}
 	if(parallelize > 0)
-		tg.join_all();
+		g1.join_all();
 }
 
 // calculate the position of from and to relative to before_ and after_
@@ -331,7 +333,7 @@ void push_relative_position(ibis::array_t<int32_t> &relativeStart,ibis::array_t<
 // set bits in Amatch and Bmatch so we can fetch only elements that overlap
 // fill two arrays of indexes that say what rows to take from selected columns of A and B
 void Stacker(const ibis::part* Apart, const ibis::part* Bpart,
-	ibis::bitvector &Amask, ibis::bitvector &Bmask, int before, int after, bool flipped)
+	ibis::bitvector &Amask, ibis::bitvector &Bmask, int before, int after, bool flipped, uint32_t thread_id)
 {
 	if (Amask.cnt() == 0 || Bmask.cnt() == 0)
 		return;
@@ -354,10 +356,8 @@ void Stacker(const ibis::part* Apart, const ibis::part* Bpart,
 	ibis::array_t<int32_t> * relativeStart = new ibis::array_t<int32_t>();
 	ibis::array_t<int32_t> * relativeEnd = new ibis::array_t<int32_t>();
 	
-	ibis::bitvector* Amatch;
-	ibis::bitvector* Bmatch;
-	Amatch = new ibis::bitvector;
-	Bmatch = new ibis::bitvector;
+	ibis::bitvector* Amatch = new ibis::bitvector;
+	ibis::bitvector* Bmatch = new ibis::bitvector;
 	const uint32_t nA = Amask.cnt();
 	const uint32_t nB = Bmask.cnt();
 	ibis::array_t<uint32_t> Aidx;
@@ -420,7 +420,7 @@ void Stacker(const ibis::part* Apart, const ibis::part* Bpart,
 	if (Amatch->cnt() == 0 || Bmatch->cnt() == 0)
 		return;
 
-	fillResult(Apart,Bpart,Amatch,Bmatch,Aidx,Bidx,*relativeStart,*relativeEnd);
+	fillResult(Apart,Bpart,Amatch,Bmatch,Aidx,Bidx,*relativeStart,*relativeEnd, thread_id);
 }
 
 // apply the user supplied query expression to the given part
@@ -461,7 +461,7 @@ void splitByStrand(const ibis::part* part, ibis::bitvector &mask,
 // so we operate on partitions with the same FBchr
 // other command line options control how intervals are selected
 // so we have to handle special cases related to strand
-void setupStacker(const ibis::part* Apart, const ibis::part* Bpart)
+void setupStacker(const ibis::part* Apart, const ibis::part* Bpart, size_t thread_id, uint32_t offset)
 {
 	// TODO: do some checks
 	// count hits to A and B on this chr
@@ -485,12 +485,12 @@ void setupStacker(const ibis::part* Apart, const ibis::part* Bpart)
 		ibis::bitvector Bminus;
 		splitByStrand(Bpart, Bmask, Bplus, Bminus);
 
-		Stacker(Apart, Bpart, Aplus, Bplus, left, right, false);
+		Stacker(Apart, Bpart, Aplus, Bplus, left, right, false, thread_id);
 		if (stranded_windows>0) {
-			Stacker(Apart, Bpart, Aminus, Bminus, right, left, true);
+			Stacker(Apart, Bpart, Aminus, Bminus, right, left, true, thread_id+offset);
 		}
 		else {
-			Stacker(Apart, Bpart, Aminus, Bminus, left, right, false);
+			Stacker(Apart, Bpart, Aminus, Bminus, left, right, false, thread_id+offset);
 		}
 	}
 	else {
@@ -500,11 +500,11 @@ void setupStacker(const ibis::part* Apart, const ibis::part* Bpart)
 			ibis::bitvector Aplus;
 			ibis::bitvector Aminus;
 			splitByStrand(Apart, Amask, Aplus, Aminus);
-			Stacker(Apart, Bpart, Aplus, Bmask, left, right, false);
-			Stacker(Apart, Bpart, Aminus, Bmask, right, left, true);
+			Stacker(Apart, Bpart, Aplus, Bmask, left, right, false, thread_id);
+			Stacker(Apart, Bpart, Aminus, Bmask, right, left, true, thread_id+offset);
 		}
 		else {
-			Stacker(Apart, Bpart, Amask, Bmask, left, right, false);
+			Stacker(Apart, Bpart, Amask, Bmask, left, right, false, thread_id);
 		}
 	}
 }
@@ -525,90 +525,91 @@ void fillColumnLists(char * sel, std::map<const char*,ibis::TYPE_T> &naty,
 
 void concatenate_column(ibis::table::bufferList& tbuff, ibis::table::typeList &ttypes, size_t col)
 {
-
 	tbuff[col] = ibis::table::allocateBuffer(ttypes[col],0);
 	for(size_t i=0; i < part_results.size(); i++) {
-		switch(ttypes[col]) {
-			case ibis::BYTE:
-			{
-				ibis::array_t<signed char>* b1 = static_cast<ibis::array_t<signed char>*>(tbuff[col]);
-				ibis::array_t<signed char>* b2 = static_cast<ibis::array_t<signed char>*>((*part_results[i])[col]);
-				b1->insert(b1->end(),b2->begin(),b2->end());
-				break;
+		if (part_results[i] != 0) {
+			switch(ttypes[col]) {
+				case ibis::BYTE:
+				{
+					ibis::array_t<signed char>* b1 = static_cast<ibis::array_t<signed char>*>(tbuff[col]);
+					ibis::array_t<signed char>* b2 = static_cast<ibis::array_t<signed char>*>((*part_results[i])[col]);
+					b1->insert(b1->end(),b2->begin(),b2->end());
+					break;
+				}
+				case ibis::UBYTE:
+				{
+					ibis::array_t<unsigned char>* b1 = static_cast<ibis::array_t<unsigned char>*>(tbuff[col]);
+					ibis::array_t<unsigned char>* b2 = static_cast<ibis::array_t<unsigned char>*>((*part_results[i])[col]);
+					b1->insert(b1->end(),b2->begin(),b2->end());
+					break;
+				}
+				case ibis::SHORT:
+				{
+					ibis::array_t<int16_t>* b1 = static_cast<ibis::array_t<int16_t>*>(tbuff[col]);
+					ibis::array_t<int16_t>* b2 = static_cast<ibis::array_t<int16_t>*>((*part_results[i])[col]);
+					b1->insert(b1->end(),b2->begin(),b2->end());
+					break;
+				}
+				case ibis::USHORT:
+				{
+					ibis::array_t<uint16_t>* b1 = static_cast<ibis::array_t<uint16_t>*>(tbuff[col]);
+					ibis::array_t<uint16_t>* b2 = static_cast<ibis::array_t<uint16_t>*>((*part_results[i])[col]);
+					b1->insert(b1->end(),b2->begin(),b2->end());
+					break;
+				}
+				case ibis::INT:
+				{
+					ibis::array_t<int32_t>* b1 = static_cast<ibis::array_t<int32_t>*>(tbuff[col]);
+					ibis::array_t<int32_t>* b2 = static_cast<ibis::array_t<int32_t>*>((*part_results[i])[col]);
+					b1->insert(b1->end(),b2->begin(),b2->end());
+					break;
+				}
+				case ibis::UINT:
+				{
+					ibis::array_t<uint32_t>* b1 = static_cast<ibis::array_t<uint32_t>*>(tbuff[col]);
+					ibis::array_t<uint32_t>* b2 = static_cast<ibis::array_t<uint32_t>*>((*part_results[i])[col]);
+					b1->insert(b1->end(),b2->begin(),b2->end());
+					break;
+				}
+				case ibis::LONG:
+				{
+					ibis::array_t<int64_t>* b1 = static_cast<ibis::array_t<int64_t>*>(tbuff[col]);
+					ibis::array_t<int64_t>* b2 = static_cast<ibis::array_t<int64_t>*>((*part_results[i])[col]);
+					b1->insert(b1->end(),b2->begin(),b2->end());
+					break;
+				}
+				case ibis::ULONG:
+				{
+					ibis::array_t<uint64_t>* b1 = static_cast<ibis::array_t<uint64_t>*>(tbuff[col]);
+					ibis::array_t<uint64_t>* b2 = static_cast<ibis::array_t<uint64_t>*>((*part_results[i])[col]);
+					b1->insert(b1->end(),b2->begin(),b2->end());
+					break;
+				}
+				case ibis::FLOAT:
+				{
+					ibis::array_t<float>* b1 = static_cast<ibis::array_t<float>*>(tbuff[col]);
+					ibis::array_t<float>* b2 = static_cast<ibis::array_t<float>*>((*part_results[i])[col]);
+					b1->insert(b1->end(),b2->begin(),b2->end());
+					break;
+				}
+				case ibis::DOUBLE:
+				{
+					ibis::array_t<double>* b1 = static_cast<ibis::array_t<double>*>(tbuff[col]);
+					ibis::array_t<double>* b2 = static_cast<ibis::array_t<double>*>((*part_results[i])[col]);
+					b1->insert(b1->end(),b2->begin(),b2->end());
+					break;
+				}
+				case ibis::TEXT:
+				case ibis::CATEGORY:
+				{
+					std::vector<std::string>* b1 = static_cast<std::vector<std::string>*>(tbuff[col]);
+					std::vector<std::string>* b2 = static_cast<std::vector<std::string>*>((*part_results[i])[col]);
+					b1->insert(b1->end(),b2->begin(),b2->end());
+					break;
+				}
+				default:
+					break;
 			}
-			case ibis::UBYTE:
-			{
-				ibis::array_t<unsigned char>* b1 = static_cast<ibis::array_t<unsigned char>*>(tbuff[col]);
-				ibis::array_t<unsigned char>* b2 = static_cast<ibis::array_t<unsigned char>*>((*part_results[i])[col]);
-				b1->insert(b1->end(),b2->begin(),b2->end());
-				break;
-			}
-			case ibis::SHORT:
-			{
-				ibis::array_t<int16_t>* b1 = static_cast<ibis::array_t<int16_t>*>(tbuff[col]);
-				ibis::array_t<int16_t>* b2 = static_cast<ibis::array_t<int16_t>*>((*part_results[i])[col]);
-				b1->insert(b1->end(),b2->begin(),b2->end());
-				break;
-			}
-			case ibis::USHORT:
-			{
-				ibis::array_t<uint16_t>* b1 = static_cast<ibis::array_t<uint16_t>*>(tbuff[col]);
-				ibis::array_t<uint16_t>* b2 = static_cast<ibis::array_t<uint16_t>*>((*part_results[i])[col]);
-				b1->insert(b1->end(),b2->begin(),b2->end());
-				break;
-			}
-			case ibis::INT:
-			{
-				ibis::array_t<int32_t>* b1 = static_cast<ibis::array_t<int32_t>*>(tbuff[col]);
-				ibis::array_t<int32_t>* b2 = static_cast<ibis::array_t<int32_t>*>((*part_results[i])[col]);
-				b1->insert(b1->end(),b2->begin(),b2->end());
-				break;
-			}
-			case ibis::UINT:
-			{
-				ibis::array_t<uint32_t>* b1 = static_cast<ibis::array_t<uint32_t>*>(tbuff[col]);
-				ibis::array_t<uint32_t>* b2 = static_cast<ibis::array_t<uint32_t>*>((*part_results[i])[col]);
-				b1->insert(b1->end(),b2->begin(),b2->end());
-				break;
-			}
-			case ibis::LONG:
-			{
-				ibis::array_t<int64_t>* b1 = static_cast<ibis::array_t<int64_t>*>(tbuff[col]);
-				ibis::array_t<int64_t>* b2 = static_cast<ibis::array_t<int64_t>*>((*part_results[i])[col]);
-				b1->insert(b1->end(),b2->begin(),b2->end());
-				break;
-			}
-			case ibis::ULONG:
-			{
-				ibis::array_t<uint64_t>* b1 = static_cast<ibis::array_t<uint64_t>*>(tbuff[col]);
-				ibis::array_t<uint64_t>* b2 = static_cast<ibis::array_t<uint64_t>*>((*part_results[i])[col]);
-				b1->insert(b1->end(),b2->begin(),b2->end());
-				break;
-			}
-			case ibis::FLOAT:
-			{
-				ibis::array_t<float>* b1 = static_cast<ibis::array_t<float>*>(tbuff[col]);
-				ibis::array_t<float>* b2 = static_cast<ibis::array_t<float>*>((*part_results[i])[col]);
-				b1->insert(b1->end(),b2->begin(),b2->end());
-				break;
-			}
-			case ibis::DOUBLE:
-			{
-				ibis::array_t<double>* b1 = static_cast<ibis::array_t<double>*>(tbuff[col]);
-				ibis::array_t<double>* b2 = static_cast<ibis::array_t<double>*>((*part_results[i])[col]);
-				b1->insert(b1->end(),b2->begin(),b2->end());
-				break;
-			}
-			case ibis::TEXT:
-			case ibis::CATEGORY:
-			{
-				std::vector<std::string>* b1 = static_cast<std::vector<std::string>*>(tbuff[col]);
-				std::vector<std::string>* b2 = static_cast<std::vector<std::string>*>((*part_results[i])[col]);
-				b1->insert(b1->end(),b2->begin(),b2->end());
-				break;
-			}
-			default:
-				break;
 		}
 	}	
 }
@@ -619,53 +620,60 @@ ibis::table* concatenate_results()
 	ibis::table::bufferList tbuff(ncols,0);
 	ibis::table::typeList ttypes(ncols);
 	ibis::table::stringList colnames(ncols);
+	std::vector<std::string> colnamesstr;
+	colnamesstr.resize(ncols);
 	IBIS_BLOCK_GUARD(ibis::table::freeBuffers, ibis::util::ref(tbuff), ibis::util::ref(ttypes));
 
 	uint32_t nrows=0;
 	for(size_t i=0; i < part_results.size(); i++) {
-		ibis::array_t<int32_t>* buff = static_cast<ibis::array_t<int32_t>*>((*part_results[i])[0]);
-		nrows += buff->size();
+		if (part_results[i] != 0) {
+			ibis::array_t<int32_t>* buff = static_cast<ibis::array_t<int32_t>*>((*part_results[i])[0]);
+			nrows += buff->size();
+		}
 	}
 	
+	colnames[0] = "start";
+	colnames[1] = "end";
 	ttypes[0] = ibis::INT;
 	ttypes[1] = ibis::INT;
-	boost::thread_group g;
+	boost::thread_group g2;
 	if (parallelize > 0) {
-		g.create_thread(boost::bind(concatenate_column, tbuff, ttypes, 0));
-		g.create_thread(boost::bind(concatenate_column, tbuff, ttypes, 1));
+		g2.create_thread(boost::bind(concatenate_column, tbuff, ttypes, 0));
+		g2.create_thread(boost::bind(concatenate_column, tbuff, ttypes, 1));
 	} else {
 		concatenate_column(tbuff,ttypes,0);
 		concatenate_column(tbuff,ttypes,1);
 	}
-	colnames[0] = "start";
-	colnames[1] = "end";
 	size_t j=2;
 	for(size_t i=0; i<Acols.size(); i++) {
-		ttypes[j] = Anaty.find(Acols[i])->second;		
+		std::ostringstream oss;
+		oss << "A__" << Acols[i];
+		colnamesstr[j] = oss.str();
+		colnames[j] = colnamesstr[j].c_str();
+		ttypes[j] = Anaty.find(Acols[i])->second;
 		if (parallelize > 0)
-			g.create_thread(boost::bind(concatenate_column, tbuff, ttypes,j));
+			g2.create_thread(boost::bind(concatenate_column, tbuff, ttypes,j));
 		else
 			concatenate_column(tbuff,ttypes,j);
-		std::string cname= "A.";
-		cname.append(Acols[i]);
-		colnames[j] = cname.c_str();
 		j++;
 	}
 	for(size_t i=0; i<Bcols.size(); i++) {
+		std::ostringstream oss;
+		oss << "B__" << Bcols[i];
+		colnamesstr[j] = oss.str();
+		colnames[j] = colnamesstr[j].c_str();
 		ttypes[j] = Bnaty.find(Bcols[i])->second;
 		if (parallelize > 0)
-			g.create_thread(boost::bind(concatenate_column, tbuff, ttypes,j));
+			g2.create_thread(boost::bind(concatenate_column, tbuff, ttypes,j));
 		else
 			concatenate_column(tbuff,ttypes,j);
-		std::string cname= "B.";
-		cname.append(Bcols[i]);
-		colnames[j] = cname.c_str();
 		j++;
 	}
 	if (parallelize > 0)
-		g.join_all();
+		g2.join_all();
+	
 	// create the table now that it's filled
-    return new ibis::bord("joined", "joined tables", nrows, tbuff, ttypes, colnames);
+    return new ibis::bord("joined", "joined tables", nrows, tbuff, ttypes, colnames,&colnames,0);
 }
 
 int main(int argc, char** argv)
@@ -708,29 +716,26 @@ int main(int argc, char** argv)
 	
 	std::vector<const ibis::part*> Aparts;
 	A->getPartitions(Aparts);
-	boost::thread_group g;
+	part_results.resize(Aparts.size()*2);
+	boost::thread_group g0;
 	for(size_t i=0; i<Aparts.size(); ++ i) {
 		const char* chr = Aparts[i]->getMetaTag("FBchr");
 		if (Bpartmap.count(chr)>0) {
 			if (parallelize > 0)
-				g.create_thread(boost::bind(setupStacker, Aparts[i], Bpartmap.find(chr)->second));
+				g0.create_thread(boost::bind(setupStacker, Aparts[i], Bpartmap.find(chr)->second,i,Aparts.size()));
 			else
-				setupStacker(Aparts[i],Bpartmap.find(chr)->second);
+				setupStacker(Aparts[i],Bpartmap.find(chr)->second,i,Aparts.size());
 		}
 	}
 	if (parallelize > 0)
-		g.join_all();
+		g0.join_all();
 
-	// concatenate each part into one table?
-	ibis::table* res = concatenate_results();
-	std::cerr << "back from concatenate_results() res->nRows() = " << res->nRows() << std::endl;
-
+	// concatenate each part into one table
+	ibis::table *res = concatenate_results();
 	res->orderby("start, end");
 	res->dump(std::cout);
-
-	// write the table out - user supplied outdir
-	// create one subdirectory partition with FBchr = stacked
 	delete res;
+
 	delete A;
 	delete B;
     return 0;

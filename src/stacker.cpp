@@ -33,8 +33,9 @@ int right=1000;
 int same_strand=0;
 int stranded_windows=0;
 int bins=0;
-
 int parallelize=0;
+
+const char* outdir;
 
 ibis::whereClause senseWhere = ibis::whereClause("strand == 1");
 ibis::qExpr* senseExpr = senseWhere.getExpr();
@@ -60,6 +61,7 @@ static void usage(const char* name)
 		<< "[-sm only report hits in B that overlap A on the same strand]" << std::endl
 		<< "[-sw define -l and -r based on strand]" << std::endl
 		<< "[-b number of bins to use for normalization after stacking. default: don't normalize]" << std::endl
+		<< "[-o output directory]" << std::endl
 		<< "[-p parallelize using threads]" << std::endl;
 }
 
@@ -95,6 +97,10 @@ void parse_args(int argc, char** argv)
 					  ++i;
 					  right = atoi(argv[i]);
 				  }
+				  break;
+			  case 'o':
+				  if (i+1 < argc)
+					  outdir = argv[++i];
 				  break;
 		      case 'd':
 		      case 'D':
@@ -152,6 +158,7 @@ void parse_args(int argc, char** argv)
 	    } // arguments starting with -
 	} // for (i=1; ...)
 
+/*
 	std::cerr << *argv << " -d1 " << Afrom << " -d2 " << Bfrom
 	  << " -s1 " << Astart << " -s2 " << Bstart
 	  << " -e1 " << Aend << " -e2 " << Bend
@@ -160,7 +167,9 @@ void parse_args(int argc, char** argv)
 	  << " -r " << right << " -l " << left
 	  << " -b " << bins << " -p " << parallelize
 	  << " -sm " << same_strand << " -sw " << stranded_windows
+	  << " -o " << outdir
 	  << std::endl;
+*/
 }
 
 // function to fill an array with values from an input array based on a list of indices
@@ -676,6 +685,155 @@ ibis::table* concatenate_results()
     return new ibis::bord("joined", "joined tables", nrows, tbuff, ttypes, colnames,&colnames,0);
 }
 
+void write_column(ibis::table* tbl, const char* cname, ibis::TYPE_T ctype, size_t nr, const char* outdir)
+{
+	// open the output file
+	std::string cnm = outdir;
+	cnm += FASTBIT_DIRSEP;
+	cnm += cname;
+	int fdes = UnixOpen(cnm.c_str(), OPEN_WRITEADD, OPEN_FILEMODE);
+	if (fdes < 0) {
+		std::cerr << "faileed to open file " << cnm << " for writing" << std::endl;
+		exit(-4);
+	}
+	IBIS_BLOCK_GUARD(UnixClose, fdes);
+#if defined(_WIN32) && defined(_MSC_VER)
+	(void)_setmode(fdes, _O_BINARY);
+#endif
+	uint64_t ierr;
+	off_t pos = UnixSeek(fdes,0,SEEK_END);
+	// fetch results and write
+	switch (ctype) {
+		case ibis::BYTE:
+		{
+			char* vals = new char[nr];			
+			ierr = tbl->getColumnAsBytes(cname,vals);
+			pos = UnixWrite(fdes,vals,sizeof(char)*nr);
+			break;
+		}
+		case ibis::UBYTE:
+		{
+			unsigned char* vals = new unsigned char[nr];
+			ierr = tbl->getColumnAsUBytes(cname,vals);
+			pos = UnixWrite(fdes,vals,sizeof(unsigned char)*nr);
+			break;
+		}
+		case ibis::SHORT:
+		{
+		    int16_t* vals = new int16_t[nr];
+			ierr = tbl->getColumnAsShorts(cname,vals);
+			pos = UnixWrite(fdes,vals,sizeof(int16_t)*nr);
+			break;
+		}
+		case ibis::USHORT:
+		{
+		    uint16_t* vals = new uint16_t[nr];
+			ierr = tbl->getColumnAsUShorts(cname,vals);
+			pos = UnixWrite(fdes,vals,sizeof(uint16_t)*nr);
+			break;
+		}
+		case ibis::INT:
+		{
+		    int32_t* vals = new int32_t[nr];
+			ierr = tbl->getColumnAsInts(cname,vals);
+			pos = UnixWrite(fdes,vals,sizeof(int32_t)*nr);
+			break;
+		}
+		case ibis::UINT:
+		{
+		    uint32_t* vals = new uint32_t[nr];
+			ierr = tbl->getColumnAsUInts(cname,vals);
+			pos = UnixWrite(fdes,vals,sizeof(uint32_t)*nr);
+			break;
+		}
+		case ibis::LONG:
+		{
+		    int64_t* vals = new int64_t[nr];
+			ierr = tbl->getColumnAsLongs(cname,vals);
+			pos = UnixWrite(fdes,vals,sizeof(int64_t)*nr);
+			break;
+		}
+		case ibis::ULONG:
+		{
+		    uint64_t* vals = new uint64_t[nr];
+			ierr = tbl->getColumnAsULongs(cname,vals);
+			pos = UnixWrite(fdes,vals,sizeof(uint64_t)*nr);
+			break;
+		}
+		case ibis::FLOAT:
+		{
+			float* vals = new float[nr];
+			ierr = tbl->getColumnAsFloats(cname,vals);
+			pos = UnixWrite(fdes,vals,sizeof(float)*nr);
+			break;
+		}
+		case ibis::DOUBLE:
+		{
+			double* vals = new double[nr];
+			ierr = tbl->getColumnAsDoubles(cname,vals);
+			pos = UnixWrite(fdes,vals,sizeof(double)*nr);
+			break;
+		}
+		case ibis::CATEGORY:
+		case ibis::TEXT:
+		{
+		    std::vector<std::string>* vals = new std::vector<std::string>();
+		    ierr = tbl->getColumnAsStrings(cname, *vals);
+			for (uint32_t j = 0; j < nr; ++ j)
+				pos = UnixWrite(fdes,(*vals)[j].c_str(),sizeof(char)*((*vals)[j].length()+1));
+			break;
+		}
+	}
+#if defined(FASTBIT_SYNC_WRITE)
+#if _POSIX_FSYNC+0 > 0
+	(void) UnixFlush(fdes); // write to disk
+#elif defined(_WIN32) && defined(_MSC_VER)
+	(void) _commit(fdes);
+#endif
+#endif
+
+}
+
+void write_table(ibis::table* tbl, const char* outdir)
+{
+	const char* startcolname="start";
+	ibis::table::stringList names = tbl->columnNames();
+	ibis::table::typeList types = tbl->columnTypes();
+	size_t nr = tbl->nRows();
+
+	ibis::part tmp(outdir, static_cast<const char*>(0));
+
+	std::string mdfile = outdir;
+	mdfile += FASTBIT_DIRSEP;
+	mdfile += "-part.txt";
+	std::ofstream md(mdfile.c_str());
+	if(! md) {
+		std::cerr << "failed to open metadata file " << mdfile << std::endl;
+		exit(-3);
+	}
+
+	md << "BEGIN HEADER\nName = joined" << "\nDescription = joined"
+	   << "\nNumber_of_rows = " << nr
+	   << "\nNumber_of_columns = " << names.size();
+	md << "\nEND HEADER\n";
+
+	boost::thread_group tg;
+	for(size_t i=0; i<names.size();i++) {
+		if(parallelize>0)
+			tg.create_thread(boost::bind(write_column, tbl, names[i], types[i], nr, outdir));
+		else
+			write_column(tbl,names[i],types[i],nr,outdir);
+		md << "\nBegin Column\nname = " << names[i] << "\ndata_type = "
+		   << ibis::TYPESTRING[(int) types[i]];
+	    if(stricmp(names[i], startcolname)==0)
+			md << "\nsorted = true";
+		md << "\nEnd Column\n";
+	}
+	md.close();
+	if(parallelize>0)
+		tg.join_all();
+}
+
 int main(int argc, char** argv)
 {
     parse_args(argc, argv);
@@ -733,8 +891,14 @@ int main(int argc, char** argv)
 	// concatenate each part into one table
 	ibis::table *res = concatenate_results();
 	res->orderby("start, end");
-	res->dump(std::cout);
+
+	// output table
+	write_table(res,outdir);
+	
+//	res->dump(std::cout);
 	delete res;
+
+
 
 	delete A;
 	delete B;

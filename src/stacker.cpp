@@ -3,7 +3,6 @@
 #include <map>
 #include <string>
 #include <boost/thread.hpp>
-#include "resource.h"	// ibis::gParameters
 
 // had to make these global
 const char* Afrom = 0;
@@ -68,7 +67,6 @@ static void usage(const char* name)
 // function to parse the command line arguments
 void parse_args(int argc, char** argv)
 {
-	// ibis::gVerbose = 3;
 	for (size_t i=1; i<argc; ++i) {
 	    if (*argv[i] == '-') { // arguments starting with -
 	      switch (argv[i][1]) {
@@ -201,60 +199,70 @@ void fillColumn(ibis::column* col, ibis::bitvector* mask,
 		{
 			ibis::array_t<signed char> *values = col->selectBytes(*mask);
 			meorder(*static_cast<ibis::array_t<signed char>*>(result),*values,idx);
+			delete values;
 			break;
 		}
 		case ibis::UBYTE:
 		{
 			ibis::array_t<unsigned char> *values = col->selectUBytes(*mask);
 			meorder(*static_cast<ibis::array_t<unsigned char>*>(result),*values,idx);
+			delete values;
 			break;
 		}
 		case ibis::SHORT:
 		{
 			ibis::array_t<int16_t> *values = col->selectShorts(*mask);
 			meorder(*static_cast<ibis::array_t<int16_t>*>(result),*values,idx);
+			delete values;
 			break;
 		}
 		case ibis::USHORT:
 		{
 			ibis::array_t<uint16_t> *values = col->selectUShorts(*mask);
 			meorder(*static_cast<ibis::array_t<uint16_t>*>(result),*values,idx);
+			delete values;
 			break;
 		}
 		case ibis::INT:
 		{
 			ibis::array_t<int32_t> *values = col->selectInts(*mask);
 			meorder(*static_cast<ibis::array_t<int32_t>*>(result),*values,idx);
+			delete values;
 			break;
 		}
 		case ibis::UINT:
 		{
 			ibis::array_t<uint32_t> *values = col->selectUInts(*mask);
 			meorder(*static_cast<ibis::array_t<uint32_t>*>(result),*values,idx);
+			delete values;
 			break;
 		}
 		case ibis::LONG:
 		{
 			ibis::array_t<int64_t> *values = col->selectLongs(*mask);
 			meorder(*static_cast<ibis::array_t<int64_t>*>(result),*values,idx);
+			delete values;
 			break;
 		}
 		case ibis::ULONG:
 		{
 			ibis::array_t<uint64_t> *values = col->selectULongs(*mask);
 			meorder(*static_cast<ibis::array_t<uint64_t>*>(result),*values,idx);
+			delete values;
 			break;
 		}
 		case ibis::FLOAT:
 		{
 			ibis::array_t<float> *values = col->selectFloats(*mask);
 			meorder(*static_cast<ibis::array_t<float>*>(result),*values,idx);
+			delete values;
 			break;
 		}
 		case ibis::DOUBLE:
 		{
 			ibis::array_t<double> *values = col->selectDoubles(*mask);
 			meorder(*static_cast<ibis::array_t<double>*>(result),*values,idx);
+			delete values;
 			break;
 		}
 		case ibis::TEXT:
@@ -262,6 +270,7 @@ void fillColumn(ibis::column* col, ibis::bitvector* mask,
 		{
 			std::vector<std::string> *values = col->selectStrings(*mask);
 			meorder(*static_cast<std::vector<std::string>*>(result),*values,idx);
+			delete values;
 			break;
 		}
 		default:
@@ -430,6 +439,14 @@ void Stacker(const ibis::part* Apart, const ibis::part* Bpart,
 		return;
 
 	fillResult(Apart,Bpart,Amatch,Bmatch,Aidx,Bidx,*relativeStart,*relativeEnd, thread_id);
+	delete Amatch;
+	delete Bmatch;
+	delete Arids;
+	delete Brids;
+	delete Astart_val;
+	delete Aend_val;
+	delete Bstart_val;
+	delete Bend_val;
 }
 
 // apply the user supplied query expression to the given part
@@ -532,6 +549,8 @@ void fillColumnLists(char * sel, std::map<const char*,ibis::TYPE_T> &naty,
 	}
 }
 
+// iterate over the partial results and stitch the arrays/vectors together for the
+// given column number
 void concatenate_column(ibis::table::bufferList& tbuff, ibis::table::typeList &ttypes, size_t col)
 {
 	tbuff[col] = ibis::table::allocateBuffer(ttypes[col],0);
@@ -623,6 +642,8 @@ void concatenate_column(ibis::table::bufferList& tbuff, ibis::table::typeList &t
 	}	
 }
 
+// iterate over the columns and concatenate the partial results for each
+// a logical table is constructed in the end
 ibis::table* concatenate_results()
 {
 	size_t ncols = Acols.size() + Bcols.size() + 2;
@@ -685,6 +706,11 @@ ibis::table* concatenate_results()
     return new ibis::bord("joined", "joined tables", nrows, tbuff, ttypes, colnames,&colnames,0);
 }
 
+// fetch an array of values from the table and write them to outdir/cname
+// ibis::table::getColumnAs...() makes a copy so values are contiguous
+// in memory.  That makes it possible to UnixWrite() the column in bulk.
+// -- not sure if categorical columns are being done the right way.
+// -- relying on subsequent fastbit activity to index/process as needed.
 void write_column(ibis::table* tbl, const char* cname, ibis::TYPE_T ctype, size_t nr, const char* outdir)
 {
 	// open the output file
@@ -709,6 +735,7 @@ void write_column(ibis::table* tbl, const char* cname, ibis::TYPE_T ctype, size_
 			char* vals = new char[nr];			
 			ierr = tbl->getColumnAsBytes(cname,vals);
 			pos = UnixWrite(fdes,vals,sizeof(char)*nr);
+			delete vals;
 			break;
 		}
 		case ibis::UBYTE:
@@ -716,6 +743,7 @@ void write_column(ibis::table* tbl, const char* cname, ibis::TYPE_T ctype, size_
 			unsigned char* vals = new unsigned char[nr];
 			ierr = tbl->getColumnAsUBytes(cname,vals);
 			pos = UnixWrite(fdes,vals,sizeof(unsigned char)*nr);
+			delete vals;
 			break;
 		}
 		case ibis::SHORT:
@@ -723,6 +751,7 @@ void write_column(ibis::table* tbl, const char* cname, ibis::TYPE_T ctype, size_
 		    int16_t* vals = new int16_t[nr];
 			ierr = tbl->getColumnAsShorts(cname,vals);
 			pos = UnixWrite(fdes,vals,sizeof(int16_t)*nr);
+			delete vals;
 			break;
 		}
 		case ibis::USHORT:
@@ -730,6 +759,7 @@ void write_column(ibis::table* tbl, const char* cname, ibis::TYPE_T ctype, size_
 		    uint16_t* vals = new uint16_t[nr];
 			ierr = tbl->getColumnAsUShorts(cname,vals);
 			pos = UnixWrite(fdes,vals,sizeof(uint16_t)*nr);
+			delete vals;
 			break;
 		}
 		case ibis::INT:
@@ -737,6 +767,7 @@ void write_column(ibis::table* tbl, const char* cname, ibis::TYPE_T ctype, size_
 		    int32_t* vals = new int32_t[nr];
 			ierr = tbl->getColumnAsInts(cname,vals);
 			pos = UnixWrite(fdes,vals,sizeof(int32_t)*nr);
+			delete vals;
 			break;
 		}
 		case ibis::UINT:
@@ -744,6 +775,7 @@ void write_column(ibis::table* tbl, const char* cname, ibis::TYPE_T ctype, size_
 		    uint32_t* vals = new uint32_t[nr];
 			ierr = tbl->getColumnAsUInts(cname,vals);
 			pos = UnixWrite(fdes,vals,sizeof(uint32_t)*nr);
+			delete vals;
 			break;
 		}
 		case ibis::LONG:
@@ -751,6 +783,7 @@ void write_column(ibis::table* tbl, const char* cname, ibis::TYPE_T ctype, size_
 		    int64_t* vals = new int64_t[nr];
 			ierr = tbl->getColumnAsLongs(cname,vals);
 			pos = UnixWrite(fdes,vals,sizeof(int64_t)*nr);
+			delete vals;
 			break;
 		}
 		case ibis::ULONG:
@@ -758,6 +791,7 @@ void write_column(ibis::table* tbl, const char* cname, ibis::TYPE_T ctype, size_
 		    uint64_t* vals = new uint64_t[nr];
 			ierr = tbl->getColumnAsULongs(cname,vals);
 			pos = UnixWrite(fdes,vals,sizeof(uint64_t)*nr);
+			delete vals;
 			break;
 		}
 		case ibis::FLOAT:
@@ -765,6 +799,7 @@ void write_column(ibis::table* tbl, const char* cname, ibis::TYPE_T ctype, size_
 			float* vals = new float[nr];
 			ierr = tbl->getColumnAsFloats(cname,vals);
 			pos = UnixWrite(fdes,vals,sizeof(float)*nr);
+			delete vals;
 			break;
 		}
 		case ibis::DOUBLE:
@@ -772,6 +807,7 @@ void write_column(ibis::table* tbl, const char* cname, ibis::TYPE_T ctype, size_
 			double* vals = new double[nr];
 			ierr = tbl->getColumnAsDoubles(cname,vals);
 			pos = UnixWrite(fdes,vals,sizeof(double)*nr);
+			delete vals;
 			break;
 		}
 		case ibis::CATEGORY:
@@ -781,6 +817,7 @@ void write_column(ibis::table* tbl, const char* cname, ibis::TYPE_T ctype, size_
 		    ierr = tbl->getColumnAsStrings(cname, *vals);
 			for (uint32_t j = 0; j < nr; ++ j)
 				pos = UnixWrite(fdes,(*vals)[j].c_str(),sizeof(char)*((*vals)[j].length()+1));
+			delete vals;
 			break;
 		}
 	}
@@ -794,6 +831,10 @@ void write_column(ibis::table* tbl, const char* cname, ibis::TYPE_T ctype, size_
 
 }
 
+// dumps the contents of an in-memory table to a new partition in outdir
+// creates metadata file outdir/-part.txt
+// and writes each column to outdir/cname using multiple threads
+// subsequent fastbit activity will build any necessary indexes.
 void write_table(ibis::table* tbl, const char* outdir)
 {
 	const char* startcolname="start";
@@ -868,13 +909,15 @@ int main(int argc, char** argv)
 
 	std::vector<const ibis::part*> Bparts;
 	B->getPartitions(Bparts);
+
+	// build a map of B's partitions so we can only join on matching FBchrs
 	std::map<const char*,const ibis::part*> Bpartmap;	
 	for(size_t i=0; i<Bparts.size(); ++ i)
 		Bpartmap.insert(std::pair<const char*,const ibis::part*>(Bparts[i]->getMetaTag("FBchr"),Bparts[i]));
 	
 	std::vector<const ibis::part*> Aparts;
 	A->getPartitions(Aparts);
-	part_results.resize(Aparts.size()*2);
+	part_results.resize(Aparts.size()*2); // *2 because of strand
 	boost::thread_group g0;
 	for(size_t i=0; i<Aparts.size(); ++ i) {
 		const char* chr = Aparts[i]->getMetaTag("FBchr");
@@ -888,18 +931,12 @@ int main(int argc, char** argv)
 	if (parallelize > 0)
 		g0.join_all();
 
-	// concatenate each part into one table
+	// concatenate each part into one table, sort, and save
 	ibis::table *res = concatenate_results();
 	res->orderby("start, end");
-
-	// output table
 	write_table(res,outdir);
 	
-//	res->dump(std::cout);
 	delete res;
-
-
-
 	delete A;
 	delete B;
     return 0;

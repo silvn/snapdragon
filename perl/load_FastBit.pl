@@ -123,6 +123,7 @@ sub parse_meta {
     my %hsh;
     for my $kv ( split /,/, $meta ) {
         my ( $k, $v ) = split /:/, $kv;
+		$v =~ s/_comma_/, /g;
         $hsh{$k} = $v;
     }
     return \%hsh;

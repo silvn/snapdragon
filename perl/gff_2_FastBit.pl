@@ -73,7 +73,7 @@ while (<>) {
     push @{ $data{$type}{phase} },  $phase;
 
     for my $attribute ( split /\s*;\s*/, $attributes ) {
-        my ( $k, $v ) = $attribute =~ m/^(\w+)=\s?"?(.*?)"?$/;
+        my ( $k, $v ) = $attribute =~ m/^(\w+)=?\s?"?(.*?)"?$/;
 
 #    next unless $k and $v; #### sometimes the attribute is present but no value is present
         push @{ $data{$type}{$k} }, $v;

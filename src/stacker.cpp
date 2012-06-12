@@ -36,7 +36,7 @@ int parallelize=0;
 
 const char* outdir;
 
-ibis::whereClause senseWhere = ibis::whereClause("strand == 1");
+ibis::whereClause senseWhere = ibis::whereClause("strand == 1 or strand == '+'");
 ibis::qExpr* senseExpr = senseWhere.getExpr();
 
 std::vector<ibis::table::bufferList*> part_results;
@@ -329,7 +329,8 @@ void fillResult(const ibis::part* Apart, const ibis::part* Bpart,
 void push_relative_position(ibis::array_t<int32_t> &relativeStart,ibis::array_t<int32_t> &relativeEnd,
 	bool flipped, uint32_t &before, uint32_t &after, uint32_t &from, uint32_t &to)
 {
-	int32_t startDiff, endDiff;
+	int32_t startDiff, endDiff, shift;
+	shift = left;
 	if (flipped) {
 		startDiff = after - to;
 		endDiff = after - from;
@@ -341,9 +342,10 @@ void push_relative_position(ibis::array_t<int32_t> &relativeStart,ibis::array_t<
 		int32_t winlength = after - before;
 		startDiff = (startDiff <= 0) ? 0 : startDiff/winlength;
 		endDiff = (endDiff >= winlength) ? winlength-1 : endDiff/winlength;
+		shift = left/winlength;
 	}
-	relativeStart.push_back(startDiff);
-	relativeEnd.push_back(endDiff);
+	relativeStart.push_back(startDiff-shift);
+	relativeEnd.push_back(endDiff-shift);
 }
 
 // fetch intervals from the partitions to be joined

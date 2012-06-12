@@ -340,12 +340,15 @@ void push_relative_position(ibis::array_t<int32_t> &relativeStart,ibis::array_t<
 	}
 	if (bins > 0) {
 		int32_t winlength = after - before;
-		startDiff = (startDiff <= 0) ? 0 : startDiff/winlength;
-		endDiff = (endDiff >= winlength) ? winlength-1 : endDiff/winlength;
-		shift = left/winlength;
+		startDiff = (startDiff <= 0) ? 0 : (bins*startDiff)/winlength;
+		endDiff = (endDiff >= winlength) ? winlength-1 : (bins*endDiff)/winlength;
+		shift = (bins*left)/winlength;
+		relativeStart.push_back(winlength*(startDiff-shift)/bins);
+		relativeEnd.push_back(winlength*(endDiff-shift)/bins);
+	} else {
+		relativeStart.push_back(startDiff-shift);
+		relativeEnd.push_back(endDiff-shift);
 	}
-	relativeStart.push_back(startDiff-shift);
-	relativeEnd.push_back(endDiff-shift);
 }
 
 // fetch intervals from the partitions to be joined

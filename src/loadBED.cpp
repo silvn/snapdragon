@@ -230,12 +230,12 @@ int main(int argc, char** argv)
 		int j = i+chunksize;
 		if (j>nlines)
 			j=nlines;
-		cout << "starting chunk [" << i << "," << j << "]" << endl;
+		cout << "parsing chunk [" << i << "," << j << "]" << endl;
 		tg.create_thread(boost::bind(parseChunk, i, j));
 	}
 	tg.join_all();
 
-	cout << "finished parsing BEDlines" << endl;
+	cout << "creating CHRmap" << endl;
 
 	// index the rows by chromosome
 	map<string,vector<int>*> CHRmap;
@@ -256,13 +256,13 @@ int main(int argc, char** argv)
 			chrvec->push_back(i);
 		}
 	}
-	cout << "finished with CHRmap" << endl;
+	cout << "building partitions" << endl;
 
 	// create a partition for each chromosome
 	map<string,vector<int>*>::iterator it;
 	int tg_size=0;
 	for ( it=CHRmap.begin(); it != CHRmap.end(); it++ ) {
-		cout << (*it).first << " => " << (*it).second->size() << endl;
+//		cout << (*it).first << " => " << (*it).second->size() << endl;
 		if (tg_size == threads) {
 			tg.join_all();
 			tg_size=0;

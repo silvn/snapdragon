@@ -6,9 +6,9 @@ CPPFLAGS = -Ifastbit/src
 LDFLAGS  = -Lfastbit/src/.libs -Wl,-rpath,$(libdir)
 LIBS = -lfastbit -lm
 if MACOS
-stacker_LDADD = -lboost_thread-mt
-loadBED_LDADD = -lboost_thread-mt
+stacker_LDADD = -lboost_thread-mt -lboost_system-mt
+loadBED_LDADD = -lboost_thread-mt -lboost_system-mt
 else
-stacker_LDADD = -lboost_thread
-loadBED_LDADD = -lboost_thread
+stacker_LDADD = -lboost_thread -lboost_system
+loadBED_LDADD = -lboost_thread -lboost_system
 endif

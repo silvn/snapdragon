@@ -239,10 +239,10 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 SUBDIRS = fastbit
 SUFFIXES = .cpp
-@MACOS_FALSE@stacker_LDADD = -lboost_thread
-@MACOS_TRUE@stacker_LDADD = -lboost_thread-mt
-@MACOS_FALSE@loadBED_LDADD = -lboost_thread
-@MACOS_TRUE@loadBED_LDADD = -lboost_thread-mt
+@MACOS_FALSE@stacker_LDADD = -lboost_thread -lboost_system
+@MACOS_TRUE@stacker_LDADD = -lboost_thread-mt -lboost_system-mt
+@MACOS_FALSE@loadBED_LDADD = -lboost_thread -lboost_system
+@MACOS_TRUE@loadBED_LDADD = -lboost_thread-mt -lboost_system-mt
 all: all-recursive
 
 .SUFFIXES:

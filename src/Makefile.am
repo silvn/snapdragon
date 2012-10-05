@@ -1,9 +1,9 @@
 SUBDIRS = fastbit
-bin_PROGRAMS = fbsql fbsql_tab join_once scatter gwas2go ranges stacker loadBED
+bin_PROGRAMS = fbsql fbsql_tab join_once scatter gwas2go ranges stacker loadBED playground
 SUFFIXES = .cpp
 CC = g++
-CPPFLAGS = -Ifastbit/src
-LDFLAGS  = -Lfastbit/src/.libs -Wl,-rpath,$(libdir)
+AM_CPPFLAGS = -Ifastbit/src
+AM_LDFLAGS  = -Lfastbit/src/.libs -Wl,-rpath,$(libdir)
 LIBS = -lfastbit -lm
 if MACOS
 stacker_LDADD = -lboost_thread-mt -lboost_system-mt

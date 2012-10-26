@@ -1,0 +1,54 @@
+/* gffParser.js
+	An example script that extends the node-csv-parser for converting GFF to JSON. [ or BED ]
+	jermth@me.com
+*/
+
+
+var csv = require('csv');
+var argv = require('optimist')
+    .usage('Parse a GFF file.\nUsage: $0 -f input_gff_file  [ -o outputformat (\'json\' | \'bed\') ]')
+    .demand('f')
+	.default('o', 'json')
+    .alias('f', 'file')
+	.describe('o', 'json or bed. Optional defaults to json')
+    .argv;
+	
+var file=argv.f;
+var commentRegex = /^\#/;
+var keyValRegex = /\S+/g;
+
+var splitCol9 = function(data){
+	var col9Array=data.col9.split("\;");
+	for( var i in col9Array ){
+		if (keyValRegex.test(col9Array[i])){
+			var keyValPair = col9Array[i].replace(/["']/g,"").match(keyValRegex);					
+			data[keyValPair[0]]=keyValPair[1];
+//			console.log(keyValPair[0],": ",keyValPair[1]);						
+		}
+
+	}	
+  	return data;		
+}
+
+var gff= csv().from.path(file, {
+      	columns: ['chr','source','type','start','end','score','strand','phase','col9'],
+	  	delimiter: "\t"	  
+    });
+
+if ( argv.o.toLowerCase() === 'json'){
+    gff.transform(splitCol9).on('record', function(data,index){
+          console.log(JSON.stringify(data));
+    });	
+}else if ( argv.o.toLowerCase() === 'bed') {
+    gff.transform(splitCol9).to.stream(process.stdout, {
+         	columns: ['chr', 'start','end','type','score',]
+    });
+}else {
+	console.log("Only 'bed' and 'json' accepted as output formats");
+	process.exit(1);
+}
+
+
+/* Adding chain for converting to BED6 format
+
+*/

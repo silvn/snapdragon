@@ -93,13 +93,15 @@ ibis::table* run_query(Handle<Object> p)
 	ibis::table* tbl = ibis::table::create(data_dir.c_str());
 	
 	const ibis::qExpr* query;
-	ibis::whereClause tmp;
 	if (p->Has(String::New("where"))) {
 		std::string query_cnd = c_stringify(p->Get(String::New("where")));
-		tmp = ibis::whereClause(query_cnd.c_str());
-		query = tmp.getExpr();
+		ibis::whereClause tmp = ibis::whereClause(query_cnd.c_str());
+		query = tmp.getExpr()->dup();
 	}
-	
+	else {
+		ibis::whereClause tmp = ibis::whereClause("1=1");
+		query = tmp.getExpr()->dup();
+	}
 	std::string select_str = c_stringify(p->Get(String::New("select")));
 
 	ibis::table *res = tbl->select(select_str.c_str(), query);

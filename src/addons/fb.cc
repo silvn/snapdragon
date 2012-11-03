@@ -10,11 +10,6 @@ std::string c_stringify(Local<Value> lv) {
 	return std::string(*p);
 }
 
-// ibis::bitvector decodeBV(Local<Value> lv) {
-// 	std::string s = c_stringify(lv);
-// 	
-// }
-
 Local<Object> TabletoJs(const ibis::table &tbl)
 {
 	size_t nr = tbl.nRows();
@@ -324,9 +319,6 @@ Handle<Value> scatter(const Arguments& args)
 	std::vector<double> bounds2;
 	std::vector<uint32_t> counts;
 	if (adaptive) {
-		// 	    ibis::bitvector mask;
-		// mask.set(1, res->nRows());
-		// try the non conditional
 		ierr = parts[0]->get2DDistribution(nms[0],nms[1],nbins1,nbins2,bounds1,bounds2,counts);
 		if (ierr < 0) {
 			ThrowException(Exception::TypeError(String::New("adaptive 2D Distribution error")));
@@ -341,23 +333,6 @@ Handle<Value> scatter(const Arguments& args)
 			v8bounds2->Set(i,Number::New(bounds2[i]));
 	}
 	else {
-		// calculate the mask corresponding to begin <= first column <= end
-		// ibis::bitvector mask;
-		// ibis::countQuery qq(parts[0]);
-		// std::ostringstream oss;
-		// oss << nms[0] << " between " << begin << " and " << end;
-		// qq.setWhereClause(oss.str().c_str());
-		// 
-		// ierr = qq.evaluate();
-		// if (ierr < 0) {
-		// 	ThrowException(Exception::TypeError(String::New("error evaluating range query")));
-		// 	return scope.Close(Undefined());
-		// }
-		// ierr = qq.getNumHits();
-		// if (ierr <= 0)
-		// 	return scope.Close(Undefined());
-		// mask.copy(*(qq.getHitVector()));
-
 		std::vector<uint32_t> counts;
 		ierr = parts[0]->get2DDistribution("1=1",nms[0],begin1,end1,stride1,nms[1],begin2,end2,stride2,counts);
 		if (ierr < 0) {
@@ -407,28 +382,69 @@ Handle<Value> SQL(const Arguments& args)
 	return scope.Close(jsObj);
 }
 
-// logical operations
-Handle<Value> logical(const Arguments& args)
-{
-	HandleScope scope;
-	
-	// ibis::bitvector bvec = decodeBV(args[1]);
-	return scope.Close(String::New("unimplemented"));
-	
+ibis::bitvector BVdecode(Local<Value> lv) {
+	if (lv->IsString())
+		std::cerr << "BVdecode: is string" << std::endl;
+	String::Utf8Value p(lv);
+	std::cerr << "BVdecode " << p.length() << std::endl;
+	return ibis::bitvector(*p);
+}
+
+Local<String> BVencode(ibis::bitvector bv) {
+	std::cerr << "BVencode " << bv.bytes() << std::endl;
+	return String::New((const char*)&bv, bv.bytes());
 }
 
 Handle<Value> cnt(const Arguments& args)
 {
 	HandleScope scope;
-	return scope.Close(String::New("unimplemented"));
-	
+	ibis::bitvector bv = BVdecode(args[0]);
+	return scope.Close(Integer::New(bv.cnt()));
 }
 
 Handle<Value> size(const Arguments& args)
 {
 	HandleScope scope;
+	ibis::bitvector bv = BVdecode(args[0]);
+	return scope.Close(Integer::New(bv.size()));
+}
+
+Handle<Value> set2bvec(const Arguments& args)
+{
+	HandleScope scope;
+	if (! args[0]->IsArray())
+		return scope.Close(String::New("first and only argument needs to be an array"));
+	Handle<Array> set = Handle<Array>::Cast(args[0]);
+	ibis::bitvector bv;
+	uint32_t prev=0;
+	for(size_t i=0; i < set->Length(); i++) {
+		uint32_t v = set->Get(i)->Uint32Value();
+		std::cerr << "set[" << i << "] = " << v << std::endl;
+		uint32_t g = v - prev;
+		if (g>1)
+			bv.appendFill(0,g);
+		if (g>0)
+			bv.appendFill(1,1);
+		prev = v;
+	}
+	std::cerr << "set2bvec: bv.cnt() = " << bv.cnt() << std::endl;
+	std::cerr << "set2bvec: bv.size() = " << bv.size() << std::endl;
+	Local<String> lv = BVencode(bv);
+	ibis::bitvector bv2 = BVdecode(lv);
+	std::cerr << "set2bvec: bv2.cnt() = " << bv2.cnt() << std::endl;
+	std::cerr << "set2bvec: bv2.size() = " << bv2.size() << std::endl;
+	return scope.Close(lv);
+}
+
+// logical operations
+Handle<Value> logical(const Arguments& args)
+{
+	HandleScope scope;
+	
+//	ibis::bitvector bvec = BVdecode(args[1]);
 	return scope.Close(String::New("unimplemented"));
 }
+
 
 void Init(Handle<Object> target)
 {
@@ -438,6 +454,7 @@ void Init(Handle<Object> target)
 	target->Set(String::NewSymbol("logical"), FunctionTemplate::New(logical)->GetFunction());
 	target->Set(String::NewSymbol("cnt"), FunctionTemplate::New(cnt)->GetFunction());
 	target->Set(String::NewSymbol("size"), FunctionTemplate::New(size)->GetFunction());
+	target->Set(String::NewSymbol("set2bvec"), FunctionTemplate::New(set2bvec)->GetFunction());
 }
 
 NODE_MODULE(fb, Init)

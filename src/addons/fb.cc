@@ -87,8 +87,17 @@ Local<Object> TabletoJs(const ibis::table &tbl)
 	return JSON;
 }
 
-ibis::table* run_query(Handle<Object> p)
+Handle<Value> run_query(Handle<Object> p, ibis::table*& res)
 {
+	if (! p->Has(String::New("from"))) {
+		ThrowException(Exception::TypeError(String::New("Missing 'from' argument")));
+		return Undefined();
+	}
+	if (! p->Has(String::New("select"))) {
+		ThrowException(Exception::TypeError(String::New("Missing 'select' argument")));
+		return Undefined();
+	}
+
 	std::string data_dir = c_stringify(p->Get(String::New("from")));
 	ibis::table* tbl = ibis::table::create(data_dir.c_str());
 	
@@ -102,17 +111,280 @@ ibis::table* run_query(Handle<Object> p)
 		ibis::whereClause tmp = ibis::whereClause("1=1");
 		query = tmp.getExpr()->dup();
 	}
+	
+	// check for qExpr
+	
 	std::string select_str = c_stringify(p->Get(String::New("select")));
-
-	ibis::table *res = tbl->select(select_str.c_str(), query);
+	res = tbl->select(select_str.c_str(), query);
 	
 	if (p->Has(String::New("orderby"))) {
 		std::string order_by = c_stringify(p->Get(String::New("orderby")));
 		res->orderby(order_by.c_str());
 	}
-	return res;
+	return String::New("OK");
 }
 
+// histogram params
+bool adaptive = false;
+uint32_t nbins=25;
+double begin,end,stride;
+Handle<Value> parse_histogram_params(Handle<Object> p)
+{
+	if (p->Has(String::New("adaptive")))
+		if (p->Get(String::New("adaptive"))->IsTrue()) {
+			adaptive = true;
+			if (p->Has(String::New("nbins")))
+				nbins = p->Get(String::New("nbins"))->Uint32Value();
+		}
+
+	if (! adaptive) {
+		if (!p->Has(String::New("begin"))) {
+			ThrowException(Exception::TypeError(String::New("Missing 'begin' argument")));
+			return Undefined();
+		}
+		if (!p->Has(String::New("end"))) {
+			ThrowException(Exception::TypeError(String::New("Missing 'end' argument")));
+			return Undefined();
+		}
+		if (!p->Has(String::New("stride"))) {
+			ThrowException(Exception::TypeError(String::New("Missing 'stride' argument")));
+			return Undefined();
+		}
+		begin = p->Get(String::New("begin"))->NumberValue();
+		end = p->Get(String::New("end"))->NumberValue();
+		stride = p->Get(String::New("stride"))->NumberValue();
+	}
+	return String::New("OK");
+}
+
+// 1D histogram
+// returns a Javascript object {bounds:[], counts:[]}
+// This function uses ibis::part histogram functions
+// so we preprocess them into a single in-memory table (with one partition).
+//
+// binning is either adaptive or uniform
+Handle<Value> histogram(const Arguments& args)
+{
+	HandleScope scope;
+
+	// parse args
+	Handle<Object> p = Handle<Object>::Cast(args[0]);
+	Handle<Value> rc = parse_histogram_params(p);
+	if (rc->IsUndefined())
+		return scope.Close(rc);
+
+	// preprocess
+	ibis::table *res = 0;
+	rc = run_query(p,res);
+	if (rc->IsUndefined())
+		return scope.Close(rc);
+
+	// no data after querying
+	if (res->nRows() <= 0)
+		return scope.Close(Undefined());
+
+	ibis::table::stringList nms = res->columnNames();
+
+	std::vector<const ibis::part*> parts;
+	res->getPartitions(parts);
+	if (parts.size() != 1) {
+		ThrowException(Exception::TypeError(String::New("WTF! expected one partition after preprocessing")));
+		return scope.Close(Undefined());
+	}
+
+	long ierr;
+	Local<Object> JSON = Object::New();
+	Local<Array> v8bounds = Array::New();
+	Local<Array> v8counts = Array::New();
+	if (adaptive) {
+		std::vector<double> bounds;
+		std::vector<uint32_t> counts;
+		ierr = parts[0]->get1DDistribution("1=1",nms[0],nbins,bounds,counts);
+		if (ierr < 0) {
+			ThrowException(Exception::TypeError(String::New("adaptive 1D Distribution error")));
+			return scope.Close(Undefined());
+		}
+		// format results
+		for(size_t i=0; i < counts.size(); i++) {
+			v8bounds->Set(i,Number::New(bounds[i]));
+			v8counts->Set(i,Number::New(counts[i]));
+		}
+	}
+	else {
+		std::vector<uint32_t> counts;
+		ierr = parts[0]->get1DDistribution("1=1",nms[0],begin,end,stride,counts);
+		if (ierr < 0) {
+			ThrowException(Exception::TypeError(String::New("uniform 1D Distribution error")));
+			return scope.Close(Undefined());
+		}
+		// format results
+		double pos = begin;
+		for(size_t i=0; i < counts.size(); i++) {
+			v8bounds->Set(i,Number::New(pos));
+			v8counts->Set(i,Number::New(counts[i]));
+			pos += stride;
+		}
+	}
+	JSON->Set(String::New("bounds"),v8bounds);
+	JSON->Set(String::New("counts"),v8counts);
+	return JSON;
+}
+
+// 2D histogram params
+uint32_t nbins1=25;
+uint32_t nbins2=25;
+double begin1,end1,stride1,begin2,end2,stride2;
+Handle<Value> parse_scatter_params(Handle<Object> p)
+{
+	if (p->Has(String::New("adaptive")))
+		if (p->Get(String::New("adaptive"))->IsTrue()) {
+			adaptive = true;
+			if (p->Has(String::New("nbins1")))
+				nbins1 = p->Get(String::New("nbins1"))->Uint32Value();
+			if (p->Has(String::New("nbins2")))
+				nbins2 = p->Get(String::New("nbins2"))->Uint32Value();
+		}
+
+	if (! adaptive) {
+		if (!p->Has(String::New("begin1"))) {
+			ThrowException(Exception::TypeError(String::New("Missing 'begin1' argument")));
+			return Undefined();
+		}
+		if (!p->Has(String::New("end1"))) {
+			ThrowException(Exception::TypeError(String::New("Missing 'end1' argument")));
+			return Undefined();
+		}
+		if (!p->Has(String::New("stride1"))) {
+			ThrowException(Exception::TypeError(String::New("Missing 'stride1' argument")));
+			return Undefined();
+		}
+		if (!p->Has(String::New("begin2"))) {
+			ThrowException(Exception::TypeError(String::New("Missing 'begin2' argument")));
+			return Undefined();
+		}
+		if (!p->Has(String::New("end2"))) {
+			ThrowException(Exception::TypeError(String::New("Missing 'end2' argument")));
+			return Undefined();
+		}
+		if (!p->Has(String::New("stride2"))) {
+			ThrowException(Exception::TypeError(String::New("Missing 'stride2' argument")));
+			return Undefined();
+		}
+		begin1 = p->Get(String::New("begin1"))->NumberValue();
+		end1 = p->Get(String::New("end1"))->NumberValue();
+		stride1 = p->Get(String::New("stride1"))->NumberValue();
+		begin2 = p->Get(String::New("begin2"))->NumberValue();
+		end2 = p->Get(String::New("end2"))->NumberValue();
+		stride2 = p->Get(String::New("stride2"))->NumberValue();
+	}
+	return String::New("OK");
+}
+
+// 2D histogram
+// returns a Javascript object {bounds1:[], bounds2:[], counts:[]}
+// This function uses ibis::part histogram functions
+// so we preprocess them into a single in-memory table (with one partition).
+//
+// binning is either adaptive or uniform
+Handle<Value> scatter(const Arguments& args)
+{
+	HandleScope scope;
+
+	// parse args
+	Handle<Object> p = Handle<Object>::Cast(args[0]);
+	Handle<Value> rc = parse_scatter_params(p);
+	if (rc->IsUndefined())
+		return scope.Close(rc);
+
+	// preprocess
+	ibis::table *res=0;
+	rc = run_query(p,res);
+	if (rc->IsUndefined())
+		return scope.Close(rc);
+
+	// no data after querying
+	if (res->nRows() <= 0)
+		return scope.Close(Undefined());
+
+	ibis::table::stringList nms = res->columnNames();
+
+	std::vector<const ibis::part*> parts;
+	res->getPartitions(parts);
+	if (parts.size() != 1) {
+		ThrowException(Exception::TypeError(String::New("WTF! expected one partition after preprocessing")));
+		return scope.Close(Undefined());
+	}
+
+	long ierr;
+	Local<Object> JSON = Object::New();
+	Local<Array> v8bounds1 = Array::New();
+	Local<Array> v8bounds2 = Array::New();
+	Local<Array> v8counts = Array::New();
+	std::vector<double> bounds1;
+	std::vector<double> bounds2;
+	std::vector<uint32_t> counts;
+	if (adaptive) {
+		// 	    ibis::bitvector mask;
+		// mask.set(1, res->nRows());
+		// try the non conditional
+		ierr = parts[0]->get2DDistribution(nms[0],nms[1],nbins1,nbins2,bounds1,bounds2,counts);
+		if (ierr < 0) {
+			ThrowException(Exception::TypeError(String::New("adaptive 2D Distribution error")));
+			return scope.Close(Undefined());
+		}
+		// format results
+		for(size_t i=0; i < counts.size(); i++)
+			v8counts->Set(i,Number::New(counts[i]));
+		for(size_t i=0; i < bounds1.size(); i++)
+			v8bounds1->Set(i,Number::New(bounds1[i]));
+		for(size_t i=0; i < bounds2.size(); i++)
+			v8bounds2->Set(i,Number::New(bounds2[i]));
+	}
+	else {
+		// calculate the mask corresponding to begin <= first column <= end
+		// ibis::bitvector mask;
+		// ibis::countQuery qq(parts[0]);
+		// std::ostringstream oss;
+		// oss << nms[0] << " between " << begin << " and " << end;
+		// qq.setWhereClause(oss.str().c_str());
+		// 
+		// ierr = qq.evaluate();
+		// if (ierr < 0) {
+		// 	ThrowException(Exception::TypeError(String::New("error evaluating range query")));
+		// 	return scope.Close(Undefined());
+		// }
+		// ierr = qq.getNumHits();
+		// if (ierr <= 0)
+		// 	return scope.Close(Undefined());
+		// mask.copy(*(qq.getHitVector()));
+
+		std::vector<uint32_t> counts;
+		ierr = parts[0]->get2DDistribution("1=1",nms[0],begin1,end1,stride1,nms[1],begin2,end2,stride2,counts);
+		if (ierr < 0) {
+			ThrowException(Exception::TypeError(String::New("uniform 2D Distribution error")));
+			return scope.Close(Undefined());
+		}
+		// format results
+		for(size_t i=0; i < counts.size(); i++)
+			v8counts->Set(i,Number::New(counts[i]));
+		double pos = begin1;
+		for(size_t i=0; i < bounds1.size(); i++) {
+			v8bounds1->Set(i,Number::New(pos));
+			pos += stride1;
+		}
+		pos = begin2;
+		for(size_t i=0; i < bounds2.size(); i++) {
+			v8bounds2->Set(i,Number::New(pos));
+			pos += stride2;
+		}
+	}
+	JSON->Set(String::New("counts"),v8counts);
+	JSON->Set(String::New("bounds1"),v8bounds1);
+	JSON->Set(String::New("bounds2"),v8bounds2);
+	return JSON;
+}
+
+// generic simple SQL function
 Handle<Value> SQL(const Arguments& args)
 {
 	HandleScope scope;
@@ -121,45 +393,18 @@ Handle<Value> SQL(const Arguments& args)
 		ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
 		return scope.Close(Undefined());
 	}
+
 	Handle<Object> p = Handle<Object>::Cast(args[0]);
-	if (! p->Has(String::New("from"))) {
-		ThrowException(Exception::TypeError(String::New("Missing 'from' argument")));
-		return scope.Close(Undefined());
-	}
-	if (! p->Has(String::New("select"))) {
-		ThrowException(Exception::TypeError(String::New("Missing 'select' argument")));
-		return scope.Close(Undefined());
-	}
 
+	ibis::table *res=0;
+	Handle<Value> rc = run_query(p,res);
 
-	ibis::table *res = run_query(p);
+	if (rc->IsUndefined())
+		return scope.Close(rc);
 
 	Local<Object> jsObj = TabletoJs(*res);
 	delete res;
 	return scope.Close(jsObj);
-}
-
-// 1D histogram
-// This function uses ibis::part histogram functions
-// so if you start with multiple partitions you have to
-// preprocess them into a single in-memory table (with one partition).
-// Another reason to preprocess is if the select is not just a column name
-//
-// If the histogram is still subject to constraints, do a countQuery first to get the mask
-// binning is either adaptive or uniform
-// return array of counts at either bin centers or intervals
-Handle<Value> histogram(const Arguments& args)
-{
-	HandleScope scope;
-	return scope.Close(String::New("unimplemented"));
-}
-
-// 2D histogram
-Handle<Value> scatter(const Arguments& args)
-{
-	HandleScope scope;
-	return scope.Close(String::New("unimplemented"));
-	
 }
 
 // logical operations

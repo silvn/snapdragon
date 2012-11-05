@@ -66,7 +66,11 @@ for( var i=0; i < n; i++) {
 	console.log(fb.scatter(args));
 }
 
-var bvec = fb.set2bvec([1,3,4,4,4,4,5,77,899,7654]);
-console.log(bvec);
-console.log(fb.cnt(bvec));
-console.log(fb.size(bvec));
+var arr1 = [2,4,5,77,899,7654];
+var bvec1 = fb.set2bvec(arr1);
+var arr2 = [1,2,3,4,5,77,899,7654];
+var bvec2 = fb.set2bvec(arr2);
+var bvand = fb.logical('^',bvec1,bvec2);
+console.log("arr1",arr1);
+console.log("arr2",arr2);
+console.log("xor",fb.bvec2set(bvand));

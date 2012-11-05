@@ -28,9 +28,9 @@ var alterGFFColumns = function(data){
 		}
 	}	
 	
-	// Change from 1-based coordinates to 0-based
+	// Change from 1-based coordinates to 0-based half-open
 	--data['start'];
-	--data['end'];
+	data['end'];
   	return data;		
 }
 

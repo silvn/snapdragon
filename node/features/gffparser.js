@@ -17,7 +17,8 @@ var file=argv.f;
 var commentRegex = /^\#/;
 var keyValRegex = /\S+/g;
 
-var splitCol9 = function(data){
+var alterGFFColumns = function(data){
+	// Convert column 9 of the GTF file into key value pairs
 	var col9Array=data.col9.split("\;");
 	for( var i in col9Array ){
 		if (keyValRegex.test(col9Array[i])){
@@ -25,22 +26,27 @@ var splitCol9 = function(data){
 			data[keyValPair[0]]=keyValPair[1];
 //			console.log(keyValPair[0],": ",keyValPair[1]);						
 		}
-
 	}	
+	
+	// Change from 1-based coordinates to 0-based
+	--data['start'];
+	--data['end'];
   	return data;		
 }
+
 
 var gff= csv().from.path(file, {
       	columns: ['chr','source','type','start','end','score','strand','phase','col9'],
 	  	delimiter: "\t"	  
     });
 
+
 if ( argv.o.toLowerCase() === 'json'){
-    gff.transform(splitCol9).on('record', function(data,index){
+    gff.transform(alterGFFColumns).on('record', function(data,index){
           console.log(JSON.stringify(data));
     });	
 }else if ( argv.o.toLowerCase() === 'bed') {
-    gff.transform(splitCol9).to.stream(process.stdout, {
+    gff.transform(alterGFFColumns).to.stream(process.stdout, {
          	columns: ['chr', 'start','end','type','score',]
     });
 }else {

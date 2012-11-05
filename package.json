@@ -1,0 +1,10 @@
+{
+    "name"         : "snapdragon"
+  , "version"      : "0.0.1"
+  , "private"      : true
+  , "dependencies" : {
+      "csv"          : ">= 0.2.1"
+	, "optimist"     : ">= 0.3.5"
+	, "buffered-reader" : ">= 1.0.1"
+  }
+}

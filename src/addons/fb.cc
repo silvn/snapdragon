@@ -7,7 +7,7 @@ using namespace v8;
 
 std::string c_stringify(Local<Value> lv) {
 	String::Utf8Value p(lv);
-	return std::string(*p);
+	return std::string(*p,p.length());
 }
 
 Local<Object> TabletoJs(const ibis::table &tbl)
@@ -383,16 +383,21 @@ Handle<Value> SQL(const Arguments& args)
 }
 
 ibis::bitvector BVdecode(Local<Value> lv) {
-	if (lv->IsString())
-		std::cerr << "BVdecode: is string" << std::endl;
-	String::Utf8Value p(lv);
-	std::cerr << "BVdecode " << p.length() << std::endl;
-	return ibis::bitvector(*p);
+	ibis::array_t<uint32_t> arr;
+	Local<Array> lva = Local<Array>::Cast(lv);
+	for(size_t i=0; i < lva->Length(); i++)
+		arr.push_back(lva->Get(i)->Uint32Value());
+	ibis::bitvector bv(arr);
+	return bv;
 }
 
-Local<String> BVencode(ibis::bitvector bv) {
-	std::cerr << "BVencode " << bv.bytes() << std::endl;
-	return String::New((const char*)&bv, bv.bytes());
+Local<Value> BVencode(ibis::bitvector bv) {
+	ibis::array_t<uint32_t> arr;
+	bv.write(arr);
+	Local<Array> v8_arr = Array::New();
+	for(size_t i=0; i < arr.size(); i++)
+		v8_arr->Set(i,Uint32::New(arr[i]));
+	return v8_arr;
 }
 
 Handle<Value> cnt(const Arguments& args)
@@ -416,33 +421,73 @@ Handle<Value> set2bvec(const Arguments& args)
 		return scope.Close(String::New("first and only argument needs to be an array"));
 	Handle<Array> set = Handle<Array>::Cast(args[0]);
 	ibis::bitvector bv;
-	uint32_t prev=0;
+	uint32_t next=0;
 	for(size_t i=0; i < set->Length(); i++) {
 		uint32_t v = set->Get(i)->Uint32Value();
-		std::cerr << "set[" << i << "] = " << v << std::endl;
-		uint32_t g = v - prev;
-		if (g>1)
-			bv.appendFill(0,g);
+		uint32_t g = v - next;
 		if (g>0)
-			bv.appendFill(1,1);
-		prev = v;
+			bv.appendFill(0,g);
+		bv.appendFill(1,1);
+		next = v+1;
 	}
-	std::cerr << "set2bvec: bv.cnt() = " << bv.cnt() << std::endl;
-	std::cerr << "set2bvec: bv.size() = " << bv.size() << std::endl;
-	Local<String> lv = BVencode(bv);
-	ibis::bitvector bv2 = BVdecode(lv);
-	std::cerr << "set2bvec: bv2.cnt() = " << bv2.cnt() << std::endl;
-	std::cerr << "set2bvec: bv2.size() = " << bv2.size() << std::endl;
-	return scope.Close(lv);
+	return scope.Close(BVencode(bv));
+}
+
+Handle<Value> bvec2set(const Arguments& args)
+{
+	HandleScope scope;
+	ibis::bitvector bv = BVdecode(args[0]);
+	size_t i=0;
+	Local<Array> set = Array::New();
+	ibis::bitvector::indexSet index = bv.firstIndexSet();
+	while (index.nIndices() > 0) {
+		const ibis::bitvector::word_t *idx0 = index.indices();
+		if (index.isRange()) {
+			for(size_t j = 0; j < index.nIndices(); j++) {
+				set->Set(i,Number::New(*idx0+j));
+				i++;
+			}
+		}
+		else {
+		    for (ibis::bitvector::word_t j = 0; j<index.nIndices(); ++j) {
+				set->Set(i,Number::New(idx0[j]));
+				i++;
+		    }
+		}
+		++ index;
+	}
+
+	return scope.Close(set);
 }
 
 // logical operations
 Handle<Value> logical(const Arguments& args)
 {
-	HandleScope scope;
+	std::string NOT = "!";
+	std::string AND = "&";
+	std::string OR = "|";
+	std::string XOR = "^";
 	
-//	ibis::bitvector bvec = BVdecode(args[1]);
-	return scope.Close(String::New("unimplemented"));
+	HandleScope scope;
+	std::string op = c_stringify(args[0]);
+	ibis::bitvector left = BVdecode(args[1]);
+	if (op == NOT)
+		left.flip();
+	if (args.Length() == 3)
+	{
+		ibis::bitvector right = BVdecode(args[2]);
+		if (op == AND)
+			left &= right;
+		else if (op == OR)
+			left |= right;
+		else if (op == XOR)
+			left ^= right;
+		else {
+			ThrowException(Exception::TypeError(String::New("unknown logical operation")));	
+			return scope.Close(Undefined());
+		}
+	}
+	return scope.Close(BVencode(left));
 }
 
 
@@ -455,6 +500,7 @@ void Init(Handle<Object> target)
 	target->Set(String::NewSymbol("cnt"), FunctionTemplate::New(cnt)->GetFunction());
 	target->Set(String::NewSymbol("size"), FunctionTemplate::New(size)->GetFunction());
 	target->Set(String::NewSymbol("set2bvec"), FunctionTemplate::New(set2bvec)->GetFunction());
+	target->Set(String::NewSymbol("bvec2set"), FunctionTemplate::New(bvec2set)->GetFunction());
 }
 
 NODE_MODULE(fb, Init)

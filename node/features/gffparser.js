@@ -32,6 +32,12 @@ var alterGFFColumns = function(data){
 	--data['start'];
 	data['end'];
   	return data;		
+	
+	// TODO: I wanted to separate the col9 parsing from the coordinates transformation, 
+	// but for some reason I can't chain more than 1 transformation to the csv object.
+	// ie: I can't do gff = csv.from.path(file).transform(col9Array).transform(coordianteChange). etc
+	// Only the last transformation is performed.
+	// Perhaps the data array is not passed in the chain? 
 }
 
 

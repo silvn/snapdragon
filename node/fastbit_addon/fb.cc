@@ -414,6 +414,13 @@ Handle<Value> size(const Arguments& args)
 	return scope.Close(Integer::New(bv.size()));
 }
 
+Handle<Value> bytes(const Arguments& args)
+{
+	HandleScope scope;
+	ibis::bitvector bv = BVdecode(args[0]);
+	return scope.Close(Integer::New(bv.bytes()));
+}
+
 Handle<Value> set2bvec(const Arguments& args)
 {
 	HandleScope scope;
@@ -499,6 +506,7 @@ void Init(Handle<Object> target)
 	target->Set(String::NewSymbol("logical"), FunctionTemplate::New(logical)->GetFunction());
 	target->Set(String::NewSymbol("cnt"), FunctionTemplate::New(cnt)->GetFunction());
 	target->Set(String::NewSymbol("size"), FunctionTemplate::New(size)->GetFunction());
+	target->Set(String::NewSymbol("bytes"), FunctionTemplate::New(bytes)->GetFunction());
 	target->Set(String::NewSymbol("set2bvec"), FunctionTemplate::New(set2bvec)->GetFunction());
 	target->Set(String::NewSymbol("bvec2set"), FunctionTemplate::New(bvec2set)->GetFunction());
 }

@@ -1,2 +1,2 @@
-dist_doc_DATA = README
+dist_doc_DATA = README.md
 SUBDIRS = src src/fastbit

@@ -1,6 +1,6 @@
 SUBDIRS = fastbit
 bin_PROGRAMS = fbsql fbsql_tab join_once scatter gwas2go ranges stacker loadBED playground
-SUFFIXES = .cpp
+AM_DEFAULT_SOURCE_EXT = .cpp
 CC = g++
 AM_CPPFLAGS = -Ifastbit/src
 AM_LDFLAGS  = -Lfastbit/src/.libs -Wl,-rpath,$(libdir)

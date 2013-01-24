@@ -1,30 +1,38 @@
 #include "bvec.h"
 
 // constructor - given a sorted vector of distinct 64bit integers
-bvec::bvec(vector<uint64_t>& vals) : count(0) {
+bvec::bvec(vector<uint64_t>& vals) {
 	uint64_t word_end = LITERAL_SIZE - 1;
 	uint32_t word=0;
-	uint32_t gap_words = vals.front()/LITERAL_SIZE;
+	uint64_t gap_words = vals.front()/LITERAL_SIZE;
+	while (gap_words > FILLMASK) {
+		words.push_back(BIT32 | FILLMASK);
+		gap_words -= FILLMASK;
+	}
 	if (gap_words > 0) {
 		words.push_back(gap_words | BIT32);
 		word_end += gap_words*LITERAL_SIZE;
 	} 
 	for(vector<uint64_t>::iterator ii = vals.begin(); ii != vals.end(); ++ii) {
 		if (*ii <= word_end) {
-			word |= 1 << (word_end - *ii);
+			word |= 1 << (uint32_t)(word_end - *ii);
 		}
 		else {
 			if (word == ALL1S) {
-				if (words.back() & ONEFILL)
+				if ((words.back() & ONEFILL) && (words.back() != ONEFILL2 ))
 					words.back()++;
 				else
 					words.push_back(ONEFILL1);
 			}
 			gap_words = (*ii - word_end)/LITERAL_SIZE;
+			while (gap_words > FILLMASK) {
+				words.push_back(BIT32 | FILLMASK);
+				gap_words -= FILLMASK;
+			}
 			if (gap_words > 0)
-				words.push_back(gap_words | BIT32);
+				words.push_back((uint32_t)gap_words | BIT32);
 			word_end += (gap_words+1)*LITERAL_SIZE;
-			word = 1 << (word_end - *ii);
+			word = 1 << (uint32_t)(word_end - *ii);
 		}
 	}
 	count = vals.size();

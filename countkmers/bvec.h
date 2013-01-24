@@ -13,6 +13,7 @@ using namespace std;
 #define ALL1S 2147483647
 #define ONEFILL 3221225472
 #define ONEFILL1 3221225473
+#define ONEFILL2 4294967295
 
 class bvec
 {
@@ -37,7 +38,6 @@ public:
 	// basic metrics
 	uint64_t cnt();
 	uint32_t bytes() { return 4*words.size(); }
-	uint32_t size() { } // uncompressed length
 
 	// logical set operations
 

@@ -18,12 +18,13 @@ bvec::bvec(vector<uint32_t>& vals) {
 			word |= 1 << (word_end - *ii);
 		}
 		else {
-			if (word == ALL1S) {
+			if (word == ALL1S)
 				if ((words.back() & ONEFILL) && (words.back() != ONEFILL2 ))
 					words.back()++;
 				else
 					words.push_back(ONEFILL1);
-			}
+			else
+				words.push_back(word);
 			gap_words = (*ii - word_end)/LITERAL_SIZE;
 			if (gap_words > 0)
 				words.push_back(gap_words | BIT32);
@@ -31,7 +32,18 @@ bvec::bvec(vector<uint32_t>& vals) {
 			word = 1 << (word_end - *ii);
 		}
 	}
+	// add the last word
+	if (word == ALL1S) {
+		if ((words.back() & ONEFILL) && (words.back() != ONEFILL2 ))
+			words.back()++;
+		else
+			words.push_back(ONEFILL1);
+	}
+	else {
+		words.push_back(word);
+	}
 	count = vals.size();
+	size = word_end+1;
 }
 // constructor - given a sorted vector of distinct 64bit integers
 bvec::bvec(vector<uint64_t>& vals) {
@@ -51,12 +63,13 @@ bvec::bvec(vector<uint64_t>& vals) {
 			word |= 1 << (uint32_t)(word_end - *ii);
 		}
 		else {
-			if (word == ALL1S) {
+			if (word == ALL1S)
 				if ((words.back() & ONEFILL) && (words.back() != ONEFILL2 ))
 					words.back()++;
 				else
 					words.push_back(ONEFILL1);
-			}
+			else
+				words.push_back(word);
 			gap_words = (*ii - word_end)/LITERAL_SIZE;
 			while (gap_words > FILLMASK) {
 				words.push_back(BIT32 | FILLMASK);
@@ -68,23 +81,55 @@ bvec::bvec(vector<uint64_t>& vals) {
 			word = 1 << (uint32_t)(word_end - *ii);
 		}
 	}
+	// add the last word
+	if (word == ALL1S) {
+		if ((words.back() & ONEFILL) && (words.back() != ONEFILL2 ))
+			words.back()++;
+		else
+			words.push_back(ONEFILL1);
+	}
+	else {
+		words.push_back(word);
+	}
 	count = vals.size();
+	size = word_end+1;
 }
 
-// union of two bvecs
-bvec& bvec::bvec_union(bvec &bv) {
-	bvec* res = new bvec();
+void bvec::matchSize(bvec &bv) {
+	printf("matchSize() %llu %llu\n",size,bv.size);
+	if (size < bv.size) {
+		uint64_t gap_words = (bv.size - size)/LITERAL_SIZE;
+		while (gap_words > FILLMASK) {
+			words.push_back(BIT32 | FILLMASK);
+			gap_words -= FILLMASK;
+		}
+		if (gap_words > 0)
+			words.push_back(BIT32 | (uint32_t)gap_words);
+		size = bv.size;
+	}
+	else if (size > bv.size) {
+		uint64_t gap_words = (size - bv.size)/LITERAL_SIZE;
+		while (gap_words > FILLMASK) {
+			bv.words.push_back(BIT32 | FILLMASK);
+			gap_words -= FILLMASK;
+		}
+		if (gap_words > 0)
+			bv.words.push_back(BIT32 | (uint32_t)gap_words);
+		bv.size = size;
+	}
+}
+
+// in place version of the bitwise OR operator.
+void bvec::operator|=(bvec& bv) {
+	// ensure that both bvecs are the same size
+	this->matchSize(bv);
+	if (size == 0)
+		return;
+	
+	vector<uint32_t> res; // fill this then swap with this.words
 	vector<uint32_t>::iterator a = words.begin();
 	vector<uint32_t>::iterator b = bv.words.begin();
-	// sanity check for empty bvecs
-	if (a == words.end()) {
-		res->words.insert(res->words.end(),b,bv.words.end());
-		return *res;
-	}
-	if (b == bv.words.end()) {
-		res->words.insert(res->words.end(),a,words.end());
-		return *res;
-	}
+
 	// maintain the end position of the current word
 	uint64_t a_pos = (*a & BIT32) ? *a & FILLMASK : 1;
 	uint64_t b_pos = (*b & BIT32) ? *b & FILLMASK : 1;
@@ -92,18 +137,40 @@ bvec& bvec::bvec_union(bvec &bv) {
 	uint32_t next_word;
 	bool incr_a = false;
 	bool incr_b = false;
-	while(a != words.end() && b != bv.words.end()) {
+	uint64_t last_pos = size/LITERAL_SIZE;
+	printf("size: %llu, bv.size: %llu, last_pos: %llu\n",size,bv.size,last_pos);
+	while(res_pos != last_pos) {
+		printf("a_pos: %llu, b_pos: %llu, res_pos: %llu\n",a_pos,b_pos,res_pos);
+		if (incr_a) {
+			while(a_pos <= res_pos) {
+				++a;
+				a_pos += (*a & BIT32) ? *a & FILLMASK : 1;
+			}
+			incr_a = false;
+		}
+		if (incr_b) {
+			while(b_pos <= res_pos) {
+				++b;
+				b_pos += (*b & BIT32) ? *b & FILLMASK : 1;
+			}
+			incr_b = false;
+		}
 		if (a_pos == b_pos) {
-			if (*a & ONEFILL || *b & ONEFILL) {
+			if (*a & ONEFILL || *b & ONEFILL)
 				next_word = ONEFILL | (a_pos - res_pos);
-			}
-			else if (*a & BIT32) { // zero fill
-				next_word = BIT32 | (a_pos - res_pos);
-			}
-			else { // literal word
-				uint32_t u = *a | *b;
-				next_word = (u == ALL1S) ? ONEFILL1 : u;
-			}
+			else
+				if (*a & BIT32)
+					if (*b & BIT32) // zero fill
+						next_word = BIT32 | (a_pos - res_pos);
+					else
+						next_word = *b;
+				else
+					if (*b & BIT32) // zero fill
+						next_word = *a;
+					else {
+						uint32_t u = *a | *b;
+						next_word = (u == ALL1S) ? ONEFILL1 : u;
+					}
 			incr_a = true;
 			incr_b = true;
 			res_pos = a_pos;
@@ -116,15 +183,12 @@ bvec& bvec::bvec_union(bvec &bv) {
 				incr_b = true;
 			}
 			else { // b is a 0-fill because it can't be a literal word and have b_pos > a_pos
-				if (*a & ONEFILL) {
+				if (*a & ONEFILL)
 					next_word = ONEFILL | (a_pos - res_pos);
-				}
-				else if (*a & BIT32) { // a is 0-fill
+				else if (*a & BIT32) // a is 0-fill
 					next_word = BIT32 | (a_pos - res_pos);
-				}
-				else { // literal
+				else // literal
 					next_word = *a;
-				}
 				res_pos = a_pos;
 				incr_a = true;
 			}
@@ -137,97 +201,83 @@ bvec& bvec::bvec_union(bvec &bv) {
 				incr_b = true;
 			}
 			else { // a is a 0-fill because it can't be a literal word and have a_pos > b_pos
-				if (*b & ONEFILL) {
+				if (*b & ONEFILL)
 					next_word = ONEFILL | (b_pos - res_pos);
-				}
-				else if (*b & BIT32) { // b is 0-fill
+				else if (*b & BIT32) // b is 0-fill
 					next_word = BIT32 | (b_pos - res_pos);
-				}
-				else { // literal
+				else // literal
 					next_word = *b;
-				}
 				res_pos = b_pos;
 				incr_b = true;
 			}
 		}
-		if (incr_a) {
-			while(a_pos <= res_pos && a != words.end()) {
-				++a;
-				if (a != words.end())
-					a_pos += (*a & BIT32) ? *a & FILLMASK : 1;
-			}
-			incr_a = false;
-		}
-		if (incr_b) {
-			while(b_pos <= res_pos && b != bv.words.end()) {
-				++b;
-				if (b != bv.words.end())
-					b_pos += (*b & BIT32) ? *b & FILLMASK : 1;
-			}
-			incr_b = false;
-		}
 		if (next_word & BIT32
-			&& res->words.size() > 0
-			&& res->words.back() & BIT32
-			&& res->words.back() & BIT31 == next_word & BIT31
-			&& res->words.back() & FILLMASK < FILLMASK
+			&& res.size() > 0
+			&& res.back() & BIT32
+			&& res.back() & BIT31 == next_word & BIT31
+			&& res.back() & FILLMASK < FILLMASK
 		) {
 			// merge fill words
 			// but just don't exceed the capacity
-			uint64_t n_words = res->words.back() & FILLMASK + next_word & FILLMASK;
-			if (n_words > FILLMASK) {
-				res->words.back() |= FILLMASK;
+			uint64_t n_words = res.back() & FILLMASK + next_word & FILLMASK;
+			if (n_words >= FILLMASK) {
+				res.back() |= FILLMASK;
 				n_words -= FILLMASK;
-				next_word = (next_word & ONEFILL) | n_words;
+				if (n_words > 0)
+					 res.push_back((next_word & ONEFILL) | n_words);
 			}
-		}
-		res->words.push_back(next_word);
-	}
-	if (a != words.end()) {
-		if(*a & BIT32) {
-			res->words.push_back((*a & ONEFILL) | (a_pos - res_pos));
-			++a;
-			if (a != words.end())
-				res->words.insert(res->words.end(),a,words.end());
+			else
+				res.push_back(next_word);
 		}
 		else
-			res->words.insert(res->words.end(),a,words.end());
+			res.push_back(next_word);
 	}
-	if (b != bv.words.end()) {
-		if(*b & BIT32) {
-			res->words.push_back((*b & ONEFILL) | (b_pos - res_pos));
-			++b;
-			if (b != bv.words.end())
-				res->words.insert(res->words.end(),b,bv.words.end());
-		}
-		else
-			res->words.insert(res->words.end(),b,bv.words.end());
-	}
-	return *res;
+	words.swap(res);
+	count=0;
 }
 
-bvec& bvec::bvec_intersect(bvec &bv) {
-	bvec* res = new bvec();
+// in place version of the bitwise AND operator.
+void bvec::operator&=(bvec& bv) {
+	// ensure that both bvecs are the same size
+	this->matchSize(bv);
+	if (size == 0)
+		return;
+	
+	vector<uint32_t> res; // fill this then swap with this.words
 	vector<uint32_t>::iterator a = words.begin();
 	vector<uint32_t>::iterator b = bv.words.begin();
-	if (a == words.end() || b == bv.words.end())
-		return *res;
-	// measure the first pair of words
+
+	// maintain the end position of the current word
 	uint64_t a_pos = (*a & BIT32) ? *a & FILLMASK : 1;
 	uint64_t b_pos = (*b & BIT32) ? *b & FILLMASK : 1;
 	uint64_t res_pos=0;
 	uint32_t next_word;
 	bool incr_a = false;
 	bool incr_b = false;
-	while(a != words.end() && b != bv.words.end()) {
+	uint64_t last_pos = size/LITERAL_SIZE;
+	printf("size: %llu, bv.size: %llu, last_pos: %llu\n",size,bv.size,last_pos);
+	while(res_pos != last_pos) {
+		printf("a_pos: %llu, b_pos: %llu, res_pos: %llu\n",a_pos,b_pos,res_pos);
+		if (incr_a) {
+			while(a_pos <= res_pos) {
+				++a;
+				a_pos += (*a & BIT32) ? *a & FILLMASK : 1;
+			}
+			incr_a = false;
+		}
+		if (incr_b) {
+			while(b_pos <= res_pos) {
+				++b;
+				b_pos += (*b & BIT32) ? *b & FILLMASK : 1;
+			}
+			incr_b = false;
+		}
 		if (a_pos == b_pos) {
-			if (*a & ONEFILL && *b & ONEFILL) {
+			if (*a & ONEFILL && *b & ONEFILL)
 				next_word = ONEFILL | (a_pos - res_pos);
-			}
-			else if (*a & BIT32) { // zero fill
+			else if (*a & BIT32 || *b & BIT32)
 				next_word = BIT32 | (a_pos - res_pos);
-			}
-			else { // literal word
+			else {
 				uint32_t u = *a & *b;
 				next_word = (u == 0) ? BIT32 | 1 : u;
 			}
@@ -237,17 +287,14 @@ bvec& bvec::bvec_intersect(bvec &bv) {
 		}
 		else if (a_pos < b_pos) {
 			if (*b & ONEFILL) {
-				if(*a & ONEFILL) {
+				if(*a & ONEFILL)
 					next_word = ONEFILL | (a_pos - res_pos);
-				}
-				else if (*a & BIT32 == 0) {
-					next_word = *a;
-				}
-				else {
+				else if (*a & BIT32)
 					next_word = BIT32 | (a_pos - res_pos);
-				}
+				else
+					next_word = *a;
 				res_pos = a_pos;
-				incr_b = true;
+				incr_a = true;
 			}
 			else { // b is a 0-fill because it can't be a literal word and have b_pos > a_pos
 				next_word = BIT32 | (b_pos - res_pos);
@@ -258,17 +305,14 @@ bvec& bvec::bvec_intersect(bvec &bv) {
 		}
 		else { // a_pos > b_pos
 			if (*a & ONEFILL) {
-				if(*b & ONEFILL) {
+				if(*b & ONEFILL)
 					next_word = ONEFILL | (b_pos - res_pos);
-				}
-				else if (*b & BIT32 == 0) {
-					next_word = *b;
-				}
-				else {
+				else if (*b & BIT32)
 					next_word = BIT32 | (b_pos - res_pos);
-				}
+				else
+					next_word = *b;
 				res_pos = b_pos;
-				incr_a = true;
+				incr_b = true;
 			}
 			else { // a is a 0-fill because it can't be a literal word and have a_pos > b_pos
 				next_word = BIT32 | (a_pos - res_pos);
@@ -277,62 +321,50 @@ bvec& bvec::bvec_intersect(bvec &bv) {
 				incr_b = true;
 			}
 		}
-		if (incr_a) {
-			while(a_pos <= res_pos && a != words.end()) {
-				++a;
-				if (a != words.end())
-					a_pos += (*a & BIT32) ? *a & FILLMASK : 1;
-			}
-			incr_a = false;
-		}
-		if (incr_b) {
-			while(b_pos <= res_pos && b != bv.words.end()) {
-				++b;
-				if (b != bv.words.end())
-					b_pos += (*b & BIT32) ? *b & FILLMASK : 1;
-			}
-			incr_b = false;
-			// ++b;
-			// if (b != bv.words.end())
-			// 	b_pos += (*b & BIT32) ? *b & FILLMASK : 1;
-			// incr_b = false;
-		}
 		if (next_word & BIT32
-			&& res->words.size() > 0
-			&& res->words.back() & BIT32
-			&& res->words.back() & BIT31 == next_word & BIT31
-			&& res->words.back() & FILLMASK < FILLMASK
+			&& res.size() > 0
+			&& res.back() & BIT32
+			&& res.back() & BIT31 == next_word & BIT31
+			&& res.back() & FILLMASK < FILLMASK
 		) {
 			// merge fill words
 			// but just don't exceed the capacity
-			uint64_t n_words = res->words.back() & FILLMASK + next_word & FILLMASK;
-			if (n_words > FILLMASK) {
-				res->words.back() |= FILLMASK;
+			uint64_t n_words = res.back() & FILLMASK + next_word & FILLMASK;
+			if (n_words >= FILLMASK) {
+				res.back() |= FILLMASK;
 				n_words -= FILLMASK;
-				next_word = (next_word & ONEFILL) | n_words;
+				if (n_words > 0)
+					 res.push_back((next_word & ONEFILL) | n_words);
 			}
-		}
-		res->words.push_back(next_word);
-	}
-	if (a != words.end()) {
-		if(*a & BIT32) {
-			res->words.push_back((*a & ONEFILL) | (a_pos - res_pos));
-			++a;
-			if (a != words.end())
-				res->words.insert(res->words.end(),a,words.end());
+			else
+				res.push_back(next_word);
 		}
 		else
-			res->words.insert(res->words.end(),a,words.end());
+			res.push_back(next_word);
 	}
-	if (b != bv.words.end()) {
-		if(*b & BIT32) {
-			res->words.push_back((*b & ONEFILL) | (b_pos - res_pos));
-			++b;
-			if (b != bv.words.end())
-				res->words.insert(res->words.end(),b,bv.words.end());
-		}
-		else
-			res->words.insert(res->words.end(),b,bv.words.end());
+	words.swap(res);
+	count=0;
+}
+
+bvec* bvec::operator|(bvec& rhs) {
+	bvec *res = new bvec();
+	if (words.size() > rhs.words.size()) {
+		res->copy(rhs);
+		*res |= *this;
+		return res;
 	}
-	return *res;
+	res->copy(*this);
+	*res |= rhs;
+	return res;
+}
+bvec* bvec::operator&(bvec& rhs) {
+	bvec *res = new bvec();
+	if (words.size() > rhs.words.size()) {
+		res->copy(rhs);
+		*res &= *this;
+		return res;
+	}
+	res->copy(*this);
+	*res &= rhs;
+	return res;
 }

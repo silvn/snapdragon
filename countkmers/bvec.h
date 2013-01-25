@@ -34,9 +34,14 @@ public:
 	bvec(vector<uint32_t>& vals);
 	bvec(vector<uint64_t>& vals);
 
+	inline bvec& copy(const bvec& bv);
+	void matchSize(bvec& bv);
+
 	// logical set operations
-	bvec& bvec_union(bvec& bv);
-	bvec& bvec_intersect(bvec& bv);
+	void operator|=(bvec& rhs);
+	bvec* operator|(bvec&);
+	void operator&=(bvec& rhs);
+	bvec* operator&(bvec&);
 
 	// is x in the set?
 	bool find(uint64_t x);
@@ -48,16 +53,24 @@ public:
 private:
 	vector<uint32_t> words;
 	uint64_t count; // cache the number of set bits
-	
+	uint64_t size; // bits in the uncompressed bitvector
 };
 
 // count the number of set bits
 inline uint64_t bvec::cnt() {
+	count=0;
 	if (count == 0) 
 		for(vector<uint32_t>::iterator it = words.begin(); it != words.end(); ++it)
 			count += (*it & BIT32) ? (*it & BIT31) ? (*it & FILLMASK) * LITERAL_SIZE : 0 : __builtin_popcount(*it) - 1;
 	return count;
 }
 
+// make a copy
+inline bvec& bvec::copy(const bvec& bv) {
+	words = bv.words;
+	count = bv.count;
+	size = bv.size;
+	return *this;
+}
 
 #endif

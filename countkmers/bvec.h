@@ -40,6 +40,8 @@ public:
 	uint32_t bytes() { return 4*words.size(); }
 
 	// logical set operations
+	bvec* union(bvec & bv);
+	bvec* intersect(bvec & bv);
 
 	// is x in the set?
 	bool find(uint64_t x);

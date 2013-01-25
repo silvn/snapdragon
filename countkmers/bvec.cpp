@@ -71,27 +71,19 @@ bvec::bvec(vector<uint64_t>& vals) {
 	count = vals.size();
 }
 
-// count the number of set bits
-uint64_t bvec::cnt() {
-	if (count == 0) 
-		for(vector<uint32_t>::iterator it = words.begin(); it != words.end(); ++it)
-			count += (*it & BIT32) ? (*it & BIT31) ? (*it & FILLMASK) * LITERAL_SIZE : 0 : __builtin_popcount(*it) - 1;
-	return count;
-}
-
-// union of two bitvectors
-bvec* bvec::union(bvec & bv) {
+// union of two bvecs
+bvec& bvec::union(bvec &bv) {
 	bvec* res = new bvec;
 	vector<uint32_t>::iterator a = words.begin();
 	vector<uint32_t>::iterator b = bv.words.begin();
-	// sanity check for empty bitvectors
+	// sanity check for empty bvecs
 	if (a == words.end()) {
 		res->words.insert(res->words.end(),b,bv.words.end());
-		return res;
+		return *res;
 	}
 	if (b == bv.words.end()) {
 		res->words.insert(res->words.end(),a,words.end());
-		return res;
+		return *res;
 	}
 	// maintain the end position of the current word
 	uint64_t a_pos = (*a & BIT32) ? *a & FILLMASK : 1;
@@ -211,15 +203,15 @@ bvec* bvec::union(bvec & bv) {
 		else
 			res->words.insert(res->words.end(),b,bv.words.end());
 	}
-	return res;
+	return *res;
 }
 
-bvec* bvec::intersect(bvec & bv) {
+bvec& bvec::intersect(bvec &bv) {
 	bvec* res = new bvec;
 	vector<uint32_t>::iterator a = words.begin();
 	vector<uint32_t>::iterator b = bv.words.begin();
 	if (a == words.end() || b == bv.words.end())
-		return res;
+		return *res;
 	// measure the first pair of words
 	uint64_t a_pos = (*a & BIT32) ? *a & FILLMASK : 1;
 	uint64_t b_pos = (*b & BIT32) ? *b & FILLMASK : 1;
@@ -342,5 +334,5 @@ bvec* bvec::intersect(bvec & bv) {
 		else
 			res->words.insert(res->words.end(),b,bv.words.end());
 	}
-	return res;
+	return *res;
 }

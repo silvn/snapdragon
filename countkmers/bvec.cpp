@@ -1,5 +1,38 @@
 #include "bvec.h"
 
+// constructor - given a sorted vector of distinct 32bit integers
+bvec::bvec(vector<uint32_t>& vals) {
+	uint32_t word_end = LITERAL_SIZE - 1;
+	uint32_t word=0;
+	uint32_t gap_words = vals.front()/LITERAL_SIZE;
+	// while (gap_words > FILLMASK) {
+	// 	words.push_back(BIT32 | FILLMASK);
+	// 	gap_words -= FILLMASK;
+	// }
+	if (gap_words > 0) {
+		words.push_back(gap_words | BIT32);
+		word_end += gap_words*LITERAL_SIZE;
+	} 
+	for(vector<uint32_t>::iterator ii = vals.begin(); ii != vals.end(); ++ii) {
+		if (*ii <= word_end) {
+			word |= 1 << (word_end - *ii);
+		}
+		else {
+			if (word == ALL1S) {
+				if ((words.back() & ONEFILL) && (words.back() != ONEFILL2 ))
+					words.back()++;
+				else
+					words.push_back(ONEFILL1);
+			}
+			gap_words = (*ii - word_end)/LITERAL_SIZE;
+			if (gap_words > 0)
+				words.push_back(gap_words | BIT32);
+			word_end += (gap_words+1)*LITERAL_SIZE;
+			word = 1 << (word_end - *ii);
+		}
+	}
+	count = vals.size();
+}
 // constructor - given a sorted vector of distinct 64bit integers
 bvec::bvec(vector<uint64_t>& vals) {
 	uint64_t word_end = LITERAL_SIZE - 1;
@@ -51,7 +84,16 @@ bvec* bvec::union(bvec & bv) {
 	bvec* res = new bvec;
 	vector<uint32_t>::iterator a = words.begin();
 	vector<uint32_t>::iterator b = bv.words.begin();
-	// measure the first pair of words
+	// sanity check for empty bitvectors
+	if (a == words.end()) {
+		res->words.insert(res->words.end(),b,bv.words.end());
+		return res;
+	}
+	if (b == bv.words.end()) {
+		res->words.insert(res->words.end(),a,words.end());
+		return res;
+	}
+	// maintain the end position of the current word
 	uint64_t a_pos = (*a & BIT32) ? *a & FILLMASK : 1;
 	uint64_t b_pos = (*b & BIT32) ? *b & FILLMASK : 1;
 	uint64_t res_pos=0;
@@ -176,6 +218,8 @@ bvec* bvec::intersect(bvec & bv) {
 	bvec* res = new bvec;
 	vector<uint32_t>::iterator a = words.begin();
 	vector<uint32_t>::iterator b = bv.words.begin();
+	if (a == words.end() || b == bv.words.end())
+		return res;
 	// measure the first pair of words
 	uint64_t a_pos = (*a & BIT32) ? *a & FILLMASK : 1;
 	uint64_t b_pos = (*b & BIT32) ? *b & FILLMASK : 1;

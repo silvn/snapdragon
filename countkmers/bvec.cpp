@@ -72,8 +72,8 @@ bvec::bvec(vector<uint64_t>& vals) {
 }
 
 // union of two bvecs
-bvec& bvec::union(bvec &bv) {
-	bvec* res = new bvec;
+bvec& bvec::bvec_union(bvec &bv) {
+	bvec* res = new bvec();
 	vector<uint32_t>::iterator a = words.begin();
 	vector<uint32_t>::iterator b = bv.words.begin();
 	// sanity check for empty bvecs
@@ -102,7 +102,7 @@ bvec& bvec::union(bvec &bv) {
 			}
 			else { // literal word
 				uint32_t u = *a | *b;
-				next_word = (u == ALL1s) ? ONEFILL1 : u;
+				next_word = (u == ALL1S) ? ONEFILL1 : u;
 			}
 			incr_a = true;
 			incr_b = true;
@@ -206,8 +206,8 @@ bvec& bvec::union(bvec &bv) {
 	return *res;
 }
 
-bvec& bvec::intersect(bvec &bv) {
-	bvec* res = new bvec;
+bvec& bvec::bvec_intersect(bvec &bv) {
+	bvec* res = new bvec();
 	vector<uint32_t>::iterator a = words.begin();
 	vector<uint32_t>::iterator b = bv.words.begin();
 	if (a == words.end() || b == bv.words.end())

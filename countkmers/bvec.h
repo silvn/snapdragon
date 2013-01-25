@@ -1,9 +1,5 @@
 #ifndef BVEC_H
 #define BVEC_H
-#include <algorithm>
-#include <vector>
-//#include <boost/serialization/vector.hpp>
-using namespace std;
 
 #define WORD_SIZE 32
 #define LITERAL_SIZE 31
@@ -15,27 +11,32 @@ using namespace std;
 #define ONEFILL1 3221225473
 #define ONEFILL2 4294967295
 
+#include <algorithm>
+#include <vector>
+#include <boost/serialization/vector.hpp>
+using namespace std;
+
 class bvec
 {
-	// friend class boost::serialization::access;
+	friend class boost::serialization::access;
 
-	// template<class Archive>
-	// void serialize(Archive & ar, const unsigned int version) {
-	// 	ar & words;
-	// }
+	template<class Archive>
+	void serialize(Archive & ar, const unsigned int version) {
+		ar & words;
+	}
 	
 public:
 	// Destructor
 	~bvec() {};
 
 	// Constructors
-	bvec();
+	bvec() {};
 	bvec(vector<uint32_t>& vals);
 	bvec(vector<uint64_t>& vals);
 
 	// logical set operations
-	bvec& union(bvec& bv);
-	bvec& intersect(bvec& bv);
+	bvec& bvec_union(bvec& bv);
+	bvec& bvec_intersect(bvec& bv);
 
 	// is x in the set?
 	bool find(uint64_t x);

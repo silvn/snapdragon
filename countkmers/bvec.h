@@ -58,10 +58,9 @@ private:
 
 // count the number of set bits
 inline uint64_t bvec::cnt() {
-	count=0;
 	if (count == 0) 
 		for(vector<uint32_t>::iterator it = words.begin(); it != words.end(); ++it)
-			count += (*it & BIT32) ? (*it & BIT31) ? (*it & FILLMASK) * LITERAL_SIZE : 0 : __builtin_popcount(*it) - 1;
+			count += (*it & BIT32) ? (*it & BIT31) ? (*it & FILLMASK) * LITERAL_SIZE : 0 : __builtin_popcount(*it);
 	return count;
 }
 

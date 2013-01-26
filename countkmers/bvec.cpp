@@ -14,9 +14,8 @@ bvec::bvec(vector<uint32_t>& vals) {
 		word_end += gap_words*LITERAL_SIZE;
 	} 
 	for(vector<uint32_t>::iterator ii = vals.begin(); ii != vals.end(); ++ii) {
-		if (*ii <= word_end) {
+		if (*ii <= word_end)
 			word |= 1 << (word_end - *ii);
-		}
 		else {
 			if (word == ALL1S)
 				if ((words.back() & ONEFILL) && (words.back() != ONEFILL2 ))
@@ -34,7 +33,7 @@ bvec::bvec(vector<uint32_t>& vals) {
 	}
 	// add the last word
 	if (word == ALL1S) {
-		if ((words.back() & ONEFILL) && (words.back() != ONEFILL2 ))
+		if ((words.size() != 0) && ((words.back() & ONEFILL) == ONEFILL) && (words.back() != ONEFILL2 ))
 			words.back()++;
 		else
 			words.push_back(ONEFILL1);
@@ -59,9 +58,8 @@ bvec::bvec(vector<uint64_t>& vals) {
 		word_end += gap_words*LITERAL_SIZE;
 	} 
 	for(vector<uint64_t>::iterator ii = vals.begin(); ii != vals.end(); ++ii) {
-		if (*ii <= word_end) {
+		if (*ii <= word_end)
 			word |= 1 << (uint32_t)(word_end - *ii);
-		}
 		else {
 			if (word == ALL1S)
 				if ((words.back() & ONEFILL) && (words.back() != ONEFILL2 ))
@@ -76,14 +74,14 @@ bvec::bvec(vector<uint64_t>& vals) {
 				gap_words -= FILLMASK;
 			}
 			if (gap_words > 0)
-				words.push_back((uint32_t)gap_words | BIT32);
+				words.push_back(BIT32 | (uint32_t)gap_words);
 			word_end += (gap_words+1)*LITERAL_SIZE;
 			word = 1 << (uint32_t)(word_end - *ii);
 		}
 	}
 	// add the last word
 	if (word == ALL1S) {
-		if ((words.back() & ONEFILL) && (words.back() != ONEFILL2 ))
+		if ((words.size() != 0) && ((words.back() & ONEFILL) == ONEFILL) && (words.back() != ONEFILL2 ))
 			words.back()++;
 		else
 			words.push_back(ONEFILL1);
@@ -96,7 +94,6 @@ bvec::bvec(vector<uint64_t>& vals) {
 }
 
 void bvec::matchSize(bvec &bv) {
-	printf("matchSize() %llu %llu\n",size,bv.size);
 	if (size < bv.size) {
 		uint64_t gap_words = (bv.size - size)/LITERAL_SIZE;
 		while (gap_words > FILLMASK) {
@@ -138,9 +135,7 @@ void bvec::operator|=(bvec& bv) {
 	bool incr_a = false;
 	bool incr_b = false;
 	uint64_t last_pos = size/LITERAL_SIZE;
-	printf("size: %llu, bv.size: %llu, last_pos: %llu\n",size,bv.size,last_pos);
 	while(res_pos != last_pos) {
-		printf("a_pos: %llu, b_pos: %llu, res_pos: %llu\n",a_pos,b_pos,res_pos);
 		if (incr_a) {
 			while(a_pos <= res_pos) {
 				++a;
@@ -156,7 +151,7 @@ void bvec::operator|=(bvec& bv) {
 			incr_b = false;
 		}
 		if (a_pos == b_pos) {
-			if (*a & ONEFILL || *b & ONEFILL)
+			if ((*a & ONEFILL) == ONEFILL || (*b & ONEFILL) == ONEFILL)
 				next_word = ONEFILL | (a_pos - res_pos);
 			else
 				if (*a & BIT32)
@@ -176,14 +171,14 @@ void bvec::operator|=(bvec& bv) {
 			res_pos = a_pos;
 		}
 		else if (a_pos < b_pos) {
-			if (*b & ONEFILL) {
+			if ((*b & ONEFILL) == ONEFILL) {
 				next_word = ONEFILL | (b_pos - res_pos);
 				res_pos = b_pos;
 				incr_a = true;
 				incr_b = true;
 			}
-			else { // b is a 0-fill because it can't be a literal word and have b_pos > a_pos
-				if (*a & ONEFILL)
+			else { // b is a 0-fill or a literal word
+				if ((*a & ONEFILL) == ONEFILL)
 					next_word = ONEFILL | (a_pos - res_pos);
 				else if (*a & BIT32) // a is 0-fill
 					next_word = BIT32 | (a_pos - res_pos);
@@ -194,14 +189,14 @@ void bvec::operator|=(bvec& bv) {
 			}
 		}
 		else { // a_pos > b_pos
-			if (*a & ONEFILL) {
+			if ((*a & ONEFILL) == ONEFILL) {
 				next_word = ONEFILL | (a_pos - res_pos);
 				res_pos = a_pos;
 				incr_a = true;
 				incr_b = true;
 			}
-			else { // a is a 0-fill because it can't be a literal word and have a_pos > b_pos
-				if (*b & ONEFILL)
+			else { // a is a 0-fill or a literal word
+				if ((*b & ONEFILL) == ONEFILL)
 					next_word = ONEFILL | (b_pos - res_pos);
 				else if (*b & BIT32) // b is 0-fill
 					next_word = BIT32 | (b_pos - res_pos);
@@ -211,15 +206,15 @@ void bvec::operator|=(bvec& bv) {
 				incr_b = true;
 			}
 		}
-		if (next_word & BIT32
+		if ((next_word & BIT32)
 			&& res.size() > 0
-			&& res.back() & BIT32
-			&& res.back() & BIT31 == next_word & BIT31
-			&& res.back() & FILLMASK < FILLMASK
+			&& (res.back() & BIT32)
+			&& (res.back() & BIT31) == (next_word & BIT31)
+			&& (res.back() & FILLMASK) < FILLMASK
 		) {
 			// merge fill words
 			// but just don't exceed the capacity
-			uint64_t n_words = res.back() & FILLMASK + next_word & FILLMASK;
+			uint64_t n_words = (res.back() & FILLMASK) + (next_word & FILLMASK);
 			if (n_words >= FILLMASK) {
 				res.back() |= FILLMASK;
 				n_words -= FILLMASK;
@@ -255,9 +250,7 @@ void bvec::operator&=(bvec& bv) {
 	bool incr_a = false;
 	bool incr_b = false;
 	uint64_t last_pos = size/LITERAL_SIZE;
-	printf("size: %llu, bv.size: %llu, last_pos: %llu\n",size,bv.size,last_pos);
 	while(res_pos != last_pos) {
-		printf("a_pos: %llu, b_pos: %llu, res_pos: %llu\n",a_pos,b_pos,res_pos);
 		if (incr_a) {
 			while(a_pos <= res_pos) {
 				++a;
@@ -273,9 +266,9 @@ void bvec::operator&=(bvec& bv) {
 			incr_b = false;
 		}
 		if (a_pos == b_pos) {
-			if (*a & ONEFILL && *b & ONEFILL)
+			if ((*a & ONEFILL) == ONEFILL && (*b & ONEFILL) == ONEFILL)
 				next_word = ONEFILL | (a_pos - res_pos);
-			else if (*a & BIT32 || *b & BIT32)
+			else if ((*a & BIT32) || (*b & BIT32))
 				next_word = BIT32 | (a_pos - res_pos);
 			else {
 				uint32_t u = *a & *b;
@@ -286,8 +279,8 @@ void bvec::operator&=(bvec& bv) {
 			res_pos = a_pos;
 		}
 		else if (a_pos < b_pos) {
-			if (*b & ONEFILL) {
-				if(*a & ONEFILL)
+			if ((*b & ONEFILL) == ONEFILL) {
+				if((*a & ONEFILL) == ONEFILL)
 					next_word = ONEFILL | (a_pos - res_pos);
 				else if (*a & BIT32)
 					next_word = BIT32 | (a_pos - res_pos);
@@ -304,8 +297,8 @@ void bvec::operator&=(bvec& bv) {
 			}
 		}
 		else { // a_pos > b_pos
-			if (*a & ONEFILL) {
-				if(*b & ONEFILL)
+			if ((*a & ONEFILL) == ONEFILL) {
+				if((*b & ONEFILL) == ONEFILL)
 					next_word = ONEFILL | (b_pos - res_pos);
 				else if (*b & BIT32)
 					next_word = BIT32 | (b_pos - res_pos);
@@ -321,15 +314,15 @@ void bvec::operator&=(bvec& bv) {
 				incr_b = true;
 			}
 		}
-		if (next_word & BIT32
+		if ((next_word & BIT32)
 			&& res.size() > 0
-			&& res.back() & BIT32
-			&& res.back() & BIT31 == next_word & BIT31
-			&& res.back() & FILLMASK < FILLMASK
+			&& (res.back() & BIT32)
+			&& (res.back() & BIT31) == (next_word & BIT31)
+			&& (res.back() & FILLMASK) < FILLMASK
 		) {
 			// merge fill words
 			// but just don't exceed the capacity
-			uint64_t n_words = res.back() & FILLMASK + next_word & FILLMASK;
+			uint64_t n_words = (res.back() & FILLMASK) + (next_word & FILLMASK);
 			if (n_words >= FILLMASK) {
 				res.back() |= FILLMASK;
 				n_words -= FILLMASK;

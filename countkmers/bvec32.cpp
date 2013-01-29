@@ -54,7 +54,9 @@ void bvec::construct_rle(vector<uint32_t>& vals) {
 			word |= ((uint32_t)1 << (word_end - *ii));
 		else {
 			if (word == ALL1S)
-				if ((words.size() != 0) && ((words.back() & ONEFILL) == ONEFILL) && (words.back() != ONEFULL))
+				if ((words.size() != 0) &&
+                    ((words.back() & ONEFILL) == ONEFILL) &&
+                    (words.back() != ONEFULL))
 					words.back()++;
 				else
 					words.push_back(ONEFILL1);
@@ -68,12 +70,15 @@ void bvec::construct_rle(vector<uint32_t>& vals) {
 			if (gap_words > 0)
 				words.push_back(gap_words | BIT1);
 			word_end += (gap_words+1)*LITERAL_SIZE;
-			word = (word_end - *ii == LITERAL_SIZE) ? 1 : (uint32_t)1 << (word_end - *ii);
+			word = (word_end - *ii == LITERAL_SIZE)
+                ? 1 : (uint32_t)1 << (word_end - *ii);
 		}
 	}
 	// add the last word
 	if (word == ALL1S) {
-		if ((words.size() != 0) && ((words.back() & ONEFILL) == ONEFILL) && (words.back() != ONEFULL ))
+		if ((words.size() != 0) &&
+            ((words.back() & ONEFILL) == ONEFILL) &&
+                (words.back() != ONEFULL))
 			words.back()++;
 		else
 			words.push_back(ONEFILL1);
@@ -84,38 +89,40 @@ void bvec::construct_rle(vector<uint32_t>& vals) {
 	size = word_end+1;
 }
 
-void bvec::convert() {
-	if (rle) {
-		// retrieve the set bits from the compressed vector
-		vector<uint32_t> res;
-		res.reserve(cnt());
-		uint32_t pos=0;
-		for(vector<uint32_t>::iterator ii = words.begin(); ii != words.end(); ++ii) {
-			if ((*ii & ONEFILL) == ONEFILL) {
-				uint32_t n_ones = LITERAL_SIZE*(*ii & FILLMASK);
-				for(uint32_t i=0;i < n_ones; i++) {
-					res.push_back(pos);
-					pos++;
-				}
-			}
-			else if (*ii & BIT1)
-				pos += LITERAL_SIZE*(*ii & FILLMASK);
-			else { // desconstruct the literal word
-				for(uint32_t bit=1; bit<=LITERAL_SIZE; bit++)
-					if (*ii & ((uint32_t)1 << (LITERAL_SIZE-bit)))
-						res.push_back(pos+bit-1);
-				pos += LITERAL_SIZE;
+void bvec::compress() {
+    if (rle) { /* Throw exception? */ return; }
+	vector<uint32_t> tmp;
+	tmp.swap(words);
+	construct_rle(tmp);
+    rle = true;
+}
+
+void bvec::decompress() {
+    if (!rle) { /* Throw exception? */ return; }
+	// retrieve the set bits from the compressed vector
+	vector<uint32_t> res;
+	res.reserve(cnt());
+	uint32_t pos=0;
+	for(vector<uint32_t>::iterator ii = words.begin(); ii != words.end(); ++ii) {
+		if ((*ii & ONEFILL) == ONEFILL) {
+			uint32_t n_ones = LITERAL_SIZE*(*ii & FILLMASK);
+			for(uint32_t i=0;i < n_ones; i++) {
+				res.push_back(pos);
+				pos++;
 			}
 		}
-		words.swap(res);
-		count = words.size();
-		rle = false;
+		else if (*ii & BIT1)
+			pos += LITERAL_SIZE*(*ii & FILLMASK);
+		else { // desconstruct the literal word
+			for(uint32_t bit=1; bit<=LITERAL_SIZE; bit++)
+				if (*ii & ((uint32_t)1 << (LITERAL_SIZE-bit)))
+					res.push_back(pos+bit-1);
+			pos += LITERAL_SIZE;
+		}
 	}
-	else {
-		vector<uint32_t> tmp;
-		tmp.swap(words);
-		construct_rle(tmp);
-	}
+	words.swap(res);
+	count = words.size();
+	rle = false;
 }
 
 // in place version of the bitwise OR operator.
@@ -199,7 +206,7 @@ void bvec::non_OR_non(bvec& bv) {
 		res.insert(res.end(),b,bv.words.end());
 
 	count = res.size();
-	// TODO: check if it's worth converting to RLE
+	// TODO: check if it's worth compressing
 
 	words.swap(res);
 }
@@ -226,32 +233,32 @@ void bvec::non_AND_non(bvec& bv) {
 }
 
 void bvec::non_AND_rle(bvec& bv) {
-	// convert rle to non
+	// decompress
 	// run non_AND_non
 	bvec *tmp = new bvec();
 	tmp->copy(bv);
-	tmp->convert();
+	tmp->decompress();
 	non_AND_non(*tmp);
 	delete tmp;
 }
 void bvec::rle_AND_non(bvec& bv) {
-	// convert rle to non
+	// decompress
 	// run non_AND_non
-	convert();
+	decompress();
 	non_AND_non(bv);
 }
 void bvec::non_OR_rle(bvec& bv) {
-	// convert non to rle
+	// compress
 	// run rle_OR_rle
-	convert();
+	compress();
 	rle_OR_rle(bv);
 }
 void bvec::rle_OR_non(bvec& bv) {
-	// convert non to rle
+	// compress
 	// run rle_OR_rle
 	bvec *tmp = new bvec();
 	tmp->copy(bv);
-	tmp->convert();
+	tmp->compress();
 	rle_OR_rle(*tmp);
 	delete tmp;
 }
@@ -392,7 +399,7 @@ void bvec::rle_OR_rle(bvec& bv) {
 	words.swap(res);
 	count=0;
 	
-	// decide whether to convert to non rle encoded
+	// decide whether to decompress
 }
 
 // in place version of the bitwise AND operator.

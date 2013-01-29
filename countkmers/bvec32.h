@@ -17,8 +17,7 @@
 #include <boost/serialization/vector.hpp>
 using namespace std;
 
-class bvec
-{
+class bvec {
 	friend class boost::serialization::access;
 
 	template<class Archive>
@@ -34,7 +33,8 @@ public:
 	bvec() {};
 	bvec(vector<uint32_t>& vals);
 	void print();
-	void convert();
+	void compress();
+    void decompress();
 
 	// logical set operations
 	void operator|=(bvec& rhs);

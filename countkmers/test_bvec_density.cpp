@@ -28,13 +28,13 @@ int main(int argc, char *argv[]) {
 	}
 	printf("generated %zi distinct random uint32_t\n",rand32uniq.size());
 	bvec *bv32 = new bvec(rand32uniq);
-//	bv32->print();
+    // bv32->print();
 	printf("cnt(): %u, bv32->bytes(): %u\n",bv32->cnt(),bv32->bytes());
-	bv32->convert();
-//	bv32->print();
+	bv32->compress();
+    // bv32->print();
 	printf("cnt(): %u, bv32->bytes(): %u\n",bv32->cnt(),bv32->bytes());
-	bv32->convert();
-//	bv32->print();
+	bv32->decompress();
+    // bv32->print();
 	printf("cnt(): %u, bv32->bytes(): %u\n",bv32->cnt(),bv32->bytes());
 	delete bv32;
 

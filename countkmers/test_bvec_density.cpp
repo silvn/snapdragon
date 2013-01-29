@@ -1,6 +1,29 @@
 #include "bvec32.h"
 #include <algorithm>
 
+#define DEBUG false
+
+void print_binary(vector<uint32_t>& v) {
+    for (int i = 0; i < v.size(); i++) {
+        for (int b = 0; b < 32; b++)
+            printf("%d", v[i] & (2 << b) ? 1 : 0);
+    }
+    printf("\n");
+}
+
+void xor_vectors(const vector<uint32_t>& a, const vector<uint32_t>& b,
+    vector<uint32_t>& c) {
+    for (int i = 0; i < a.size(); i++) {
+        c.push_back(a[i] ^ b[i]);
+    }
+}
+
+void debug_binary(const char* head, vector<uint32_t>& v) {
+    if (!DEBUG) return;
+    printf("%-20s ", head);
+    print_binary(v);
+}
+
 using namespace std;
 int main(int argc, char *argv[]) {
 	// simulate random bitvectors with up to 1 billion points
@@ -31,12 +54,22 @@ int main(int argc, char *argv[]) {
     // bv32->print();
 	printf("cnt(): %u, bv32->bytes(): %u\n",bv32->cnt(),bv32->bytes());
 	bv32->compress();
+    vector<uint32_t> compressed = bv32->get_words();
     // bv32->print();
 	printf("cnt(): %u, bv32->bytes(): %u\n",bv32->cnt(),bv32->bytes());
 	bv32->decompress();
+    vector<uint32_t> uncompressed = bv32->get_words();
     // bv32->print();
 	printf("cnt(): %u, bv32->bytes(): %u\n",bv32->cnt(),bv32->bytes());
 	delete bv32;
+    cout << "Are they equal? " << (rand32uniq == uncompressed ? "yes" : "no") << endl;
+    if (rand32uniq != uncompressed) {
+        vector<uint32_t> v;
+        xor_vectors(rand32uniq, uncompressed, v);
+        debug_binary("Original", rand32uniq);
+        debug_binary("Uncompressed", uncompressed);
+        debug_binary("XOR", v);
+    }
 
 	// vector<uint64_t> rand64;
 	// for(int i=0;i<n;i++) {

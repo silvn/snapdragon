@@ -17,7 +17,7 @@ bvec::bvec(vector<uint32_t>& vals) {
 }
 
 bool bvec::low_density(vector<uint32_t>& vals) {
-	printf("low_density() %u/%u %c %f\n",vals.size(),
+	printf("low_density() %u/%u %c %f\n", (uint32_t)vals.size(),
 		vals.back() - vals.front() + 1,
 			((double)vals.size()/(double)(vals.back() - vals.front() + 1) < 1.0/(double)LITERAL_SIZE) ? '<' : '>',
 				1.0/(double)LITERAL_SIZE);
@@ -82,8 +82,7 @@ void bvec::construct_rle(vector<uint32_t>& vals) {
 			words.back()++;
 		else
 			words.push_back(ONEFILL1);
-	}
-	else {
+	} else {
 		words.push_back(word);
 	}
 	size = word_end+1;
@@ -95,6 +94,10 @@ void bvec::compress() {
 	tmp.swap(words);
 	construct_rle(tmp);
     rle = true;
+}
+
+vector<uint32_t>& bvec::get_words() {
+    return words;
 }
 
 void bvec::decompress() {

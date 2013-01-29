@@ -35,6 +35,7 @@ public:
 	void print();
 	void compress();
     void decompress();
+    vector<uint32_t>& get_words();
 
 	// logical set operations
 	void operator|=(bvec& rhs);

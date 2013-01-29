@@ -92,7 +92,7 @@ void bvec::convert() {
 		uint32_t pos=0;
 		for(vector<uint32_t>::iterator ii = words.begin(); ii != words.end(); ++ii) {
 			if ((*ii & ONEFILL) == ONEFILL) {
-				uint32_t n_ones = *ii & FILLMASK;
+				uint32_t n_ones = LITERAL_SIZE*(*ii & FILLMASK);
 				for(uint32_t i=0;i < n_ones; i++) {
 					res.push_back(pos);
 					pos++;

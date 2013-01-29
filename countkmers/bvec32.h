@@ -6,7 +6,7 @@
 #define BIT1 0x80000000
 #define BIT2 0x40000000
 #define FILLMASK 0x3FFFFFFF
-#define ALL1S 0x5FFFFFFF
+#define ALL1S 0x7FFFFFFF
 #define ONEFILL 0xC0000000
 #define ONEFILL1 0xC0000001
 #define ONEFULL 0xFFFFFFFF
@@ -71,9 +71,13 @@ private:
 
 // count the number of set bits
 inline uint32_t bvec::cnt() {
+	count=0;
 	if (count == 0) 
-		for(vector<uint32_t>::iterator it = words.begin(); it != words.end(); ++it)
-			count += (*it & BIT1) ? (*it & BIT2) ? (*it & FILLMASK) * LITERAL_SIZE : 0 : __builtin_popcount(*it);
+		if (rle)
+			for(vector<uint32_t>::iterator it = words.begin(); it != words.end(); ++it)
+				count += (*it & BIT1) ? (*it & BIT2) ? (*it & FILLMASK) * LITERAL_SIZE : 0 : __builtin_popcount(*it);
+		else
+			count = words.size();
 	return count;
 }
 

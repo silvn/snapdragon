@@ -5,19 +5,19 @@ bvec::bvec(vector<uint32_t>& vals) {
 	count = vals.size();
 	// if the density is too low, run length encoding will take MORE space
 	if (low_density(vals)) {
-		printf("constructed non rle\n");
+		if (DEBUG) printf("constructed non rle\n");
 		words = vals;
 		rle = false;
 		size = 0; // irrelevant?
 	}
 	else {
-		printf("construct_rle\n");
+		if (DEBUG) printf("construct_rle\n");
 		construct_rle(vals);
 	}
 }
 
 bool bvec::low_density(vector<uint32_t>& vals) {
-	printf("low_density() %u/%u %c %f\n", (uint32_t)vals.size(),
+	if (DEBUG) printf("low_density() %u/%u %c %f\n", (uint32_t)vals.size(),
 		vals.back() - vals.front() + 1,
 			((double)vals.size()/(double)(vals.back() - vals.front() + 1) < 1.0/(double)LITERAL_SIZE) ? '<' : '>',
 				1.0/(double)LITERAL_SIZE);

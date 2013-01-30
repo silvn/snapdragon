@@ -1,6 +1,8 @@
 #ifndef BVEC32_H
 #define BVEC32_H
 
+#define DEBUG false
+
 #define WORD_SIZE 32
 #define LITERAL_SIZE 31
 #define BIT1 0x80000000

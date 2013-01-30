@@ -29,7 +29,16 @@ void bvec::print() {
 	printf("rle: %c\n",rle ? 'T' : 'F');
 	printf("words:\n");
 	for(int i=0;i<words.size();i++) {
-		printf(" %i %u\n",i,words[i]);
+		printf(" %i ",i);
+		if (rle)
+			if ((words[i] & ONEFILL) == ONEFILL) 
+				printf("1-fill %u %u\n",words[i] & FILLMASK, LITERAL_SIZE*(words[i] & FILLMASK));
+			else if (words[i] & BIT1)
+				printf("0-fill %u %u\n",words[i] & FILLMASK, LITERAL_SIZE*(words[i] & FILLMASK));
+			else
+				printf("literal %u\n",words[i]);
+		else
+			printf("direct %u\n",words[i]);
 	}
 }
 
@@ -62,7 +71,7 @@ void bvec::construct_rle(vector<uint32_t>& vals) {
 					words.push_back(ONEFILL1);
 			else
 				words.push_back(word);
-			gap_words = (*ii - word_end)/LITERAL_SIZE;
+			gap_words = (*ii - word_end - 1)/LITERAL_SIZE;
 			while (gap_words > FILLMASK) {
 				words.push_back(ZEROFULL);
 				gap_words -= FILLMASK;

@@ -1,7 +1,7 @@
 #include "bvec64.h"
 
 // constructor - given a sorted vector of distinct 64bit integers
-bvec::bvec(vector<uint64_t>& vals) {
+bvec64::bvec64(vector<uint64_t>& vals) {
 	count = vals.size();
 	// if the density is too low, run length encoding will take MORE space
 	if (low_density(vals)) {
@@ -16,8 +16,8 @@ bvec::bvec(vector<uint64_t>& vals) {
 	}
 }
 
-bool bvec::low_density(vector<uint64_t>& vals) {
-	if (DEBUG) printf("low_density() %u/%u %c %f\n", (uint64_t)vals.size(),
+bool bvec64::low_density(vector<uint64_t>& vals) {
+	if (DEBUG) printf("low_density() %llu/%llu %c %f\n", (uint64_t)vals.size(),
 		vals.back() - vals.front() + 1,
 			((double)vals.size()/(double)(vals.back() - vals.front() + 1) < 1.0/(double)LITERAL_SIZE) ? '<' : '>',
 				1.0/(double)LITERAL_SIZE);
@@ -25,24 +25,24 @@ bool bvec::low_density(vector<uint64_t>& vals) {
 	
 }
 
-void bvec::print() {
+void bvec64::print() {
 	printf("rle: %c\n",rle ? 'T' : 'F');
 	printf("words:\n");
 	for(int i=0;i<words.size();i++) {
 		printf(" %i ",i);
 		if (rle)
 			if ((words[i] & ONEFILL) == ONEFILL) 
-				printf("1-fill %u %u\n",words[i] & FILLMASK, LITERAL_SIZE*(words[i] & FILLMASK));
+				printf("1-fill %llu %llu\n",words[i] & FILLMASK, LITERAL_SIZE*(words[i] & FILLMASK));
 			else if (words[i] & BIT1)
-				printf("0-fill %u %u\n",words[i] & FILLMASK, LITERAL_SIZE*(words[i] & FILLMASK));
+				printf("0-fill %llu %llu\n",words[i] & FILLMASK, LITERAL_SIZE*(words[i] & FILLMASK));
 			else
-				printf("literal %u\n",words[i]);
+				printf("literal %llu\n",words[i]);
 		else
-			printf("direct %u\n",words[i]);
+			printf("direct %llu\n",words[i]);
 	}
 }
 
-void bvec::construct_rle(vector<uint64_t>& vals) {
+void bvec64::construct_rle(vector<uint64_t>& vals) {
 	rle = true;
 	uint64_t word_end = LITERAL_SIZE - 1;
 	uint64_t word=0;
@@ -58,9 +58,9 @@ void bvec::construct_rle(vector<uint64_t>& vals) {
 	}
 	for(vector<uint64_t>::iterator ii = vals.begin(); ii != vals.end(); ++ii) {
 		if (*ii == word_end)
-			word |= 1;
+			word |= 1ULL;
 		else if (*ii < word_end)
-			word |= ((uint64_t)1 << (word_end - *ii));
+			word |= (1ULL << (word_end - *ii));
 		else {
 			if (word == ALL1S)
 				if ((words.size() != 0) &&
@@ -71,7 +71,7 @@ void bvec::construct_rle(vector<uint64_t>& vals) {
 					words.push_back(ONEFILL1);
 			else
 				words.push_back(word);
-			gap_words = (*ii - word_end - 1)/LITERAL_SIZE;
+			gap_words = (*ii - word_end - 1ULL)/LITERAL_SIZE;
 			while (gap_words > FILLMASK) {
 				words.push_back(ZEROFULL);
 				gap_words -= FILLMASK;
@@ -80,7 +80,7 @@ void bvec::construct_rle(vector<uint64_t>& vals) {
 				words.push_back(gap_words | BIT1);
 			word_end += (gap_words+1)*LITERAL_SIZE;
 			word = (word_end - *ii == LITERAL_SIZE)
-                ? 1 : (uint64_t)1 << (word_end - *ii);
+                ? 1ULL : 1ULL << (word_end - *ii);
 		}
 	}
 	// add the last word
@@ -97,7 +97,7 @@ void bvec::construct_rle(vector<uint64_t>& vals) {
 	size = word_end+1;
 }
 
-void bvec::compress() {
+void bvec64::compress() {
     if (rle) { /* Throw exception? */ return; }
 	vector<uint64_t> tmp;
 	tmp.swap(words);
@@ -105,11 +105,11 @@ void bvec::compress() {
     rle = true;
 }
 
-vector<uint64_t>& bvec::get_words() {
+vector<uint64_t>& bvec64::get_words() {
     return words;
 }
 
-void bvec::decompress() {
+void bvec64::decompress() {
     if (!rle) { /* Throw exception? */ return; }
 	// retrieve the set bits from the compressed vector
 	vector<uint64_t> res;
@@ -138,7 +138,7 @@ void bvec::decompress() {
 }
 
 // in place version of the bitwise OR operator.
-void bvec::operator|=(bvec& bv) {
+void bvec64::operator|=(bvec64& bv) {
 	// decide which version we'll be using
 	if (rle)
 		if (bv.rle)
@@ -152,7 +152,7 @@ void bvec::operator|=(bvec& bv) {
 			non_OR_non(bv);
 }
 // in place version of the bitwise AND operator.
-void bvec::operator&=(bvec& bv) {
+void bvec64::operator&=(bvec64& bv) {
 	// decide which version we'll be using
 	if (rle)
 		if (bv.rle)
@@ -165,8 +165,8 @@ void bvec::operator&=(bvec& bv) {
 		else
 			non_AND_non(bv);
 }
-bvec* bvec::operator|(bvec& rhs) {
-	bvec *res = new bvec();
+bvec64* bvec64::operator|(bvec64& rhs) {
+	bvec64 *res = new bvec64();
 	if (words.size() > rhs.words.size()) {
 		res->copy(rhs);
 		*res |= *this;
@@ -176,8 +176,8 @@ bvec* bvec::operator|(bvec& rhs) {
 	*res |= rhs;
 	return res;
 }
-bvec* bvec::operator&(bvec& rhs) {
-	bvec *res = new bvec();
+bvec64* bvec64::operator&(bvec64& rhs) {
+	bvec64 *res = new bvec64();
 	if (words.size() > rhs.words.size()) {
 		res->copy(rhs);
 		*res &= *this;
@@ -188,7 +188,7 @@ bvec* bvec::operator&(bvec& rhs) {
 	return res;
 }
 
-void bvec::non_OR_non(bvec& bv) {
+void bvec64::non_OR_non(bvec64& bv) {
 	
 	vector<uint64_t> res;
 	vector<uint64_t>::iterator a = words.begin();
@@ -223,7 +223,7 @@ void bvec::non_OR_non(bvec& bv) {
 	words.swap(res);
 }
 
-void bvec::non_AND_non(bvec& bv) {
+void bvec64::non_AND_non(bvec64& bv) {
 	
 	vector<uint64_t> res;
 	vector<uint64_t>::iterator a = words.begin();
@@ -244,38 +244,38 @@ void bvec::non_AND_non(bvec& bv) {
 	words.swap(res);
 }
 
-void bvec::non_AND_rle(bvec& bv) {
+void bvec64::non_AND_rle(bvec64& bv) {
 	// decompress
 	// run non_AND_non
-	bvec *tmp = new bvec();
+	bvec64 *tmp = new bvec64();
 	tmp->copy(bv);
 	tmp->decompress();
 	non_AND_non(*tmp);
 	delete tmp;
 }
-void bvec::rle_AND_non(bvec& bv) {
+void bvec64::rle_AND_non(bvec64& bv) {
 	// decompress
 	// run non_AND_non
 	decompress();
 	non_AND_non(bv);
 }
-void bvec::non_OR_rle(bvec& bv) {
+void bvec64::non_OR_rle(bvec64& bv) {
 	// compress
 	// run rle_OR_rle
 	compress();
 	rle_OR_rle(bv);
 }
-void bvec::rle_OR_non(bvec& bv) {
+void bvec64::rle_OR_non(bvec64& bv) {
 	// compress
 	// run rle_OR_rle
-	bvec *tmp = new bvec();
+	bvec64 *tmp = new bvec64();
 	tmp->copy(bv);
 	tmp->compress();
 	rle_OR_rle(*tmp);
 	delete tmp;
 }
 
-void bvec::matchSize(bvec &bv) {
+void bvec64::matchSize(bvec64 &bv) {
 	if (size < bv.size) {
 		uint64_t gap_words = (bv.size - size)/LITERAL_SIZE;
 		while (gap_words > FILLMASK) {
@@ -298,8 +298,8 @@ void bvec::matchSize(bvec &bv) {
 	}
 }
 
-void bvec::rle_OR_rle(bvec& bv) {
-	// ensure that both bvecs are the same size
+void bvec64::rle_OR_rle(bvec64& bv) {
+	// ensure that both bvec64s are the same size
 	this->matchSize(bv);
 	if (size == 0)
 		return;
@@ -415,8 +415,8 @@ void bvec::rle_OR_rle(bvec& bv) {
 }
 
 // in place version of the bitwise AND operator.
-void bvec::rle_AND_rle(bvec& bv) {
-	// ensure that both bvecs are the same size
+void bvec64::rle_AND_rle(bvec64& bv) {
+	// ensure that both bvec64s are the same size
 	this->matchSize(bv);
 	if (size == 0)
 		return;

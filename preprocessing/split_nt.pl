@@ -58,17 +58,28 @@ while (<STDIN>) { # usage: gzip -cd nt.gz | split_nt.pl gi_taxid_nucl.dmp nodes.
 					unshift @path, $tax;
 					$tax = $tax2parent{$tax};
 				}
+				$tax = $path[-1];
 				$tax2path{$tax} = join("/",$outdir,@path,"split.fa.gz");
+				system("mkdir -p ".join("/",$outdir,@path));
 			}
 			# check if there are too many files open
-			if (keys %active_fh == $max_open_fh) {
+			my @open_files = keys %active_fh;
+			if (@open_files == $max_open_fh) {
 				# close something
 				my ($t,$z) = each %active_fh;
+				print STDERR "closing file for tax $t\n";
 				close $z;
 				delete $active_fh{$t};
 			}
 			# open tax2path{$tax} in append mode and store in $active{$tax}
-			$active_fh{$tax} = new IO::Compress::Gzip $tax2path{$tax}, Merge => 1 or die "failed to open $tax2path{$tax} in Merge mode: $!\n";
+			if (-e $tax2path{$tax}) {
+				$active_fh{$tax} = new IO::Compress::Gzip $tax2path{$tax}, Merge => 1
+				 or die "failed to open $tax2path{$tax} in Merge mode: $!\n";
+			}
+			else {
+				$active_fh{$tax} = new IO::Compress::Gzip $tax2path{$tax}
+				 or die "failed to open $tax2path{$tax}: $!\n";
+			}
 		}
 	}
 	# write the sequence to $active{$tax}

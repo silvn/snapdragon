@@ -1,5 +1,6 @@
-#!/usr/bin/env perl -w
+#! /usr/bin/env perl 
 use strict;
+use warnings;
 
 use IO::Compress::Gzip qw(gzip $GzipError);
 my $max_open_fh = 200;
@@ -27,7 +28,7 @@ my %gi2tax;
 my %tax2path;
 my %active_fh;
 my $tax;
-while (<>) { # usage: gzip -cd nt.gz | split_nt.pl gi_taxid_nucl.dmp nodes.dmp outdir
+while (<STDIN>) { # usage: gzip -cd nt.gz | split_nt.pl gi_taxid_nucl.dmp nodes.dmp outdir
 	if (/^>(.+)/) {
 		# parse the header line
 		my @gis = ($_ =~ m/gi\|(\d+)\|/g);

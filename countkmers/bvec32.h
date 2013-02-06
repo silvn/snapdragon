@@ -96,6 +96,7 @@ inline uint32_t bvec32::popcount(uint32_t val) const {
 	table[(val>>16)&0xFFUL] + table[(val>>24)&0xFFUL];
 }
 
+
 // count the number of set bits
 inline uint32_t bvec32::cnt() {
 	if (count == 0)

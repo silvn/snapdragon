@@ -7,6 +7,8 @@
 #include <ctime>
 #include <iostream>
 #include <string>
+#include <errno.h>
+
 using namespace std;
 
 inline uint32_t vsearch(vector<uint32_t> &a, vector<uint32_t> &b, uint32_t v) {
@@ -19,37 +21,35 @@ inline uint32_t vsearch(vector<uint32_t> &a, vector<uint32_t> &b, uint32_t v) {
 KSEQ_INIT(gzFile, gzread)
 int main(int argc, char *argv[])
 {
-	// setup 2bit vector
-	vector<uint32_t> twobit;
-	twobit.resize(256,0);
-	twobit[99] = 1;  // c
-	twobit[103] = 2; // g
-	twobit[116] = 3; // t
-	twobit[67] = 1;  // C
-	twobit[71] = 2;  // G
-	twobit[84] = 3;  // T
-
 	if (argc != 3) {
 		fprintf(stderr, "Usage: %s gi_taxid_nucl.dmp nodes.dmp nt.gz\n", argv[0]);
 		return 1;
 	}
 
-	// read gi_taxid_nucl.dmp into memory as two vectors
+	// read gi_taxid_nucl.dmp.gz into memory as two vectors
 	clock_t start,end;
 	start = clock();
-	FILE *pFile;
-	pFile = fopen(argv[1],"r");
+	gzFile file;
+	file = gzopen(argv[1], "rb");
+	if (file == NULL) {
+		fprintf(stderr, "gzopen of '%s' failed: %s.\n", argv[1], strerror(errno));
+		exit(1);
+	}
+	int uncomprLen = 50; // how do you choose this?
+	char uncompr[50];
 	vector<uint32_t> gi_vec,tax_vec;
-	while (!feof(pFile)) {
+	while (! gzeof(file)) {
+		gzgets(file, uncompr, uncomprLen);
 		uint32_t gi,tax;
-		fscanf(pFile,"%u %u\n",&gi,&tax);
+		sscanf(uncompr,"%u\t%u",&gi,&tax);
 		gi_vec.push_back(gi);
 		tax_vec.push_back(tax);
 	}
-	fclose(pFile);
+	gzclose(file);
+
 	end = clock();
-	cout << "parsing gi_taxid_nucl.dmp into two vectors took "
-		<< (double(end-start)/CLOCKS_PER_SEC) << " seconds\n";
+	fprintf(stderr,"parsing gi_taxid_nucl.dmp into two vectors took %f seconds\n",
+		double(end-start)/CLOCKS_PER_SEC);
 	
 	start = clock();
 	for(int i=0;i<1000000;i++) {
@@ -61,11 +61,12 @@ int main(int argc, char *argv[])
 		}
 	}
 	end = clock();
-	cout << "1000000 gi->tax lookups took "
-		<< (double(end-start)/CLOCKS_PER_SEC) << " seconds\n";
+	fprintf(stderr,"1000000 gi->tax lookups took %f seconds\n",
+		double(end-start)/CLOCKS_PER_SEC);
 
 	// read nodes.dmp into memory as two vectors
 	start = clock();
+	FILE *pFile;
 	pFile = fopen(argv[2],"r");
 	vector<uint32_t> nodes_tax;
 	vector<uint32_t> nodes_parent;
@@ -78,8 +79,8 @@ int main(int argc, char *argv[])
 	}
 	fclose(pFile);
 	end = clock();
-	cout << "parsing nodes.dmp into two vectors took "
-		<< (double(end-start)/CLOCKS_PER_SEC) << " seconds\n";
+	fprintf(stderr,"parsing nodes.dmp into two vectors took %s seconds\n",
+		double(end-start)/CLOCKS_PER_SEC);
 
 	start = clock();
 	for(int i=0;i<1000000;i++) {
@@ -91,9 +92,10 @@ int main(int argc, char *argv[])
 		}
 	}
 	end = clock();
-	cout << "1000000 tax->parent lookups took "
-		<< (double(end-start)/CLOCKS_PER_SEC) << " seconds\n";
+	fprintf(stderr,"1000000 tax->parent lookups took %f seconds\n",
+		double(end-start)/CLOCKS_PER_SEC);
 
+	return 0;
 	// split the nt.gz according to taxonomy
 	kseq_t *seq;
 	map<uint32_t,string> tax_path;

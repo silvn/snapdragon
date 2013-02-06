@@ -64,6 +64,9 @@ int main(int argc, char *argv[])
 	fprintf(stderr,"1000000 gi->tax lookups took %f seconds\n",
 		double(end-start)/CLOCKS_PER_SEC);
 
+	// do a dfs traversal of the taxonomy tree
+	// and create the directories on the file system
+
 	// read nodes.dmp into memory as two vectors
 	start = clock();
 	FILE *pFile;
@@ -98,10 +101,10 @@ int main(int argc, char *argv[])
 	// split the nt.gz according to taxonomy
 	start = clock();
 	kseq_t *seq;
-	map<uint32_t,char*> tax_path;
+//	map<uint32_t,char*> tax_path;
 	map<uint32_t,FILE*> active;
 	map<uint32_t, uint32_t> active_used;
-	int max_open_files = 128;
+	int max_open_files = 8192;
 	
 	int length;
 	gzFile fp = gzopen(argv[3], "r");
@@ -112,25 +115,29 @@ int main(int argc, char *argv[])
 		uint32_t gi;
 		sscanf(seq->name.s,"gi|%u|",&gi);
 		uint32_t tax = vsearch(gi_vec,tax_vec,gi);
-//		fprintf(stderr,"gi %u is tax %u\n",gi,tax);
 		if (tax == 0) {
 			fprintf(stderr,"failed to determine tax_id of gi %u\n",gi);
 		}
-		else {
+		else if (vsearch(nodes_tax,nodes_parent,tax) > 0) {
+//			fprintf(stderr,"gi|%u|tax|%u|len|%i\n",gi,tax,length);
 			// check if this tax id is an active file
 			map<uint32_t,FILE*>::iterator it1 = active.find(tax);
 			if (it1 == active.end()) {
 				// not an active file
 				// check if we have already prepared a path
-				map<uint32_t,char*>::iterator it2 = tax_path.find(tax);
-				if (it2 == tax_path.end()) {
+				// map<uint32_t,char*>::iterator it2 = tax_path.find(tax);
+				// if (it2 == tax_path.end()) {
 	//				fprintf(stderr,"creating path to tax\n");
+					// is this map getting too large?
 					// need to create the path
 					vector<uint32_t> path;
 					path.push_back(tax);
 					while (tax != 1) {
 						tax = vsearch(nodes_tax,nodes_parent,tax);
-	//					fprintf(stderr,",%u",tax);
+						if (tax == 0) {
+							fprintf(stderr,"taxonomy fail parent(%u) undefined\n",path.back());
+							exit(1);
+						}
 						path.push_back(tax);
 					}
 					tax = path.front();
@@ -142,8 +149,8 @@ int main(int argc, char *argv[])
 					}
 					sprintf(path_str,"%ssplit_nt.fa",path_str);
 	//				fprintf(stderr,"file: %s\n",path_str);
-					tax_path[tax] = path_str;
-				}
+//					tax_path[tax] = path_str;
+//				}
 				if (active.size() == max_open_files) {
 					// have to close some files - how about the least recently used 64 files?
 					vector<uint32_t> last_used;
@@ -151,7 +158,7 @@ int main(int argc, char *argv[])
 						last_used.push_back(uit->second);
 					}
 					sort(last_used.begin(),last_used.end());
-					uint32_t mid_ru = last_used[64];
+					uint32_t mid_ru = last_used[max_open_files/8];
 					vector<uint32_t> toclose;
 					for(map<uint32_t,uint32_t>::iterator uit = active_used.begin(); uit != active_used.end(); ++uit)
 						if(uit->second < mid_ru)
@@ -163,7 +170,11 @@ int main(int argc, char *argv[])
 					}
 				}
 				// open the file in append mode
-				active[tax] = fopen(tax_path[tax],"a");
+//				active[tax] = fopen(tax_path[tax],"a");
+				active[tax] = fopen(path_str,"a");
+				if (active[tax] == NULL) {
+					fprintf(stderr,"failed to open %s in append mode\n",path_str);
+				}
 			}
 			// write this seq to active[tax]
 			fprintf(active[tax],">%s\n%s\n",seq->name.s,seq->seq.s);

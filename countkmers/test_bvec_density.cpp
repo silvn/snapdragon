@@ -41,7 +41,7 @@ void run_test_cases() {
         vector<uint32_t> v;
         for (int j = 0; j < TEST_VEC_LENGTH; j++)
             v.push_back(TEST_CASES[i][j]);
-        bvec *bv = new bvec(v);
+        bvec32 *bv = new bvec32(v);
         bv->compress();
         bv->decompress();
         vector<uint32_t> uncomp = bv->get_words();
@@ -89,7 +89,7 @@ int main(int argc, char *argv[]) {
 		++ii32;
 	}
 	printf("generated %zi distinct random uint32_t\n",rand32uniq.size());
-	bvec *bv32 = new bvec(rand32uniq);
+	bvec32 *bv32 = new bvec32(rand32uniq);
 //    bv32->print();
 	printf("cnt(): %u, bv32->bytes(): %u\n",bv32->cnt(),bv32->bytes());
 	bv32->compress();
@@ -127,7 +127,7 @@ int main(int argc, char *argv[]) {
 	// 	++ii64;
 	// }
 	// printf("generated %zi distinct random uint64_t\n",rand64uniq.size());
-	// bvec *bv64 = new bvec(rand64uniq);
+	// bvec32 *bv64 = new bvec32(rand64uniq);
 	// printf("bv64()->bytes() = %u\n",bv64->bytes());
 	// delete bv64;
 }

@@ -111,13 +111,15 @@ int main(int argc, char *argv[])
 		aki++;
 	}
 	printf("after merging via sorting %zi distinct kmers\n",allmerged.size());
-	vector<bvec32*>::iterator si = seq2vec.begin();
-	bvec32 *merged = *si;
-	++si;
-	while (si != seq2vec.end()) {
-		*merged |= **si;
-		++si;
-	}
-	printf("finished ORing all the bvecs. %u distinct %i-mers\n",merged->cnt(),k);
+
+	// 
+	// vector<bvec32*>::iterator si = seq2vec.begin();
+	// bvec32 *merged = *si;
+	// ++si;
+	// while (si != seq2vec.end()) {
+	// 	*merged |= **si;
+	// 	++si;
+	// }
+	// printf("finished ORing all the bvecs. %u distinct %i-mers\n",merged->cnt(),k);
 	return 0;
 }

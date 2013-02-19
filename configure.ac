@@ -45,5 +45,6 @@ AC_CHECK_FUNCS([mkdir strerror])
 
 AC_CONFIG_FILES([Makefile
                  countkmers/Makefile
-                 preprocessing/Makefile])
+                 preprocessing/Makefile
+				 test/Makefile])
 AC_OUTPUT

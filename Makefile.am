@@ -1,2 +1,2 @@
 dist_doc_DATA = README.md
-SUBDIRS = countkmers
+SUBDIRS = countkmers preprocessing test

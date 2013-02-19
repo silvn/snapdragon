@@ -1,10 +1,6 @@
 #include "bvec32.h"
+#include "test.h"
 #include <algorithm>
-
-#define TERM_RESET "\e[m"
-#define TERM_BOLD  "\e[1m"
-#define TERM_RED   "\e[31m"
-#define TERM_GREEN "\e[32m"
 
 #define TEST_VEC_LENGTH 4
 const uint32_t TEST_CASES[][TEST_VEC_LENGTH] = {
@@ -13,27 +9,6 @@ const uint32_t TEST_CASES[][TEST_VEC_LENGTH] = {
     { 13431029,   377786868,  1463271703, 1501810865 },
     { 1819233732, 2235579467, 2625766209, 4061912144 }
 };
-
-void print_binary(vector<uint32_t>& v) {
-    for (int i = 0; i < v.size(); i++) {
-        for (int b = 31; b >= 0; b--)
-            printf("%d", v[i] & (1 << b) ? 1 : 0);
-		printf(" ");
-    }
-    printf("\n");
-}
-
-void xor_vectors(const vector<uint32_t>& a, const vector<uint32_t>& b,
-    vector<uint32_t>& c) {
-    for (int i = 0; i < a.size(); i++) {
-        c.push_back(a[i] ^ b[i]);
-    }
-}
-
-void debug_binary(const char* head, vector<uint32_t>& v) {
-    printf("%-20s ", head);
-    print_binary(v);
-}
 
 void run_test_cases() {
     int num_cases = sizeof(TEST_CASES) / (TEST_VEC_LENGTH * sizeof(uint32_t));

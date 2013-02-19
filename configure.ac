@@ -6,6 +6,7 @@ AC_INIT([FULL-PACKAGE-NAME], [VERSION], [BUG-REPORT-ADDRESS])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 AC_CONFIG_SRCDIR([countkmers])
 AC_CONFIG_HEADERS([config.h])
+AC_CONFIG_MACRO_DIR([m4])
 AM_CONDITIONAL([MACOS], [test "$(uname -s)" = "Darwin"])
 # Options to configure.
 # Boost
@@ -21,9 +22,14 @@ AC_CHECK_HEADERS([boost/foreach.hpp], [],
     [AC_MSG_ERROR(You need the Boost libraries.)])
 AC_LANG_POP([C++])
 
+LIB_VERSION_INFO=0:9:0
+
+AM_PROG_AR
+
 # Checks for programs.
 AC_PROG_CXX
 AC_PROG_CC
+AC_PROG_LIBTOOL
 
 # Checks for libraries.
 AC_CHECK_LIB([z], [deflateInit])
@@ -47,4 +53,6 @@ AC_CONFIG_FILES([Makefile
                  countkmers/Makefile
                  preprocessing/Makefile
 				 test/Makefile])
+
+LT_INIT
 AC_OUTPUT

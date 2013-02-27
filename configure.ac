@@ -2,9 +2,9 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([FULL-PACKAGE-NAME], [VERSION], [BUG-REPORT-ADDRESS])
+AC_INIT([bvec], [0.0.1], [aolson@me.com])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
-AC_CONFIG_SRCDIR([countkmers])
+AC_CONFIG_SRCDIR([config.h.in])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 AM_CONDITIONAL([MACOS], [test "$(uname -s)" = "Darwin"])
@@ -28,11 +28,17 @@ AM_PROG_AR
 
 # Checks for programs.
 AC_PROG_CXX
+AC_PROG_AWK
 AC_PROG_CC
+AC_PROG_CPP
+AC_PROG_INSTALL
+AC_PROG_LN_S
+AC_PROG_MAKE_SET
 AC_PROG_LIBTOOL
 
 # Checks for libraries.
 AC_CHECK_LIB([z], [deflateInit])
+AC_CHECK_LIB([boost_serialization], [serialize])
 
 # Checks for header files.
 AC_CHECK_HEADERS([stdlib.h string.h])
@@ -50,9 +56,9 @@ AC_FUNC_REALLOC
 AC_CHECK_FUNCS([mkdir strerror])
 
 AC_CONFIG_FILES([Makefile
-                 countkmers/Makefile
-                 preprocessing/Makefile
-				 test/Makefile])
-
+                 src/Makefile
+                 src/countkmers/Makefile
+                 src/preprocessing/Makefile
+                 test/Makefile])
 LT_INIT
 AC_OUTPUT

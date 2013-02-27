@@ -29,7 +29,7 @@ bvec32* random_bvec(int n) {
 
 using namespace std;
 int main(int argc, char *argv[]) {
-	short n = 1000;
+	short n = 10;
 	if (argc > 1) 
 		n = atoi(argv[1]);
 
@@ -40,9 +40,21 @@ int main(int argc, char *argv[]) {
     std::tmpnam(filename);
     cout << "Writing to file " << filename << endl;
     
-    // save_to_file(*original, filename);
-    // restore_from_file(*deserialized, filename);
+    save_to_file(*original, filename);
+    restore_from_file(*deserialized, filename);
     
-    print_test("serialize", original == deserialized);
-    return 2;
+    bool match = original->equals(*deserialized); // original == deserialized
+    if (!match) {
+        original->print();
+        deserialized->print();
+        vector<uint32_t> orig = original->get_words();
+        vector<uint32_t> deser = deserialized->get_words();
+        debug_binary("Original", orig);
+        debug_binary("Deserialized", deser);
+        vector<uint32_t> v;
+        xor_vectors(orig, deser, v);
+        debug_binary("XOR", v);
+        return 1;
+    }
+    return 0;
 }

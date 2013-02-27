@@ -188,6 +188,20 @@ bvec32* bvec32::operator&(bvec32& rhs) {
 	return res;
 }
 
+bool bvec32::operator==(bvec32& other) const {
+    return (words == other.words) &&
+           (count == other.count) &&
+           (size  == other.size)  &&
+           (rle   == other.rle);
+}
+
+bool bvec32::equals(const bvec32& other) const {
+    return (words == other.words) &&
+           (count == other.count) &&
+           (size  == other.size)  &&
+           (rle   == other.rle);
+}
+
 void bvec32::non_OR_non(bvec32& bv) {
 	
 	vector<uint32_t> res;

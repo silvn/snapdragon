@@ -37,7 +37,7 @@ class bvec32 {
 
     template<class Archive>
     void serialize(Archive & ar, const unsigned int version) {
-            ar & words & count & size & rle;
+        ar & words & count & size & rle;
     }
     
 public:
@@ -57,6 +57,9 @@ public:
     bvec32* operator|(bvec32&);
     void operator&=(bvec32& rhs);
     bvec32* operator&(bvec32&);
+    bool operator==(bvec32&) const;
+    
+    bool equals(const bvec32&) const;
 
     // is x in the set?
     bool find(uint32_t x);
@@ -110,8 +113,13 @@ inline uint32_t bvec32::popcount(uint32_t val) const {
 inline uint32_t bvec32::cnt() {
     if (count == 0)
         if (rle)
-            for(vector<uint32_t>::iterator it = words.begin(); it != words.end(); ++it)
-                count += (*it & BIT1) ? (*it & BIT2) ? (*it & FILLMASK) * LITERAL_SIZE : 0 : popcount(*it & ALL1S);
+            for(vector<uint32_t>::iterator it = words.begin();
+                it != words.end(); ++it)
+                count += (*it & BIT1)
+                    ? (*it & BIT2)
+                        ? (*it & FILLMASK) * LITERAL_SIZE
+                        : 0
+                    : popcount(*it & ALL1S);
         else
             count = words.size();
     return count;
@@ -139,13 +147,11 @@ inline bvec32& bvec32::copy(const bvec32& bv) {
 }
 
 ostream & operator<<(ostream &os, const vector<uint32_t> vec) {
-    // for (int i = 0; i < vec.size(); ++i)
-    //     os << (int) vec[i];
     return os << vec;
 }
 
-ostream & operator<<(ostream &os, const bvec32 &bvec) {
-    return os << bvec.words << bvec.rle << bvec.size << bvec.count;
+ostream & operator<<(ostream &os, const bvec32 &vec) {
+    return os << vec;
 }
 
 void

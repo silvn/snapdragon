@@ -1,8 +1,8 @@
+#include "countkmers/kseq.h"
 #include <zlib.h>
 #include <stdio.h>
 #include <vector>
 #include <algorithm>
-#include "kseq.h"
 #include <ctime>
 #include <sstream>
 #include <fstream>

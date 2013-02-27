@@ -108,7 +108,6 @@ AM_V_CXXLD = $(am__v_CXXLD_@AM_V@)
 am__v_CXXLD_ = $(am__v_CXXLD_@AM_DEFAULT_V@)
 am__v_CXXLD_0 = @echo "  CXXLD   " $@;
 am__v_CXXLD_1 = 
-SOURCES = split_nt.cpp
 DIST_SOURCES = split_nt.cpp
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
@@ -255,7 +254,9 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AM_DEFAULT_SOURCE_EXT = .cpp
-AM_CPPFLAGS = -I../countkmers
+SOURCES = split_nt.cpp
+# FIXME: distcheck popping up _build and into src/
+AM_CPPFLAGS = -I$(top_srcdir)/../src
 all: all-am
 
 .SUFFIXES:

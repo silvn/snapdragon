@@ -13,9 +13,9 @@ AM_CONDITIONAL([MACOS], [test "$(uname -s)" = "Darwin"])
 # Options to configure.
 # Boost
 AC_ARG_WITH(boost, AS_HELP_STRING([--with-boost=PATH],
-    [directory for the boost header files]))
+	[directory for the boost header files]))
 if test "$with_boost" -a -d "$with_boost"; then
-    boost_cppflags="-I$with_boost"
+	boost_cppflags="-I$with_boost"
 fi
 AC_SUBST(CPPFLAGS, "$boost_cppflags $CPPFLAGS")
 

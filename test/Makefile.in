@@ -50,7 +50,6 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 check_PROGRAMS = bvec_density$(EXEEXT) serialize$(EXEEXT)
-TESTS = bvec_density$(EXEEXT) serialize$(EXEEXT)
 subdir = test
 DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
 	$(top_srcdir)/depcomp $(top_srcdir)/test-driver
@@ -68,6 +67,7 @@ CONFIG_CLEAN_VPATH_FILES =
 bvec_density_SOURCES = bvec_density.cpp
 bvec_density_OBJECTS = bvec_density.$(OBJEXT)
 bvec_density_LDADD = $(LDADD)
+bvec_density_DEPENDENCIES =
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
@@ -75,6 +75,7 @@ am__v_lt_1 =
 serialize_SOURCES = serialize.cpp
 serialize_OBJECTS = serialize.$(OBJEXT)
 serialize_LDADD = $(LDADD)
+serialize_DEPENDENCIES =
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -378,7 +379,7 @@ INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
 LIBOBJS = @LIBOBJS@
-LIBS = @LIBS@
+LIBS = -lbvec
 LIBTOOL = @LIBTOOL@
 LIPO = @LIPO@
 LN_S = @LN_S@
@@ -461,6 +462,11 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AM_DEFAULT_SOURCE_EXT = .cpp
 ACLOCAL_AMFLAGS = -I m4
+AM_CPPFLAGS = -I../src
+TESTS = $(check_PROGRAMS)
+AM_LDFLAGS = -L../src/countkmers/.libs
+@MACOS_FALSE@LDADD = -lboost_serialization
+@MACOS_TRUE@LDADD = -lboost_serialization-mt
 all: all-am
 
 .SUFFIXES:

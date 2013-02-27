@@ -283,6 +283,8 @@ top_srcdir = @top_srcdir@
 lib_LTLIBRARIES = libbvec.la
 libbvec_la_SOURCES = bvec32.cpp
 AM_DEFAULT_SOURCE_EXT = .cpp
+@MACOS_FALSE@LDADD = -lboost_serialization
+@MACOS_TRUE@LDADD = -lboost_serialization-mt
 all: all-am
 
 .SUFFIXES:
@@ -596,8 +598,6 @@ uninstall-am: uninstall-libLTLIBRARIES
 	mostlyclean-generic mostlyclean-libtool pdf pdf-am ps ps-am \
 	tags tags-am uninstall uninstall-am uninstall-libLTLIBRARIES
 
-@MACOS_TRUE@	LIBS = -lboost_serialization-mt
-@MACOS_FALSE@	LIBS = -lboost_serialization
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

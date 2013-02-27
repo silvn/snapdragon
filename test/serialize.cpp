@@ -1,4 +1,4 @@
-#include "bvec32.h"
+#include "countkmers/bvec32.h"
 #include "test.h"
 #include <algorithm>
 
@@ -44,5 +44,5 @@ int main(int argc, char *argv[]) {
     // restore_from_file(*deserialized, filename);
     
     print_test("serialize", original == deserialized);
-    return 0;
+    return 2;
 }

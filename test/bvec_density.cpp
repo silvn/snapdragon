@@ -1,4 +1,4 @@
-#include "bvec32.h"
+#include "countkmers/bvec32.h"
 #include "test.h"
 #include <algorithm>
 

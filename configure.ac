@@ -4,6 +4,8 @@
 AC_PREREQ([2.69])
 AC_INIT([bvec], [0.0.1], [aolson@me.com])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
+AC_REVISION([m4_esyscmd_s([git describe --always])])
+
 AC_CONFIG_SRCDIR([config.h.in])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])

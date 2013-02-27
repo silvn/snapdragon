@@ -29,7 +29,7 @@ bvec32* random_bvec(int n) {
 
 using namespace std;
 int main(int argc, char *argv[]) {
-	short n = 10;
+	short n = 1000;
 	if (argc > 1) 
 		n = atoi(argv[1]);
 

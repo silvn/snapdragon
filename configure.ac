@@ -21,11 +21,6 @@ AC_PROG_CC
 AC_PROG_CXX
 AC_PROG_LIBTOOL
 
-AC_CONFIG_HEADERS([config.h])
-AC_CONFIG_FILES([
-	Makefile
-	src/Makefile
-])
 AC_ARG_ENABLE(fastbit,
 	[AS_HELP_STRING([--enable-fastbit],
 		[Enable FastBit library and wrappers [default=no]])],
@@ -36,6 +31,15 @@ AC_MSG_RESULT(${fastbit})
 AM_CONDITIONAL(BUILD_FASTBIT, test "$fastbit" = "yes")
 AC_SUBST(BUILD_FASTBIT)
 
+AC_CONFIG_HEADERS([config.h])
+AC_CONFIG_FILES([
+	Makefile
+	src/Makefile
+	src/fastbit/Makefile
+])
+if test "$fastbit" = "yes"; then
+	AC_CONFIG_SUBDIRS([vendor/fastbit])
+fi
 AC_OUTPUT
 AC_CACHE_SAVE
 

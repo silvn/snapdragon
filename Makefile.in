@@ -150,7 +150,7 @@ am__define_uniq_tagged_files = \
 ETAGS = etags
 CTAGS = ctags
 CSCOPE = cscope
-DIST_SUBDIRS = $(SUBDIRS)
+DIST_SUBDIRS = src vendor/fastbit
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 distdir = $(PACKAGE)-$(VERSION)
 top_distdir = $(distdir)
@@ -307,12 +307,14 @@ psdir = @psdir@
 sbindir = @sbindir@
 sharedstatedir = @sharedstatedir@
 srcdir = @srcdir@
+subdirs = @subdirs@
 sysconfdir = @sysconfdir@
 target_alias = @target_alias@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 dist_doc_DATA = README.md
+@BUILD_FASTBIT_TRUE@EXTRA_BUILD = vendor/fastbit
 SUBDIRS = src $(EXTRA_BUILD)
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-recursive
@@ -813,7 +815,6 @@ uninstall-am: uninstall-dist_docDATA
 	mostlyclean-libtool pdf pdf-am ps ps-am tags tags-am uninstall \
 	uninstall-am uninstall-dist_docDATA
 
-@BUILD_FASTBIT_TRUE@	EXTRA_BUILD=vendor/fastbit
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

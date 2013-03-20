@@ -1,5 +1,5 @@
 dist_doc_DATA = README.md
 if BUILD_FASTBIT
-	EXTRA_BUILD=vendor/fastbit
+   EXTRA_BUILD=vendor/fastbit
 endif
 SUBDIRS = src $(EXTRA_BUILD)

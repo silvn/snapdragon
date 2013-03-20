@@ -1,4 +1,4 @@
 if BUILD_FASTBIT
-	EXTRA_BUILD=fastbit
+   EXTRA_BUILD=fastbit
 endif
 SUBDIRS = $(EXTRA_BUILD)

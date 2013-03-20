@@ -26,6 +26,8 @@ kmerizer::kmerizer(const size_t _k, const size_t _threads, const char* _outdir, 
 	mode = _mode;
 	threads = _threads;
 	thread_bins = threads/NBINS:
+	state = READING;
+	batches=0;
 }
 
 int kmerizer::allocate(const size_t maximem) {
@@ -110,10 +112,46 @@ int kmerizer::save() {
 
 int kmerizer::histogram() {
 	if (batches>1) {
-		int rc = mergeBatches();
-		fprintf(stderr,"error merging batches\n");
+		int rc = save();
+		fprintf(stderr,"error saving\n");
 		exit(1);
 	}
+	if (state == READING) {
+		int rc = unique();
+		if (rc != 0) {
+			fprintf(stderr,"error uniqifying kmers\n");
+			return 1;
+		}
+	}
+	// merge the NBINS counts bvecs
+	uint32_t todo = NBINS;
+	size_t offset [NBINS];
+	size_t done [NBINS];
+	memset(offset,0,sizeof(uint32_t)*NBINS);
+	memset(done,0,sizeof(uint32_t)*NBINS);
+	uint32_t key=1; // min kmer frequency
+	while (todo > 0) {
+		uint32_t val = 0;
+		for(size_t i=0;i<NBINS;i++) {
+			if (done[i]==0) {
+				if (kmer_freq[i][offset[i]] == key) {
+					val += counts[i][offset[i]]->count();
+					if (offset[i]>0) // undo the range encoding <=
+						val -= counts[i][offset[i-1]]->count();
+					offset[i]++;
+					if(offset[i] == kmer_freq[i].size()) {
+						done[i]=1;
+						todo--;
+					}
+				}
+			}
+		}
+		if (val>0) {
+			printf("%u %u\n",key,val);
+		}
+		key++;
+	}
+	return 0;
 }
 
 void kmerizer::serialize() {
@@ -137,6 +175,7 @@ void kmerizer::serialize() {
 	for(size_t i=0;i<NBINS;i++) {
 		delete counts[i]; // bvec32 destructor
 	}
+	state = READING;
 }
 
 int kmerizer::unique() {
@@ -146,6 +185,7 @@ int kmerizer::unique() {
 		tg.create_thread(boost::bind(do_unique,i,j));
 	}
 	tg.join_all();
+	state = QUERY;
 }
 
 int kmerizer::writeBatch() {
@@ -185,10 +225,8 @@ void kmerizer::do_unique(const size_t from, const size_t to) {
 			}
 		}
 		bin_tally[bin] = distinct+1;
-		// change the state from counting to uniquified
-		
 		// create a bitmap index for the tally vector
-		range_index(tally,counts[bin]);
+		range_index(tally,kmer_freq[bin],counts[bin]);
 	}
 }
 
@@ -203,27 +241,27 @@ void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
 
 // for each distinct value in the vec create a bitvector
 // indexing the positions in the vec holding a value <= v
-void range_index(vector<uint32_t> &vec, vector<bvec32*> &index) {
+void range_index(vector<uint32_t> &vec, vector<uint32_t> &values, vector<bvec32*> &index) {
 	// find the distinct values in vec
-	vector<uint32_t> sortuniq;
-	sortuniq.reserve(vec.size());
-	copy(vec.begin(),vec.end(),sortuniq.begin());
-	sort(sortuniq.begin(),sortuniq.end());
+	values.clear();
+	values.reserve(vec.size());
+	copy(vec.begin(),vec.end(),values.begin());
+	sort(values.begin(),values.end());
 	vector<uint32_t>::iterator it;
-	it = unique(sortuniq.begin(),sortuniq.end());
-	sortuniq.resize(distance(sortuniq.begin(),it));
+	it = unique(values.begin(),values.end());
+	values.resize(distance(values.begin(),it));
 	// setup a vector for each range
-	vector<uint32_t> range [sortuniq.size()];
+	vector<uint32_t> range [values.size()];
 	// iterate over the vec and push the offset onto each range
 	for(size_t i=0;i<vec.size();i++) {
-		it = find(sortuniq.begin(),sortuniq.end(),vec[i]);
-		for(size_t j=0;j<=distance(sortuniq.begin(),it);j++) {
+		it = find(values.begin(),values.end(),vec[i]);
+		for(size_t j=0;j<=distance(values.begin(),it);j++) {
 			range[j].push_back(i);
 		}
 	}
 	// create a bitvector for each range
-	index.resize(sortuniq.size());
-	for(size_t i=0;i<sortuniq.size();i++) {
+	index.resize(values.size());
+	for(size_t i=0;i<range.size();i++) {
 		index[i] = new bvec32(range[i]);
 		fprintf(stderr,"index[%zi]->bytes()=%u\n",i,index[i]->bytes());
 	}

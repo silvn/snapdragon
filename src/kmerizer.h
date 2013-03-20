@@ -2,9 +2,11 @@
 #define KMERIZER_H
 
 #define DEBUG false
-#define NBINS 256;
-#define CANONICAL C;
-#define BOTH B;
+#define NBINS 256
+#define CANONICAL C
+#define BOTH B
+#define READING 1
+#define QUERY 2
 
 #include <vector>
 #include "bvec32.h"
@@ -23,14 +25,12 @@ class kmerizer {
 	size_t batches;
 	size_t max_kmers_per_bin;
 	char mode;
-
-	// need something for whether we are taking forward only, canonical, or both.
-	// need something to say what state the class is in.
-	// bloom filter?
+	char state;
 
 	word_t* kmer_buf [NBINS]; // raw unsorted kmers (padded), or qsort|uniq'ed kmers
 	uint32_t bin_tally [NBINS]; // number of kmers in each bin (or number of distinct kmers)
-	vector<bvec32*> counts [NBINS]; // bitmap index of counts
+	vector<uint32_t> kmer_freq [NBINS]; // sorted distinct kmer frequencies
+	vector<bvec32*> counts [NBINS]; // bitmap index of frequency counts
 
 public:
 	kmerizer(const size_t _k, const size_t _threads, const char* _outdir, const char _mode);
@@ -53,7 +53,8 @@ private:
 	void do_writeBatch(const size_t from, const size_t to); // for parallelization
 	int mergeBatches();
 	void do_mergeBatches(const size_t from, const size_t to);
-	void range_index(vector<uint32_t> &vec, vector<bvec32*> &index); // this is too generic to live here
+	// is this too generic to go here?
+	void range_index(vector<uint32_t> &vec, vector<uint32_t> &values, vector<bvec32*> &index);
 };
 
 inline word_t twobit(const word_t val) const {

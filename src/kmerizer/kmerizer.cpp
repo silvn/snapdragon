@@ -155,6 +155,7 @@ int kmerizer::histogram() {
 }
 
 void kmerizer::serialize() {
+	batches++;
 	// unique the batch
 	int rc = unique();
 	if (rc != 0) {
@@ -168,7 +169,6 @@ void kmerizer::serialize() {
 		fprintf(stderr,"error writing a batch of kmers to disk\n");
 		exit(1);
 	}
-	batches++;
 
 	// zero the data
 	memset(bin_tally,0,sizeof(uint32_t)*NBINS);
@@ -204,6 +204,7 @@ int kmerizer::mergeBatches() {
 		tg.create_thread(boost::bind(do_mergeBatches,i,j));
 	}
 	tg.join_all();
+	batches=1;
 }
 
 void kmerizer::do_unique(const size_t from, const size_t to) {
@@ -231,11 +232,66 @@ void kmerizer::do_unique(const size_t from, const size_t to) {
 }
 
 void kmerizer::do_writeBatch(const size_t from, const size_t to) {
-	
+	for(size_t bin=from; bin<to; bin++) {
+		// open output file for kmer_buf
+		char kmer_file [100];
+		sprintf(kmer_file,"%s/%zi-mers.%zi.%zi",outdir,k,bin,batches);
+		FILE *fp;
+		fp = fopen(kmer_file, "wb");
+		fwrite(kmer_buf[bin],kmer_size,bin_tally[bin],fp);
+		fclose(fp);
+
+		// open output file for counts
+		char counts_file [100];
+		sprintf(counts_file,"%s/%zi-mers.%zi.%zi.idx",outdir,k,bin,batches);
+		// first write the number of distinct values
+		// then write the distinct values
+		// for each distinct value, write out the bvec (size,count,rle,words.size(),words)
+		int n_distinct = kmer_freq[bin].size();
+		fwrite(&n_distinct,sizeof(int),1,fp);
+		fwrite(kmer_freq[bin].data(),sizeof(uint32_t),n_distinct,fp);
+		for(size_t i=0;i<n_distinct;i++) {
+			// I want this DIY serialization/deserialization in bvec
+			uint32_t u = counts[bin][i]->size;
+			fwrite(&u,sizeof(uint32_t),1,fp);
+			uint32_t c = counts[bin][i]->count();
+			fwrite(&c,sizeof(uint32_t),1,fp);
+			bool rle = counts[bin][i]->rle;
+			fwrite(&rle,sizeof(bool),1,fp);
+			uint32_t s = counts[bin][i]->words.size();
+			fwrite(&s,sizeof(uint32_t),1,fp);
+			fwrite(counts[bin][i]->words.data(),sizeof(uint32_t),s,fp);
+		}
+		fclose(fp);
+	}
 }
 
 void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
-	
+	for(size_t bin=from; bin<to; bin++) {
+		// read the counts for each batch
+		// and open the files of sorted distinct kmers
+		vector<bvec*> batch_counts [batches];
+		FILE kmer_fp [batches];
+		for(size_t i=1;i<=batches;i++) {
+			char fname [100];
+			sprintf(fname,"%s/%zi-mers.%zi.%zi",outdir,k,bin,i);
+			kmer_fp[i-1] = fopen(fname, "rb");
+			sprintf(fname,"%s/%zi-mers.%zi.%zi.idx",outdir,k,bin,i);
+			read_index(fname,batch_counts[i]);
+		}
+		// open an output file for the merged distinct kmers
+		FILE *ofp;
+		char fname [100];
+		sprintf(fname,"%s/%zi-mers.%zi.%zi",outdir,k,bin);
+		ofp = fopen(fname,"wb");
+		// read the first kmer from each batch
+		// choose min
+		// replace min
+		// iterate until there's nothing left to do
+		// close output file
+		// close input files
+		// delete input files
+	}
 }
 
 

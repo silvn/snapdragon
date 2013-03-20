@@ -1,6 +1,6 @@
-AC_COPYRIGHT((c) 2012 Cold Spring Harbor Laboratory)
+AC_COPYRIGHT((c) 2013 Cold Spring Harbor Laboratory)
 
-AC_INIT([snapdragon],[1.0],[olson@warelab.org])
+AC_INIT([snapdragon],[0.2],[olson@warelab.org])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 AM_CONDITIONAL([MACOS], [test "$(uname -s)" = "Darwin"])
 # Options to configure.
@@ -25,7 +25,6 @@ AC_CONFIG_FILES([
 	Makefile
 	src/Makefile
 ])
-AC_CONFIG_SUBDIRS([src/fastbit])
 AC_OUTPUT
 AC_CACHE_SAVE
 

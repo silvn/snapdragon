@@ -1,11 +1,10 @@
 #include "kmerizer.h"
-#include <zlib.h>
-#include "kseq.h"
-#include <cstdlib>
-#include <cstdio>
-#include <cstring>
-#include <sys/stat.h>
 #include <boost/thread.hpp>
+#include <algorithm> // stl sort
+#include <cstdlib> // qsort()
+#include <cstdio>  // sprintf()
+#include <cstring> // memcpy()
+#include <sys/stat.h> // mkdir()
 
 // constructor
 kmerizer::kmerizer(const size_t _k, const size_t _threads, const char* _outdir, const char _mode) {
@@ -199,4 +198,33 @@ void kmerizer::do_writeBatch(const size_t from, const size_t to) {
 
 void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
 	
+}
+
+
+// for each distinct value in the vec create a bitvector
+// indexing the positions in the vec holding a value <= v
+void range_index(vector<uint32_t> &vec, vector<bvec32*> &index) {
+	// find the distinct values in vec
+	vector<uint32_t> sortuniq;
+	sortuniq.reserve(vec.size());
+	copy(vec.begin(),vec.end(),sortuniq.begin());
+	sort(sortuniq.begin(),sortuniq.end());
+	vector<uint32_t>::iterator it;
+	it = unique(sortuniq.begin(),sortuniq.end());
+	sortuniq.resize(distance(sortuniq.begin(),it));
+	// setup a vector for each range
+	vector<uint32_t> range [sortuniq.size()];
+	// iterate over the vec and push the offset onto each range
+	for(size_t i=0;i<vec.size();i++) {
+		it = find(sortuniq.begin(),sortuniq.end(),vec[i]);
+		for(size_t j=0;j<=distance(sortuniq.begin(),it);j++) {
+			range[j].push_back(i);
+		}
+	}
+	// create a bitvector for each range
+	index.resize(sortuniq.size());
+	for(size_t i=0;i<sortuniq.size();i++) {
+		index[i] = new bvec32(range[i]);
+		fprintf(stderr,"index[%zi]->bytes()=%u\n",i,index[i]->bytes());
+	}
 }

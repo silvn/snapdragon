@@ -53,6 +53,7 @@ private:
 	void do_writeBatch(const size_t from, const size_t to); // for parallelization
 	int mergeBatches();
 	void do_mergeBatches(const size_t from, const size_t to);
+	void range_index(vector<uint32_t> &vec, vector<bvec32*> &index); // this is too generic to live here
 };
 
 inline word_t twobit(const word_t val) const {

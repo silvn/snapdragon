@@ -100,29 +100,103 @@ int kmerizer::addSequence(const char* seq, const int length) {
 }
 
 int kmerizer::save() {
+	serialize();
 	
+	if (batches>1) {
+		int rc = mergeBatches();
+		fprintf(stderr,"error merging batches\n");
+		return 1;
+	}
 }
 
 int kmerizer::histogram() {
-	
+	if (batches>1) {
+		int rc = mergeBatches();
+		fprintf(stderr,"error merging batches\n");
+		exit(1);
+	}
 }
 
-void serialize() {
+void kmerizer::serialize() {
 	// unique the batch
+	int rc = unique();
+	if (rc != 0) {
+		fprintf(stderr,"error uniqifying a batch of kmers\n");
+		exit(1);
+	}
+
 	// write to disk
+	rc = writeBatch();
+	if (rc != 0) {
+		fprintf(stderr,"error writing a batch of kmers to disk\n");
+		exit(1);
+	}
+	batches++;
+
 	// zero the data
 	memset(bin_tally,0,sizeof(uint32_t)*NBINS);
+	for(size_t i=0;i<NBINS;i++) {
+		delete counts[i]; // bvec32 destructor
+	}
 }
 
-int unique() {
+int kmerizer::unique() {
 	boost::thread_group tg;
 	for(size_t i=0;i<NBINS;i+=thread_bins) {
 		size_t j=(i+thread_bins>NBINS) ? NBINS : i+thread_bins;
-		tg.create_thread(boost::bind(sortuniq,i,j));
+		tg.create_thread(boost::bind(do_unique,i,j));
 	}
 	tg.join_all();
 }
 
-void sortuniq(const size_t from, const size_t to) {
+int kmerizer::writeBatch() {
+	boost::thread_group tg;
+	for(size_t i=0;i<NBINS;i+=thread_bins) {
+		size_t j=(i+thread_bins>NBINS) ? NBINS : i+thread_bins;
+		tg.create_thread(boost::bind(do_writeBatch,i,j));
+	}
+	tg.join_all();
+}
+
+int kmerizer::mergeBatches() {
+	boost::thread_group tg;
+	for(size_t i=0;i<NBINS;i+=thread_bins) {
+		size_t j=(i+thread_bins>NBINS) ? NBINS : i+thread_bins;
+		tg.create_thread(boost::bind(do_mergeBatches,i,j));
+	}
+	tg.join_all();
+}
+
+void kmerizer::do_unique(const size_t from, const size_t to) {
+	for(size_t bin=from; bin<to; bin++) {
+		// sort
+		qsort(kmer_buf[bin], bin_tally[bin], kmer_size, compare_kmers);
+		// uniq
+		uint32_t distinct = 0;
+		vector<uint32_t> tally;
+		tally.push_back(1); // first kmer
+		for(size_t i=1;i<bin_tally[bin];i++) {
+			word_t *ith = kmer_buf[bin] + i*nwords;
+			if(compare_kmers(kmer_buf[bin] + distinct*nwords, ith) == 0)
+				tally.back()++;
+			else {
+				distinct++;
+				tally.push_back(1);
+				memcpy(kmer_buf[bin] + distinct*nwords, ith, kmer_size);
+			}
+		}
+		bin_tally[bin] = distinct+1;
+		// change the state from counting to uniquified
+		
+		// create a bitmap index for the tally vector
+		range_index(tally,counts[bin]);
+	}
+}
+
+void kmerizer::do_writeBatch(const size_t from, const size_t to) {
+	
+}
+
+void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
 	
 }

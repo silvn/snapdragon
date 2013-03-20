@@ -7,6 +7,7 @@
 #define BOTH B;
 
 #include <vector>
+#include "bvec32.h"
 
 typedef uint64_t word_t;
 using namespace std;
@@ -29,10 +30,10 @@ class kmerizer {
 
 	word_t* kmer_buf [NBINS]; // raw unsorted kmers (padded), or qsort|uniq'ed kmers
 	uint32_t bin_tally [NBINS]; // number of kmers in each bin (or number of distinct kmers)
-	vector<uint32_t> rle_counts [NBINS]; // run length encoded vectors of kmer counts
+	vector<bvec32*> counts [NBINS]; // bitmap index of counts
 
 public:
-	kmerizer(const size_t k, const size_t threads, const char* outdir, const char canonical);
+	kmerizer(const size_t _k, const size_t _threads, const char* _outdir, const char _mode);
 	int allocate(const size_t maximem); // allocates memory for each kmer_buf
 	int addSequence(const char* seq,const int length); // extract (canonicalized) kmers from the sequence
 	int save(); // writes distinct kmers and rle counts to disk (merging multiple batches)
@@ -45,8 +46,13 @@ private:
 	inline uint8_t hashkmer(word_t *kmer, uint8_t seed) const; // to select a bin
 	inline int compare_kmers(const void *k1, const void *v2) const; // for qsort
 	inline word_t* canonicalize(word_t *packed, word_t *rcpack) const;
-	int unique(); // qsort each kmer_buf, update bin_tally, and fill rle_counts
-	void sortuniq(const size_t from, const size_t to);
+	int serialize(); // kmer_buf is full. uniqify and write batch to disk
+	int unique(); // qsort each kmer_buf, update bin_tally, and fill counts
+	void do_unique(const size_t from, const size_t to); // for parallelization
+	int writeBatch();
+	void do_writeBatch(const size_t from, const size_t to); // for parallelization
+	int mergeBatches();
+	void do_mergeBatches(const size_t from, const size_t to);
 };
 
 inline word_t twobit(const word_t val) const {

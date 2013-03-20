@@ -313,8 +313,7 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 dist_doc_DATA = README.md
-SUBDIRS = src
-SUBDIR = src $(EXTRA_BUILD)
+SUBDIRS = src $(EXTRA_BUILD)
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-recursive
 
@@ -814,7 +813,7 @@ uninstall-am: uninstall-dist_docDATA
 	mostlyclean-libtool pdf pdf-am ps ps-am tags tags-am uninstall \
 	uninstall-am uninstall-dist_docDATA
 
-@BUILD_FASTBIT_TRUE@	EXTRA_BUILD=fastbit
+@BUILD_FASTBIT_TRUE@	EXTRA_BUILD=vendor/fastbit
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

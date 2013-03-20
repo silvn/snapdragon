@@ -1,6 +1,5 @@
 dist_doc_DATA = README.md
-SUBDIRS = src
 if BUILD_FASTBIT
-	EXTRA_BUILD=fastbit
+	EXTRA_BUILD=vendor/fastbit
 endif
-SUBDIR = src $(EXTRA_BUILD)
+SUBDIRS = src $(EXTRA_BUILD)

@@ -28,7 +28,7 @@ AC_CONFIG_FILES([
 ])
 AC_ARG_ENABLE(fastbit,
 	[AS_HELP_STRING([--enable-fastbit],
-		[Enable FastBit library and wrappers.])],
+		[Enable FastBit library and wrappers [default=no]])],
 	[if test "$enableval" = "yes"; then fastbit="yes"; else fastbit="no"; fi],
 	[fastbit="no"]
 )

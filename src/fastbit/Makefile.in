@@ -282,10 +282,8 @@ top_srcdir = @top_srcdir@
 AM_DEFAULT_SOURCE_EXT = .cpp
 AM_CPPFLAGS = -Ifastbit/src
 AM_LDFLAGS = -Lfastbit/src/.libs -Wl,-rpath,$(libdir)
-@MACOS_FALSE@stacker_LDADD = -lboost_thread -lboost_system
-@MACOS_TRUE@stacker_LDADD = -lboost_thread-mt -lboost_system-mt
-@MACOS_FALSE@loadBED_LDADD = -lboost_thread -lboost_system
-@MACOS_TRUE@loadBED_LDADD = -lboost_thread-mt -lboost_system-mt
+stacker_LDADD = -lboost_thread$(suff) -lboost_system$(suff)
+loadBED_LDADD = -lboost_thread$(suff) -lboost_system$(suff)
 all: all-am
 
 .SUFFIXES:
@@ -645,6 +643,7 @@ uninstall-am: uninstall-binPROGRAMS
 	mostlyclean-generic mostlyclean-libtool pdf pdf-am ps ps-am \
 	tags tags-am uninstall uninstall-am uninstall-binPROGRAMS
 
+@MACOS_TRUE@	suff=-mt
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

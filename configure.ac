@@ -23,6 +23,8 @@ AC_SUBST(CPPFLAGS, "$boost_cppflags $CPPFLAGS")
 AC_LANG_PUSH([C++])
 AC_CHECK_HEADERS([boost/foreach.hpp], [],
     [AC_MSG_ERROR(You need the Boost libraries.)])
+AC_CHECK_HEADERS([zlib.h], [],
+	[AC_MSG_ERROR(You need zlib (http://zlib.net).)])
 AC_LANG_POP([C++])
 
 LIB_VERSION_INFO=0:9:0

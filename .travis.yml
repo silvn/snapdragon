@@ -1,5 +1,6 @@
 language: cpp
 before_install:
     - "sudo apt-get install libboost-all-dev"
+    - "sudo apt-get install zlibc"
     - "autoreconf -vfi"
 install: "./configure && make && make check"

@@ -3,8 +3,8 @@
 
 #define DEBUG false
 #define NBINS 256
-#define CANONICAL C
-#define BOTH B
+#define CANONICAL 'C'
+#define BOTH 'B'
 #define READING 1
 #define QUERY 2
 
@@ -18,6 +18,7 @@ class kmerizer {
 	size_t k;
 	word_t kmask;
 	size_t shiftlastby;
+	size_t rshift;
 	size_t nwords;
 	size_t kmer_size; // in bytes
 	size_t threads;
@@ -26,6 +27,7 @@ class kmerizer {
 	size_t max_kmers_per_bin;
 	char mode;
 	char state;
+	char *outdir;
 
 	word_t* kmer_buf [NBINS]; // raw unsorted kmers (padded), or qsort|uniq'ed kmers
 	uint32_t bin_tally [NBINS]; // number of kmers in each bin (or number of distinct kmers)
@@ -33,7 +35,7 @@ class kmerizer {
 	vector<bvec32*> counts [NBINS]; // bitmap index of frequency counts
 
 public:
-	kmerizer(const size_t _k, const size_t _threads, const char* _outdir, const char _mode);
+	kmerizer(const size_t _k, const size_t _threads, char* _outdir, const char _mode);
 	int allocate(const size_t maximem); // allocates memory for each kmer_buf
 	int addSequence(const char* seq,const int length); // extract (canonicalized) kmers from the sequence
 	int save(); // writes distinct kmers and rle counts to disk (merging multiple batches)
@@ -43,11 +45,11 @@ public:
 private:
 	inline word_t twobit(const word_t val) const; // pack nucleotides into 2 bits
 	inline word_t revcomp(const word_t val) const; // reverse complement
-	inline uint8_t hashkmer(word_t *kmer, uint8_t seed) const; // to select a bin
+	inline uint8_t hashkmer(const word_t *kmer, const uint8_t seed) const; // to select a bin
 	inline int compare_kmers(const void *k1, const void *v2) const; // for qsort
 	inline word_t* canonicalize(word_t *packed, word_t *rcpack) const;
-	int serialize(); // kmer_buf is full. uniqify and write batch to disk
-	int unique(); // qsort each kmer_buf, update bin_tally, and fill counts
+	void serialize(); // kmer_buf is full. uniqify and write batch to disk
+	int uniqify(); // qsort each kmer_buf, update bin_tally, and fill counts
 	void do_unique(const size_t from, const size_t to); // for parallelization
 	int writeBatch();
 	void do_writeBatch(const size_t from, const size_t to); // for parallelization
@@ -55,9 +57,12 @@ private:
 	void do_mergeBatches(const size_t from, const size_t to);
 	// is this too generic to go here?
 	void range_index(vector<uint32_t> &vec, vector<uint32_t> &values, vector<bvec32*> &index);
+	void read_index(const char* idxfile,vector<uint32_t> &values, vector<bvec32*> &index);
+	size_t find_min(const word_t* kmers, const uint32_t* kcounts);
+	uint32_t pos2value(size_t pos, vector<uint32_t> &values, vector<bvec32*> &index);
 };
 
-inline word_t twobit(const word_t val) const {
+inline word_t kmerizer::twobit(const word_t val) const {
 	static const uint8_t table[256] =
 	{
 		0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -80,7 +85,7 @@ inline word_t twobit(const word_t val) const {
 	return (word_t)table[val];
 }
 
-inline word_t revcomp(const word_t val) const {
+inline word_t kmerizer::revcomp(const word_t val) const {
 	// bitwise reverse complement of values from 0 to 255
 	static const uint8_t table[256] =
 	{
@@ -113,7 +118,7 @@ inline word_t revcomp(const word_t val) const {
 		((word_t)table[(val>>56)&0xFFUL]);
 }
 
-inline uint8_t hashkmer(const word_t *kmer, const uint8_t seed) const {
+inline uint8_t kmerizer::hashkmer(const word_t *kmer, const uint8_t seed) const {
 	static const uint8_t Rand8[256] =
 	{
 		105,193,195, 26,208, 80, 38,156,128,  2,101,205, 75,116,139, 61,
@@ -147,11 +152,11 @@ inline uint8_t hashkmer(const word_t *kmer, const uint8_t seed) const {
 	return h;
 }
 
-inline int compare_kmers(const void *k1, const void *k2) const {
+inline int kmerizer::compare_kmers(const void *k1, const void *k2) const {
 	return memcmp(k1,k2,kmer_size);
 }
 
-inline word_t* canonicalize(word_t *packed, word_t *rcpack) const {
+inline word_t* kmerizer::canonicalize(word_t *packed, word_t *rcpack) const {
 	int cmp=0;
 	for(size_t i=0;i<nwords;i++) {
 		rcpack[i] = revcomp(packed[nwords-1-i]);

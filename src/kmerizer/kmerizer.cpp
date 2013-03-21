@@ -7,13 +7,13 @@
 #include <sys/stat.h> // mkdir()
 
 // constructor
-kmerizer::kmerizer(const size_t _k, const size_t _threads, const char* _outdir, const char _mode) {
+kmerizer::kmerizer(const size_t _k, const size_t _threads, char* _outdir, const char _mode) {
 	k = _k;
 	kmask = 0xFFFFFFFFFFFFFFFF;
 	shiftlastby = 62;
 	if (k<32) {
 		kmask = (1ULL << (k*2)) - 1;
-		rshift = 64 - k*2
+		rshift = 64 - k*2;
 	}
 	if (k>32 & k%32 > 0) {
 		kmask = (1ULL << (2*(k%32))) - 1;
@@ -25,7 +25,7 @@ kmerizer::kmerizer(const size_t _k, const size_t _threads, const char* _outdir, 
 	outdir = _outdir;
 	mode = _mode;
 	threads = _threads;
-	thread_bins = threads/NBINS:
+	thread_bins = threads/NBINS;
 	state = READING;
 	batches=0;
 }
@@ -117,7 +117,7 @@ int kmerizer::histogram() {
 		exit(1);
 	}
 	if (state == READING) {
-		int rc = unique();
+		int rc = uniqify();
 		if (rc != 0) {
 			fprintf(stderr,"error uniqifying kmers\n");
 			return 1;
@@ -135,9 +135,9 @@ int kmerizer::histogram() {
 		for(size_t i=0;i<NBINS;i++) {
 			if (done[i]==0) {
 				if (kmer_freq[i][offset[i]] == key) {
-					val += counts[i][offset[i]]->count();
+					val += counts[i][offset[i]]->cnt();
 					if (offset[i]>0) // undo the range encoding <=
-						val -= counts[i][offset[i-1]]->count();
+						val -= counts[i][offset[i-1]]->cnt();
 					offset[i]++;
 					if(offset[i] == kmer_freq[i].size()) {
 						done[i]=1;
@@ -157,7 +157,7 @@ int kmerizer::histogram() {
 void kmerizer::serialize() {
 	batches++;
 	// unique the batch
-	int rc = unique();
+	int rc = uniqify();
 	if (rc != 0) {
 		fprintf(stderr,"error uniqifying a batch of kmers\n");
 		exit(1);
@@ -173,12 +173,13 @@ void kmerizer::serialize() {
 	// zero the data
 	memset(bin_tally,0,sizeof(uint32_t)*NBINS);
 	for(size_t i=0;i<NBINS;i++) {
-		delete counts[i]; // bvec32 destructor
+		for(size_t j=0; j<counts[i].size(); j++)
+			delete counts[i][j]; // bvec32 destructor
 	}
 	state = READING;
 }
 
-int kmerizer::unique() {
+int kmerizer::uniqify() {
 	boost::thread_group tg;
 	for(size_t i=0;i<NBINS;i+=thread_bins) {
 		size_t j=(i+thread_bins>NBINS) ? NBINS : i+thread_bins;
@@ -263,13 +264,15 @@ void kmerizer::do_writeBatch(const size_t from, const size_t to) {
 	}
 }
 
+void read_index(const char* fname, vector<uint32_t> &values, vector<bvec32*> &index);
+
 void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
 	for(size_t bin=from; bin<to; bin++) {
 		// read the counts for each batch
 		// and open the files of sorted distinct kmers
-		vector<bvec*> batch_counts [batches];
+		vector<bvec32*> batch_counts [batches];
 		vector<uint32_t> batch_values [batches];
-		FILE kmer_fp [batches];
+		FILE *kmer_fp [batches];
 		for(size_t i=1;i<=batches;i++) {
 			char fname [100];
 			sprintf(fname,"%s/%zi-mers.%zi.%zi",outdir,k,bin,i);
@@ -315,7 +318,7 @@ void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
 			else
 				btally[mindex] = pos2value(offset[mindex]++,batch_values[mindex],batch_counts[mindex]);
 			mindex = find_min(kmers,btally);
-			if (memcmp(kmers + mindex*nwords,distinct)==0)
+			if (memcmp(kmers + mindex*nwords,distinct,kmer_size)==0)
 				tally.back() += btally[mindex];
 			else {
 				size_t rc = fwrite(distinct,kmer_size,1,ofp);
@@ -336,26 +339,21 @@ void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
 		
 		char counts_file [100];
 		sprintf(counts_file,"%s/%zi-mers.%zi.idx",outdir,k,bin);
-		fp = fopen(counts_file, "wb");
+		ofp = fopen(counts_file, "wb");
 		// first write the number of distinct values
 		// then write the distinct values
 		// for each distinct value, write out the bvec (size,count,rle,words.size(),words)
 		int n_distinct = kmer_freq[bin].size();
-		fwrite(&n_distinct,sizeof(int),1,fp);
-		fwrite(kmer_freq[bin].data(),sizeof(uint32_t),n_distinct,fp);
+		fwrite(&n_distinct,sizeof(int),1,ofp);
+		fwrite(kmer_freq[bin].data(),sizeof(uint32_t),n_distinct,ofp);
 		for(size_t i=0;i<n_distinct;i++) {
 			// I want this DIY serialization/deserialization in bvec
-			uint32_t u = counts[bin][i]->size;
-			fwrite(&u,sizeof(uint32_t),1,fp);
-			uint32_t c = counts[bin][i]->count();
-			fwrite(&c,sizeof(uint32_t),1,fp);
-			bool rle = counts[bin][i]->rle;
-			fwrite(&rle,sizeof(bool),1,fp);
-			uint32_t s = counts[bin][i]->words.size();
-			fwrite(&s,sizeof(uint32_t),1,fp);
-			fwrite(counts[bin][i]->words.data(),sizeof(uint32_t),s,fp);
+			uint32_t *buf;
+			size_t bytes = counts[bin][i]->dump(buf);
+			fwrite(&bytes,sizeof(size_t),1,ofp);
+			fwrite(counts[bin][i]->get_words().data(),1,counts[bin][i]->bytes(),ofp);
 		}
-		fclose(fp);
+		fclose(ofp);
 		// delete input files
 		
 	}
@@ -394,17 +392,18 @@ void kmerizer::range_index(vector<uint32_t> &vec, vector<uint32_t> &values, vect
 	}
 	// create a bitvector for each range
 	index.resize(values.size());
-	for(size_t i=0;i<range.size();i++) {
+	for(size_t i=0;i<values.size();i++) {
 		index[i] = new bvec32(range[i]);
 		fprintf(stderr,"index[%zi]->bytes()=%u\n",i,index[i]->bytes());
 	}
 }
 
-void read_index(const char* idxfile,vector<uint32_t> &values, vector<bvec32*> &index) {
+void kmerizer::read_index(const char* idxfile,vector<uint32_t> &values, vector<bvec32*> &index) {
 	// open idxfile
 	// fread to repopulate values and bvecs
 	// need bvec32 constructor?
 }
-uint32_t pos2value(size_t pos, vector<uint32_t> &values, vector<bvec32*> &index) {
+uint32_t kmerizer::pos2value(size_t pos, vector<uint32_t> &values, vector<bvec32*> &index) {
 	// lookup the value in the pos bit
 	// find the first bvec where this bit is set
+}

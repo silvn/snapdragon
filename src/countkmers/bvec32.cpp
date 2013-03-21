@@ -23,7 +23,7 @@ bvec32::bvec32(uint32_t *buf) {
 	count = buf[2];
 	rle = false;
 	if (nwords & BIT1) {
-		nwords ~= BIT1;
+		nwords -= BIT1;
 		rle=true;
 	}
 	words.resize(nwords);
@@ -33,17 +33,17 @@ bvec32::bvec32(uint32_t *buf) {
 // DIY serialization
 size_t bvec32::dump(uint32_t *buf) {
 	// allocate space in buf
-	size_t bytes = sizeof(uint32_t)*(3 + words->size());
+	size_t bytes = sizeof(uint32_t)*(3 + words.size());
 	buf = (uint32_t*) malloc(bytes);
 	if (buf == NULL) {
-		fprintf(stderr,"failed to allocate %iz bytes\n",bytes);
+		fprintf(stderr,"failed to allocate %zi bytes\n",bytes);
 		return 0;
 	}
-	buf[0] = words->size();
+	buf[0] = words.size();
 	if (rle) buf[0] |= BIT1;
 	buf[1] = size;
 	buf[2] = count;
-	memcpy(buf + 3, words->data(), bytes);
+	memcpy(buf + 3, words.data(), bytes);
 	return bytes;
 }
 
@@ -134,10 +134,6 @@ void bvec32::compress() {
 	tmp.swap(words);
 	construct_rle(tmp);
     rle = true;
-}
-
-vector<uint32_t>& bvec32::get_words() {
-    return words;
 }
 
 void bvec32::decompress() {

@@ -73,6 +73,7 @@ AC_CONFIG_FILES([
 	src/fastbit/Makefile
     src/countkmers/Makefile
     src/preprocessing/Makefile
+	src/kmerizer/Makefile
     test/Makefile
 ])
 if test "$fastbit" = "yes"; then

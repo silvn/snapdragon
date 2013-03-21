@@ -116,7 +116,7 @@ am__define_uniq_tagged_files = \
   done | $(am__uniquify_input)`
 ETAGS = etags
 CTAGS = ctags
-DIST_SUBDIRS = countkmers preprocessing fastbit
+DIST_SUBDIRS = countkmers preprocessing kmerizer fastbit
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 am__relativize = \
   dir0=`pwd`; \
@@ -265,7 +265,7 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 @BUILD_FASTBIT_TRUE@EXTRA_BUILD = fastbit
-SUBDIRS = countkmers preprocessing $(EXTRA_BUILD)
+SUBDIRS = countkmers preprocessing kmerizer $(EXTRA_BUILD)
 AM_DEFAULT_SOURCE_EXT = .cpp
 all: all-recursive
 

@@ -288,6 +288,7 @@ AM_DEFAULT_SOURCE_EXT = .cpp
 fastbit_dir = $(top_srcdir)/vendor/fastbit
 AM_CPPFLAGS = -I$(fastbit_dir)/src
 AM_LDFLAGS = -L$(fastbit_dir)/src/.libs -Wl,-rpath,$(libdir)
+@MACOS_TRUE@suff = -mt
 stacker_LDADD = -lboost_thread$(suff) -lboost_system$(suff)
 loadBED_LDADD = -lboost_thread$(suff) -lboost_system$(suff)
 all: all-am
@@ -649,7 +650,6 @@ uninstall-am: uninstall-binPROGRAMS
 	mostlyclean-generic mostlyclean-libtool pdf pdf-am ps ps-am \
 	tags tags-am uninstall uninstall-am uninstall-binPROGRAMS
 
-@MACOS_TRUE@	suff=-mt
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

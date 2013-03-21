@@ -1,5 +1,10 @@
 language: cpp
 before_install:
     - "sudo apt-get install libboost-all-dev"
+    - "git clone -b v1.2.5 git://github.com/madler/zlib.git"
+    - "cd zlib"
+    - "./configure && make"
+    - "sudo make install"
+    - "cd -"
     - "autoreconf -vfi"
 install: "./configure && make && make check"

@@ -47,10 +47,11 @@ public:
     // Constructors
     bvec32() : rle(false), count(0), size(0) {};
     bvec32(vector<uint32_t>& vals);
+	bvec32(uint32_t* buf); // DIY deserialization
     void print();
     void compress();
     void decompress();
-    vector<uint32_t>& get_words();
+    size_t dump(uint32_t *buf); // DIY serialization
 
     // logical set operations
     void operator|=(bvec32& rhs);

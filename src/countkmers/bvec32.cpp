@@ -16,6 +16,37 @@ bvec32::bvec32(vector<uint32_t>& vals) {
 	}
 }
 
+// constructor - given a previously dumped bvec
+bvec32::bvec32(uint32_t *buf) {
+	uint32_t nwords = buf[0];
+	size = buf[1];
+	count = buf[2];
+	rle = false;
+	if (nwords & BIT1) {
+		nwords ~= BIT1;
+		rle=true;
+	}
+	words.resize(nwords);
+	memcpy(words.data(),buf+3,nwords*4);
+}
+
+// DIY serialization
+size_t bvec32::dump(uint32_t *buf) {
+	// allocate space in buf
+	size_t bytes = sizeof(uint32_t)*(3 + words->size());
+	buf = (uint32_t*) malloc(bytes);
+	if (buf == NULL) {
+		fprintf(stderr,"failed to allocate %iz bytes\n",bytes);
+		return 0;
+	}
+	buf[0] = words->size();
+	if (rle) buf[0] |= BIT1;
+	buf[1] = size;
+	buf[2] = count;
+	memcpy(buf + 3, words->data(), bytes);
+	return bytes;
+}
+
 bool bvec32::low_density(vector<uint32_t>& vals) {
 	if (DEBUG) printf("low_density() %u/%u %c %f\n", (uint32_t)vals.size(),
 		vals.back() - vals.front() + 1,

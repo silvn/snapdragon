@@ -18,6 +18,7 @@
 #include <fstream>
 #include <algorithm>
 #include <vector>
+#include <cstring>
 #include <boost/serialization/vector.hpp>
 #include <boost/cstdint.hpp>
 
@@ -47,10 +48,11 @@ public:
     // Constructors
     bvec32() : rle(false), count(0), size(0) {};
     bvec32(vector<uint32_t>& vals);
+	bvec32(uint32_t* buf); // DIY deserialization
     void print();
     void compress();
     void decompress();
-    vector<uint32_t>& get_words();
+    size_t dump(uint32_t *buf); // DIY serialization
 
     // logical set operations
     void operator|=(bvec32& rhs);
@@ -60,6 +62,7 @@ public:
     bool operator==(bvec32&) const;
     
     bool equals(const bvec32&) const;
+	vector<uint32_t>& get_words();
 
     // is x in the set?
     bool find(uint32_t x);

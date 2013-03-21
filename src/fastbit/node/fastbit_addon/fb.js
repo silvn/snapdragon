@@ -1,47 +1,49 @@
 var fb = require('./build/Release/fb');
 var data = "/Users/olson/src/garden/iris/examples/fastbit/";
-console.log(fb.SQL(
-	{
-		select: "GO_branch,count(*) as tally",
-		from: data + "gene2GO",
-		orderby: "tally desc"
-	}
-));
-console.log(fb.SQL(
-	{
-		select: "GO_branch,count(*) as tally",
-		from: data + "gene2GO",
-		where: "49000 < gene_id < 50000",
-		orderby: "tally desc"
-	}
-));
+var args = {
+	select: "GO_branch,count(*) as tally",
+	from: data + "gene2GO",
+	orderby: "tally desc"
+};
+console.log("fb.SQL",args);
+console.log(fb.SQL(args));
 
-console.log(fb.histogram(
-	{
-		select: "score",
-		from: data + "GWAS/3396",
-		begin: 0,
-		end: 10,
-		stride: 1
-	}
-));
-console.log(fb.histogram(
-	{
-		select: "score",
-		from: data + "GWAS/3396",
-		adaptive: true,
-		nbins: 10
-	}
-));
-console.log(fb.scatter(
-	{
-		select: "pos,score",
-		from: data + "GWAS/3396/1",
-		adaptive: true,
-		nbins1: 10,
-		nbins2: 10
-	}
-));
+args = {
+	select: "GO_branch,count(*) as tally",
+	from: data + "gene2GO",
+	where: "49000 < gene_id < 50000",
+	orderby: "tally desc"
+};
+console.log("fb.SQL",args);
+console.log(fb.SQL(args));
+
+args = {
+	select: "score",
+	from: data + "GWAS/3396",
+	begin: 0,
+	end: 10,
+	stride: 1
+};
+console.log("fb.histogram",args);
+console.log(fb.histogram(args));
+args = {
+	select: "score",
+	from: data + "GWAS/3396",
+	adaptive: true,
+	nbins: 10
+};
+console.log("fb.histogram",args);
+console.log(fb.histogram(args));
+args = {
+	select: "pos,score",
+	from: data + "GWAS/3396/1",
+	adaptive: true,
+	nbins1: 10,
+	nbins2: 10
+};
+console.log("fb.scatter",args);
+console.log(fb.scatter(args));
+
 var chr_list = fb.SQL(
 	{
 		select: "chr,max(score) as score,max(pos) as pos",
@@ -66,75 +68,44 @@ for( var i=0; i < n; i++) {
 	console.log(fb.scatter(args));
 }
 
-var arr1 = [2,4,5,77,899,7654];
+var arr1 = [1,2,4,5,77,78,899,7654];
 var bvec1 = fb.set2bvec(arr1);
+console.log("bvec1",bvec1);
 var arr2 = [1,2,3,4,5,77,899,7654];
 var bvec2 = fb.set2bvec(arr2);
-var bvand = fb.logical('^',bvec1,bvec2);
-console.log("arr1",arr1);
+console.log("arr1",arr1,fb.bvec2set(bvec1));
 console.log("arr2",arr2);
-console.log("xor",fb.bvec2set(bvand));
+console.log("xor",fb.bvec2set(fb.logical('^',bvec1,bvec2)));
 
-// try a big bitvector
 var start = new Date;
-var n = 10000000;
-var g = 100;
-var gap_probability = 0.1;
-var big_arr = new Array(n);
-var p = 0;
-for (var i=0; i<n; i++) {
-	var r=1;
-	if (Math.random() < gap_probability) {
-		r = Math.floor((Math.random()*g)+1);
-	}
-	p+=r;
-	big_arr[i] = p;
-}
-var big_arr2 = new Array(n);
-p = 0;
-for (var i=0; i<n; i++) {
-	var r=1;
-	if (Math.random() < gap_probability) {
-		r = Math.floor((Math.random()*g)+1);
-	}
-	p+=r;
-	big_arr2[i] = p;
-}
+var bvrand1 = fb.randbvec({n:1e5,max:1000000000,length:100});
+var bvrand2 = fb.randbvec({n:1e5,max:1000000000,length:200});
+console.log("build 2 random bitvectors",new Date - start,"ms");
+console.log("bytes(bvrand1)=",fb.bytes(bvrand1));
+console.log("bytes(bvrand2)=",fb.bytes(bvrand2));
+console.log("cnt(bvrand1)=",fb.cnt(bvrand1));
+console.log("cnt(bvrand2)=",fb.cnt(bvrand2));
+start = new Date;
+console.log("cnt(logical('&',bvrand1,bvrand2))=",fb.cnt(fb.logical('&',bvrand1,bvrand2)));
+console.log(new Date - start,"ms");
+start = new Date;
+console.log("phi(bvrand1,bvrand2)=",fb.phi(bvrand1,bvrand2));
+console.log(new Date - start,"ms");
 
-console.log("build 2 arrays",new Date - start,"ms");
-
-start = new Date;
-var big_vec = fb.set2bvec(big_arr);
-var big_vec2 = fb.set2bvec(big_arr2);
-console.log("set2bvec",new Date - start,"ms");
-
-console.log("bytes(big_vec)=",fb.bytes(big_vec));
-console.log("bytes(big_vec2)=",fb.bytes(big_vec2));
-
-start = new Date;
-var big_and = fb.logical('&',big_vec,big_vec2);
-console.log("logical('&',big_vec,big_vec2)",new Date - start, "ms");
-start = new Date;
-var big_or = fb.logical('|',big_vec,big_vec2);
-console.log("logical('|',big_vec,big_vec2)",new Date - start, "ms");
-start = new Date;
-var big_xor = fb.logical('^',big_vec,big_vec2);
-console.log("logical('^',big_vec,big_vec2)",new Date - start, "ms");
-
-
-start = new Date;
-console.log("size(big_vec)=",fb.size(big_vec),new Date - start,"ms");
-start = new Date;
-console.log("size(big_vec2)=",fb.size(big_vec2),new Date - start,"ms");
-
-start = new Date;
-console.log("cnt(big_vec)=",fb.cnt(big_vec), new Date - start, "ms");
-start = new Date;
-console.log("cnt(big_vec2)=",fb.cnt(big_vec2), new Date - start, "ms");
-start = new Date;
-console.log("cnt(big_and)=",fb.cnt(big_and), new Date - start, "ms");
-start = new Date;
-console.log("cnt(big_or)=",fb.cnt(big_or), new Date - start, "ms");
-start = new Date;
-console.log("cnt(big_xor)=",fb.cnt(big_xor), new Date - start, "ms");
-
+bvec1 = fb.intervals2bvec([100,300,800,30],[200,400,900,50]);
+bvec2 = fb.intervals2bvec([100,700,10],[400,900,50]);
+var MC1 = fb.MC(bvec1,bvec2,100);
+console.log(MC1);
+// var iterations = [1,100];
+// var sizes = [1e5,1e6,1e7];
+// for (var i=0;i<sizes.length;i++) {
+// 	var size = sizes[i];
+// 	var bv1 = fb.randbvec({n:size,max:1000000000,length:100});
+// 	var bv2 = fb.randbvec({n:size,max:1000000000,length:100});
+// 	for (var j=0;j<iterations.length;j++) {
+// 		var iter = iterations[j];
+// 		start = new Date;
+// 		var MC = fb.MC(bv1,bv2,iter);
+// 		console.log(size,iter,MC,new Date - start,"ms");
+// 	}
+// }

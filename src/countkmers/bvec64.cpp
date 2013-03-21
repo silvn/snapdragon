@@ -1,7 +1,7 @@
-#include "bvec32.h"
+#include "bvec64.h"
 
-// constructor - given a sorted vector of distinct 32bit integers
-bvec32::bvec32(vector<uint32_t>& vals) {
+// constructor - given a sorted vector of distinct 64bit integers
+bvec64::bvec64(vector<uint64_t>& vals) {
 	count = vals.size();
 	// if the density is too low, run length encoding will take MORE space
 	if (low_density(vals)) {
@@ -16,8 +16,8 @@ bvec32::bvec32(vector<uint32_t>& vals) {
 	}
 }
 
-bool bvec32::low_density(vector<uint32_t>& vals) {
-	if (DEBUG) printf("low_density() %u/%u %c %f\n", (uint32_t)vals.size(),
+bool bvec64::low_density(vector<uint64_t>& vals) {
+	if (DEBUG) printf("low_density() %llu/%llu %c %f\n", (uint64_t)vals.size(),
 		vals.back() - vals.front() + 1,
 			((double)vals.size()/(double)(vals.back() - vals.front() + 1) < 1.0/(double)LITERAL_SIZE) ? '<' : '>',
 				1.0/(double)LITERAL_SIZE);
@@ -25,28 +25,28 @@ bool bvec32::low_density(vector<uint32_t>& vals) {
 	
 }
 
-void bvec32::print() {
+void bvec64::print() {
 	printf("rle: %c\n",rle ? 'T' : 'F');
 	printf("words:\n");
 	for(int i=0;i<words.size();i++) {
 		printf(" %i ",i);
 		if (rle)
 			if ((words[i] & ONEFILL) == ONEFILL) 
-				printf("1-fill %zi %zi\n",words[i] & FILLMASK, LITERAL_SIZE*(words[i] & FILLMASK));
+				printf("1-fill %llu %llu\n",words[i] & FILLMASK, LITERAL_SIZE*(words[i] & FILLMASK));
 			else if (words[i] & BIT1)
-				printf("0-fill %zi %zi\n",words[i] & FILLMASK, LITERAL_SIZE*(words[i] & FILLMASK));
+				printf("0-fill %llu %llu\n",words[i] & FILLMASK, LITERAL_SIZE*(words[i] & FILLMASK));
 			else
-				printf("literal %u\n",words[i]);
+				printf("literal %llu\n",words[i]);
 		else
-			printf("direct %u\n",words[i]);
+			printf("direct %llu\n",words[i]);
 	}
 }
 
-void bvec32::construct_rle(vector<uint32_t>& vals) {
+void bvec64::construct_rle(vector<uint64_t>& vals) {
 	rle = true;
-	uint32_t word_end = LITERAL_SIZE - 1;
-	uint32_t word=0;
-	uint32_t gap_words = vals.front()/LITERAL_SIZE;
+	uint64_t word_end = LITERAL_SIZE - 1;
+	uint64_t word=0;
+	uint64_t gap_words = vals.front()/LITERAL_SIZE;
 	if (gap_words > 0) {
 		word_end += LITERAL_SIZE*gap_words;
 		while (gap_words > FILLMASK) {
@@ -56,11 +56,11 @@ void bvec32::construct_rle(vector<uint32_t>& vals) {
 		if (gap_words > 0)
 			words.push_back(gap_words | BIT1);
 	}
-	for(vector<uint32_t>::iterator ii = vals.begin(); ii != vals.end(); ++ii) {
+	for(vector<uint64_t>::iterator ii = vals.begin(); ii != vals.end(); ++ii) {
 		if (*ii == word_end)
-			word |= 1;
+			word |= 1ULL;
 		else if (*ii < word_end)
-			word |= ((uint32_t)1 << (word_end - *ii));
+			word |= (1ULL << (word_end - *ii));
 		else {
 			if (word == ALL1S)
 				if ((words.size() != 0) &&
@@ -71,7 +71,7 @@ void bvec32::construct_rle(vector<uint32_t>& vals) {
 					words.push_back(ONEFILL1);
 			else
 				words.push_back(word);
-			gap_words = (*ii - word_end - 1)/LITERAL_SIZE;
+			gap_words = (*ii - word_end - 1ULL)/LITERAL_SIZE;
 			while (gap_words > FILLMASK) {
 				words.push_back(ZEROFULL);
 				gap_words -= FILLMASK;
@@ -80,7 +80,7 @@ void bvec32::construct_rle(vector<uint32_t>& vals) {
 				words.push_back(gap_words | BIT1);
 			word_end += (gap_words+1)*LITERAL_SIZE;
 			word = (word_end - *ii == LITERAL_SIZE)
-                ? 1 : (uint32_t)1 << (word_end - *ii);
+                ? 1ULL : 1ULL << (word_end - *ii);
 		}
 	}
 	// add the last word
@@ -97,28 +97,28 @@ void bvec32::construct_rle(vector<uint32_t>& vals) {
 	size = word_end+1;
 }
 
-void bvec32::compress() {
+void bvec64::compress() {
     if (rle) { /* Throw exception? */ return; }
-	vector<uint32_t> tmp;
+	vector<uint64_t> tmp;
 	tmp.swap(words);
 	construct_rle(tmp);
     rle = true;
 }
 
-vector<uint32_t>& bvec32::get_words() {
+vector<uint64_t>& bvec64::get_words() {
     return words;
 }
 
-void bvec32::decompress() {
+void bvec64::decompress() {
     if (!rle) { /* Throw exception? */ return; }
 	// retrieve the set bits from the compressed vector
-	vector<uint32_t> res;
+	vector<uint64_t> res;
 	res.reserve(cnt());
-	uint32_t pos=0;
-	for(vector<uint32_t>::iterator ii = words.begin(); ii != words.end(); ++ii) {
+	uint64_t pos=0;
+	for(vector<uint64_t>::iterator ii = words.begin(); ii != words.end(); ++ii) {
 		if ((*ii & ONEFILL) == ONEFILL) {
-			uint32_t n_ones = LITERAL_SIZE*(*ii & FILLMASK);
-			for(uint32_t i=0;i < n_ones; i++) {
+			uint64_t n_ones = LITERAL_SIZE*(*ii & FILLMASK);
+			for(uint64_t i=0;i < n_ones; i++) {
 				res.push_back(pos);
 				pos++;
 			}
@@ -126,8 +126,8 @@ void bvec32::decompress() {
 		else if (*ii & BIT1)
 			pos += LITERAL_SIZE*(*ii & FILLMASK);
 		else { // desconstruct the literal word
-			for(uint32_t bit=1; bit<=LITERAL_SIZE; bit++)
-				if (*ii & ((uint32_t)1 << (LITERAL_SIZE-bit)))
+			for(uint64_t bit=1; bit<=LITERAL_SIZE; bit++)
+				if (*ii & ((uint64_t)1 << (LITERAL_SIZE-bit)))
 					res.push_back(pos+bit-1);
 			pos += LITERAL_SIZE;
 		}
@@ -138,7 +138,7 @@ void bvec32::decompress() {
 }
 
 // in place version of the bitwise OR operator.
-void bvec32::operator|=(bvec32& bv) {
+void bvec64::operator|=(bvec64& bv) {
 	// decide which version we'll be using
 	if (rle)
 		if (bv.rle)
@@ -152,7 +152,7 @@ void bvec32::operator|=(bvec32& bv) {
 			non_OR_non(bv);
 }
 // in place version of the bitwise AND operator.
-void bvec32::operator&=(bvec32& bv) {
+void bvec64::operator&=(bvec64& bv) {
 	// decide which version we'll be using
 	if (rle)
 		if (bv.rle)
@@ -165,8 +165,8 @@ void bvec32::operator&=(bvec32& bv) {
 		else
 			non_AND_non(bv);
 }
-bvec32* bvec32::operator|(bvec32& rhs) {
-	bvec32 *res = new bvec32();
+bvec64* bvec64::operator|(bvec64& rhs) {
+	bvec64 *res = new bvec64();
 	if (words.size() > rhs.words.size()) {
 		res->copy(rhs);
 		*res |= *this;
@@ -176,8 +176,8 @@ bvec32* bvec32::operator|(bvec32& rhs) {
 	*res |= rhs;
 	return res;
 }
-bvec32* bvec32::operator&(bvec32& rhs) {
-	bvec32 *res = new bvec32();
+bvec64* bvec64::operator&(bvec64& rhs) {
+	bvec64 *res = new bvec64();
 	if (words.size() > rhs.words.size()) {
 		res->copy(rhs);
 		*res &= *this;
@@ -188,25 +188,11 @@ bvec32* bvec32::operator&(bvec32& rhs) {
 	return res;
 }
 
-bool bvec32::operator==(bvec32& other) const {
-    return (words == other.words) &&
-           (count == other.count) &&
-           (size  == other.size)  &&
-           (rle   == other.rle);
-}
-
-bool bvec32::equals(const bvec32& other) const {
-    return (words == other.words) &&
-           (count == other.count) &&
-           (size  == other.size)  &&
-           (rle   == other.rle);
-}
-
-void bvec32::non_OR_non(bvec32& bv) {
+void bvec64::non_OR_non(bvec64& bv) {
 	
-	vector<uint32_t> res;
-	vector<uint32_t>::iterator a = words.begin();
-	vector<uint32_t>::iterator b = bv.words.begin();
+	vector<uint64_t> res;
+	vector<uint64_t>::iterator a = words.begin();
+	vector<uint64_t>::iterator b = bv.words.begin();
 	res.push_back(*a < *b ? *a : *b);
 	while(a != words.end() && b != bv.words.end()) {
 		if (*a < *b) {
@@ -237,11 +223,11 @@ void bvec32::non_OR_non(bvec32& bv) {
 	words.swap(res);
 }
 
-void bvec32::non_AND_non(bvec32& bv) {
+void bvec64::non_AND_non(bvec64& bv) {
 	
-	vector<uint32_t> res;
-	vector<uint32_t>::iterator a = words.begin();
-	vector<uint32_t>::iterator b = bv.words.begin();
+	vector<uint64_t> res;
+	vector<uint64_t>::iterator a = words.begin();
+	vector<uint64_t>::iterator b = bv.words.begin();
 	res.push_back(*a < *b ? *a : *b);
 	while(a != words.end() && b != bv.words.end()) {
 		if (*a < *b)
@@ -258,40 +244,40 @@ void bvec32::non_AND_non(bvec32& bv) {
 	words.swap(res);
 }
 
-void bvec32::non_AND_rle(bvec32& bv) {
+void bvec64::non_AND_rle(bvec64& bv) {
 	// decompress
 	// run non_AND_non
-	bvec32 *tmp = new bvec32();
+	bvec64 *tmp = new bvec64();
 	tmp->copy(bv);
 	tmp->decompress();
 	non_AND_non(*tmp);
 	delete tmp;
 }
-void bvec32::rle_AND_non(bvec32& bv) {
+void bvec64::rle_AND_non(bvec64& bv) {
 	// decompress
 	// run non_AND_non
 	decompress();
 	non_AND_non(bv);
 }
-void bvec32::non_OR_rle(bvec32& bv) {
+void bvec64::non_OR_rle(bvec64& bv) {
 	// compress
 	// run rle_OR_rle
 	compress();
 	rle_OR_rle(bv);
 }
-void bvec32::rle_OR_non(bvec32& bv) {
+void bvec64::rle_OR_non(bvec64& bv) {
 	// compress
 	// run rle_OR_rle
-	bvec32 *tmp = new bvec32();
+	bvec64 *tmp = new bvec64();
 	tmp->copy(bv);
 	tmp->compress();
 	rle_OR_rle(*tmp);
 	delete tmp;
 }
 
-void bvec32::matchSize(bvec32 &bv) {
+void bvec64::matchSize(bvec64 &bv) {
 	if (size < bv.size) {
-		uint32_t gap_words = (bv.size - size)/LITERAL_SIZE;
+		uint64_t gap_words = (bv.size - size)/LITERAL_SIZE;
 		while (gap_words > FILLMASK) {
 			words.push_back(ZEROFULL);
 			gap_words -= FILLMASK;
@@ -301,7 +287,7 @@ void bvec32::matchSize(bvec32 &bv) {
 		size = bv.size;
 	}
 	else if (size > bv.size) {
-		uint32_t gap_words = (size - bv.size)/LITERAL_SIZE;
+		uint64_t gap_words = (size - bv.size)/LITERAL_SIZE;
 		while (gap_words > FILLMASK) {
 			bv.words.push_back(ZEROFULL);
 			gap_words -= FILLMASK;
@@ -312,24 +298,24 @@ void bvec32::matchSize(bvec32 &bv) {
 	}
 }
 
-void bvec32::rle_OR_rle(bvec32& bv) {
-	// ensure that both bvec32s are the same size
+void bvec64::rle_OR_rle(bvec64& bv) {
+	// ensure that both bvec64s are the same size
 	this->matchSize(bv);
 	if (size == 0)
 		return;
 	
-	vector<uint32_t> res; // fill this then swap with this.words
-	vector<uint32_t>::iterator a = words.begin();
-	vector<uint32_t>::iterator b = bv.words.begin();
+	vector<uint64_t> res; // fill this then swap with this.words
+	vector<uint64_t>::iterator a = words.begin();
+	vector<uint64_t>::iterator b = bv.words.begin();
 
 	// maintain the end position of the current word
-	uint32_t a_pos = (*a & BIT1) ? (*a & FILLMASK) : 1;
-	uint32_t b_pos = (*b & BIT1) ? (*b & FILLMASK) : 1;
-	uint32_t res_pos=0;
-	uint32_t next_word;
+	uint64_t a_pos = (*a & BIT1) ? *a & FILLMASK : 1;
+	uint64_t b_pos = (*b & BIT1) ? *b & FILLMASK : 1;
+	uint64_t res_pos=0;
+	uint64_t next_word;
 	bool incr_a = false;
 	bool incr_b = false;
-	uint32_t last_pos = size/LITERAL_SIZE;
+	uint64_t last_pos = size/LITERAL_SIZE;
 	while(res_pos != last_pos) {
 		if (incr_a) {
 			while(a_pos <= res_pos) {
@@ -358,7 +344,7 @@ void bvec32::rle_OR_rle(bvec32& bv) {
 					if (*b & BIT1) // zero fill
 						next_word = *a;
 					else {
-						uint32_t u = *a | *b;
+						uint64_t u = *a | *b;
 						next_word = (u == ALL1S) ? ONEFILL1 : u;
 					}
 			incr_a = true;
@@ -409,7 +395,7 @@ void bvec32::rle_OR_rle(bvec32& bv) {
 		) {
 			// merge fill words
 			// but just don't exceed the capacity
-			uint32_t n_words = (res.back() & FILLMASK) + (next_word & FILLMASK);
+			uint64_t n_words = (res.back() & FILLMASK) + (next_word & FILLMASK);
 			if (n_words >= FILLMASK) {
 				res.back() |= FILLMASK;
 				n_words -= FILLMASK;
@@ -429,24 +415,24 @@ void bvec32::rle_OR_rle(bvec32& bv) {
 }
 
 // in place version of the bitwise AND operator.
-void bvec32::rle_AND_rle(bvec32& bv) {
-	// ensure that both bvec32s are the same size
+void bvec64::rle_AND_rle(bvec64& bv) {
+	// ensure that both bvec64s are the same size
 	this->matchSize(bv);
 	if (size == 0)
 		return;
 	
-	vector<uint32_t> res; // fill this then swap with this.words
-	vector<uint32_t>::iterator a = words.begin();
-	vector<uint32_t>::iterator b = bv.words.begin();
+	vector<uint64_t> res; // fill this then swap with this.words
+	vector<uint64_t>::iterator a = words.begin();
+	vector<uint64_t>::iterator b = bv.words.begin();
 
 	// maintain the end position of the current word
-	uint32_t a_pos = (*a & BIT1) ? *a & FILLMASK : 1;
-	uint32_t b_pos = (*b & BIT1) ? *b & FILLMASK : 1;
-	uint32_t res_pos=0;
-	uint32_t next_word;
+	uint64_t a_pos = (*a & BIT1) ? *a & FILLMASK : 1;
+	uint64_t b_pos = (*b & BIT1) ? *b & FILLMASK : 1;
+	uint64_t res_pos=0;
+	uint64_t next_word;
 	bool incr_a = false;
 	bool incr_b = false;
-	uint32_t last_pos = size/LITERAL_SIZE;
+	uint64_t last_pos = size/LITERAL_SIZE;
 	while(res_pos != last_pos) {
 		if (incr_a) {
 			while(a_pos <= res_pos) {
@@ -468,7 +454,7 @@ void bvec32::rle_AND_rle(bvec32& bv) {
 			else if ((*a & BIT1) || (*b & BIT1))
 				next_word = BIT1 | (a_pos - res_pos);
 			else {
-				uint32_t u = *a & *b;
+				uint64_t u = *a & *b;
 				next_word = (u == 0) ? BIT1 | 1 : u;
 			}
 			incr_a = true;
@@ -519,7 +505,7 @@ void bvec32::rle_AND_rle(bvec32& bv) {
 		) {
 			// merge fill words
 			// but just don't exceed the capacity
-			uint32_t n_words = (res.back() & FILLMASK) + (next_word & FILLMASK);
+			uint64_t n_words = (res.back() & FILLMASK) + (next_word & FILLMASK);
 			if (n_words >= FILLMASK) {
 				res.back() |= FILLMASK;
 				n_words -= FILLMASK;

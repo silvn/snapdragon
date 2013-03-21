@@ -1,2 +1,12 @@
 language: cpp
-install: "./configure && make"
+before_install:
+    - "sudo apt-get install libboost-all-dev"
+    - "git clone -b v1.2.5 git://github.com/madler/zlib.git"
+    - "cd zlib"
+    - "./configure && make"
+    - "sudo make install"
+    - "cd -"
+    - "autoreconf -vfi"
+install:
+    - "./configure CPPFLAGS=-I/usr/local/include LDFLAGS=-L/usr/local/lib"
+    - "make && make check"

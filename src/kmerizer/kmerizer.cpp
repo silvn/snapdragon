@@ -252,16 +252,12 @@ void kmerizer::do_writeBatch(const size_t from, const size_t to) {
 		fwrite(&n_distinct,sizeof(int),1,fp);
 		fwrite(kmer_freq[bin].data(),sizeof(uint32_t),n_distinct,fp);
 		for(size_t i=0;i<n_distinct;i++) {
-			// I want this DIY serialization/deserialization in bvec
-			uint32_t u = counts[bin][i]->size;
-			fwrite(&u,sizeof(uint32_t),1,fp);
-			uint32_t c = counts[bin][i]->count();
-			fwrite(&c,sizeof(uint32_t),1,fp);
-			bool rle = counts[bin][i]->rle;
-			fwrite(&rle,sizeof(bool),1,fp);
-			uint32_t s = counts[bin][i]->words.size();
-			fwrite(&s,sizeof(uint32_t),1,fp);
-			fwrite(counts[bin][i]->words.data(),sizeof(uint32_t),s,fp);
+			uint32_t* buf;
+			size_t bytes = counts[bin][i]->dump(buf);
+			// how many bytes are we writing
+			fwrite(&bytes,sizeof(size_t),1,fp);
+			// write them
+			fwrite(buf,1,bytes,fp);
 		}
 		fclose(fp);
 	}
@@ -412,4 +408,3 @@ void read_index(const char* idxfile,vector<uint32_t> &values, vector<bvec32*> &i
 uint32_t pos2value(size_t pos, vector<uint32_t> &values, vector<bvec32*> &index) {
 	// lookup the value in the pos bit
 	// find the first bvec where this bit is set
-}

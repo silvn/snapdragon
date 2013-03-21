@@ -11,4 +11,3 @@ if MACOS
 endif
 stacker_LDADD = -lboost_thread$(suff) -lboost_system$(suff)
 loadBED_LDADD = -lboost_thread$(suff) -lboost_system$(suff)
-SUBDIRS = ../../vendor/fastbit #$(fastbit_dir)

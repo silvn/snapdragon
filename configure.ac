@@ -2,6 +2,7 @@ AC_COPYRIGHT((c) 2013 Cold Spring Harbor Laboratory)
 
 AC_PREREQ([2.69])
 AC_INIT([snapdragon],[0.2],[olson@warelab.org])
+AC_CONFIG_AUX_DIR([.])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 AC_REVISION([m4_esyscmd_s([git describe --always])])
 

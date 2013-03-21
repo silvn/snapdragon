@@ -18,6 +18,7 @@
 #include <fstream>
 #include <algorithm>
 #include <vector>
+#include <cstring>
 #include <boost/serialization/vector.hpp>
 #include <boost/cstdint.hpp>
 

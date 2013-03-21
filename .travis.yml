@@ -1,2 +1,3 @@
 language: cpp
-install: "./configure && make"
+before_install: "sudo apt-get install libboost"
+install: "./configure && make && make check"

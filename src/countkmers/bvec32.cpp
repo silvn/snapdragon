@@ -29,7 +29,9 @@ bvec32::bvec32(uint32_t *buf) {
 	words.resize(nwords);
 	memcpy(words.data(),buf+3,nwords*4);
 }
-
+vector<uint32_t>& bvec32::get_words() {
+	return words;
+}
 // DIY serialization
 size_t bvec32::dump(uint32_t *buf) {
 	// allocate space in buf

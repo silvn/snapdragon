@@ -61,6 +61,7 @@ public:
     bool operator==(bvec32&) const;
     
     bool equals(const bvec32&) const;
+	vector<uint32_t>& get_words();
 
     // is x in the set?
     bool find(uint32_t x);

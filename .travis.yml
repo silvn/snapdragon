@@ -1,9 +1,10 @@
 language: cpp
 before_install:
     - "sudo apt-get install libboost-all-dev"
-    - "curl -L 'http://downloads.sourceforge.net/project/libpng/zlib/1.2.5/zlib-1.2.5.tar.gz?r=http%3A%2F%2Fsourceforge.net%2Fprojects%2Flibpng%2Ffiles%2Fzlib%2F1.2.5%2F&ts=1363880549&use_mirror=iweb' | tar zxf -"
-    - "cd zlib-1.2.5"
+    - "git clone -b v1.2.5 git://github.com/madler/zlib.git"
+    - "cd zlib"
     - "./configure && make"
     - "sudo make install"
+    - "cd -"
     - "autoreconf -vfi"
 install: "./configure && make && make check"

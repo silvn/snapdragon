@@ -5,7 +5,6 @@
 #include <stdio.h>  // sprintf()
 #include <string.h> // memcpy()
 #include <sys/stat.h> // mkdir()
-#include "city.h" // hash functions
 #include "kseq.h"
 #include <boost/thread.hpp>
 using namespace std;
@@ -14,9 +13,6 @@ using namespace std;
 
 size_t nwords;
 size_t kmer_size;
-uint64_t bf_bytes;
-uint64_t bf_mask;
-size_t bf_k;
 size_t threads;
 size_t thread_bins;
 char* outprefix;
@@ -149,15 +145,15 @@ void sortuniq(const size_t from, const size_t to, vector<uint64_t*> &kmer_buf, v
 			if (compare_kmers(distinct,ith) == 0) // same kmer
 				count++;
 			else {
-				// gzwrite(kmer_fp, distinct, kmer_size);
-				// gzwrite(kcount_fp, &count, sizeof(uint32_t));
+				gzwrite(kmer_fp, distinct, kmer_size);
+				gzwrite(kcount_fp, &count, sizeof(uint32_t));
 				memcpy(distinct,ith,kmer_size);
 				count=1;
 			}
 		}
 		// write last distinct kmer and count
-		// gzwrite(kmer_fp, distinct, kmer_size);
-		// gzwrite(kcount_fp, &count, sizeof(uint32_t));
+		gzwrite(kmer_fp, distinct, kmer_size);
+		gzwrite(kcount_fp, &count, sizeof(uint32_t));
 		// close output files
 		gzclose(kmer_fp);
 		gzclose(kcount_fp);
@@ -287,31 +283,6 @@ inline uint64_t* canonicalize(uint64_t *packed, uint64_t *rcpack) {
 		return packed;
 }
 
-inline bool bf_novel(uint64_t *bfilter, uint64_t *kmer) {
-	// first hash the kmer
-	bool novel=false;
-	uint64_t hash_val;
-	hash_val = CityHash64((const char*)kmer, kmer_size);
-	uint64_t bit = hash_val & bf_mask;
-	uint64_t word = bit >> 5;
-	uint64_t mask = 1ULL << ((bit & 31ULL)-1ULL);
-	if ((bfilter[word] & mask) == 0) {
-		bfilter[word] |= mask;
-		novel = true;
-	}
-	for(size_t i=1;i<bf_k;i++) {
-		hash_val = CityHash64WithSeed((const char*)kmer, kmer_size, hash_val);
-		bit = hash_val & bf_mask;
-		word = bit >> 5;
-		mask = 1ULL << ((bit & 31ULL)-1ULL);
-		if ((bfilter[word] & mask) == 0) {
-			bfilter[word] |= mask;
-			novel = true;
-		}
-	}
-	return novel;
-}
-
 void serialize_batch(vector<uint64_t*> &kmer_buf,vector<size_t> &bin_tally,size_t batches,size_t k) {
 	boost::thread_group tg;
 	for(size_t i=0;i<NBINS;i+=thread_bins) {
@@ -393,8 +364,8 @@ KSEQ_INIT(gzFile, gzread)
 int main(int argc, char *argv[])
 {
 	// parse args
-	if (argc != 7) {
-		fprintf(stderr, "Usage: %s <input file> <k> <threads> <cap_bits> <use bloom filter (1/0)> <output dir>\n", argv[0]);
+	if (argc != 6) {
+		fprintf(stderr, "Usage: %s <input file> <k> <threads> <cap_bits> <output dir>\n", argv[0]);
 		return 1;
 	}
 	gzFile fp;
@@ -402,17 +373,7 @@ int main(int argc, char *argv[])
 	size_t k = atoi(argv[2]);
 	threads = atoi(argv[3]);
 	size_t cap_bits = atoi(argv[4]);
-	bool use_bfilter = false;
-	if (atoi(argv[5]) == 1) {
-		use_bfilter = true;
-		cap_bits--; // use half the memory for the bloom filter 
-		size_t bf_nbits = cap_bits-5;
-		bf_mask = (1ULL << bf_nbits) - 1ULL;
-		
-		bf_k = 3; // make this a parameter or make it depend on the size of the bloom filter?
-		// another thought is to abandon the bloom filter when the collision rate becomes too high...
-	}
-	outprefix = argv[6];
+	outprefix = argv[5];
 	// create output directory if it doesn't exist
 	mkdir(outprefix,0755);
 
@@ -422,19 +383,15 @@ int main(int argc, char *argv[])
 	kmer_size = nwords*sizeof(uint64_t);
 	size_t memory_cap = 1ULL<<cap_bits;
 	size_t max_kmers_per_bin = memory_cap/kmer_size/NBINS;
-	size_t bfilter_size = memory_cap/8/NBINS;
 	fprintf(stderr,"k: %zi, nwords: %zi, memory_cap: %zi, max_kmers_per_bin: %zi\n",k,nwords,memory_cap,max_kmers_per_bin);
 	vector<size_t> bin_tally; // when a bin reaches max_kmers_per_bin, sort,uniq,count,deflate
 	vector<uint64_t*> kmer_buf; // we'll use qsort from stdlib to sort kmers in place
-	vector<uint64_t*> bfilter;
 	// reserve space
 	kmer_buf.resize(NBINS);
 	bin_tally.resize(NBINS);
-	if (use_bfilter) bfilter.resize(NBINS);
 	for(int i=0;i<NBINS;i++) {
 		kmer_buf[i] = (uint64_t*) calloc(max_kmers_per_bin, kmer_size);
 		bin_tally[i] = 0;
-		if (use_bfilter) bfilter[i] = (uint64_t*) calloc(bfilter_size, sizeof(uint64_t));
 	}
 
 	size_t batches=0;
@@ -457,21 +414,15 @@ int main(int argc, char *argv[])
 			// canonicalize the first kmer
 			uint64_t *kmer = canonicalize(packed,rcpack);
 			size_t bin = hashkmer(kmer,0); // kmer[0] & 255;
-			// insert bloom filter here
-			bool skip=false;
-			if (use_bfilter)
-				skip = bf_novel(bfilter[bin], kmer);
 
-			if (skip == false) {
-				memcpy(kmer_buf[bin] + nwords*bin_tally[bin],kmer,kmer_size);
-				bin_tally[bin]++;
-				// one more kmer would cause a seg fault, so check if we've filled up our allocated memory
-				if (bin_tally[bin] == max_kmers_per_bin) {
-					fprintf(stderr,"buffer is full in bin %zi\n",bin);
-					batches++;
-					serialize_batch(kmer_buf,bin_tally,batches,k);
-					fprintf(stderr,"back from serialize_batch()\n");
-				}
+			memcpy(kmer_buf[bin] + nwords*bin_tally[bin],kmer,kmer_size);
+			bin_tally[bin]++;
+			// one more kmer would cause a seg fault, so check if we've filled up our allocated memory
+			if (bin_tally[bin] == max_kmers_per_bin) {
+				fprintf(stderr,"buffer is full in bin %zi\n",bin);
+				batches++;
+				serialize_batch(kmer_buf,bin_tally,batches,k);
+				fprintf(stderr,"back from serialize_batch()\n");
 			}
 
 			// pack the rest of the sequence
@@ -487,21 +438,15 @@ int main(int argc, char *argv[])
 				// canonicalize the ith kmer
 				kmer = canonicalize(packed,rcpack);
 				bin = hashkmer(kmer,0); // kmer[0] & 255;
-				bool skip=false;
-				if (use_bfilter)
-					skip = bf_novel(bfilter[bin], kmer);
+				memcpy(kmer_buf[bin] + nwords*bin_tally[bin],kmer,kmer_size);
+				bin_tally[bin]++;
 
-				if (skip == false) {
-					memcpy(kmer_buf[bin] + nwords*bin_tally[bin],kmer,kmer_size);
-					bin_tally[bin]++;
-
-					// check if we've filled up our allocated memory
-					if (bin_tally[bin] == max_kmers_per_bin) {
-						fprintf(stderr,"buffer is full in bin %zi\n",bin);
-						batches++;
-						serialize_batch(kmer_buf,bin_tally,batches,k);
-						fprintf(stderr,"back from serialize_batch()\n");
-					}
+				// check if we've filled up our allocated memory
+				if (bin_tally[bin] == max_kmers_per_bin) {
+					fprintf(stderr,"buffer is full in bin %zi\n",bin);
+					batches++;
+					serialize_batch(kmer_buf,bin_tally,batches,k);
+					fprintf(stderr,"back from serialize_batch()\n");
 				}
 			}
 		}
@@ -526,7 +471,6 @@ int main(int argc, char *argv[])
 		}
 		merge_tg.join_all();
 	}
-	exit(1);
 	fprintf(stderr,"starting stats\n");
 	vector<uint32_t> histogram [NBINS];
 	boost::thread_group stats_tg;

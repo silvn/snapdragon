@@ -244,6 +244,7 @@ void kmerizer::do_writeBatch(const size_t from, const size_t to) {
 		// open output file for counts
 		char counts_file [100];
 		sprintf(counts_file,"%s/%zi-mers.%zi.%zi.idx",outdir,k,bin,batches);
+		fp = fopen(counts_file, "wb");
 		// first write the number of distinct values
 		// then write the distinct values
 		// for each distinct value, write out the bvec (size,count,rle,words.size(),words)
@@ -271,33 +272,113 @@ void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
 		// read the counts for each batch
 		// and open the files of sorted distinct kmers
 		vector<bvec*> batch_counts [batches];
+		vector<uint32_t> batch_values [batches];
 		FILE kmer_fp [batches];
 		for(size_t i=1;i<=batches;i++) {
 			char fname [100];
 			sprintf(fname,"%s/%zi-mers.%zi.%zi",outdir,k,bin,i);
 			kmer_fp[i-1] = fopen(fname, "rb");
 			sprintf(fname,"%s/%zi-mers.%zi.%zi.idx",outdir,k,bin,i);
-			read_index(fname,batch_counts[i]);
+			read_index(fname,batch_values[i],batch_counts[i]);
 		}
 		// open an output file for the merged distinct kmers
 		FILE *ofp;
 		char fname [100];
-		sprintf(fname,"%s/%zi-mers.%zi.%zi",outdir,k,bin);
+		sprintf(fname,"%s/%zi-mers.%zi",outdir,k,bin);
 		ofp = fopen(fname,"wb");
+		vector<uint32_t> tally;
 		// read the first kmer from each batch
+		word_t kmers [batches*nwords];
+		uint32_t btally [batches];
+		uint32_t todo = batches;
+		size_t offset [batches];
+		memset(offset,0,sizeof(size_t)*batches);
+		for(size_t i=0;i<batches;i++) {
+			size_t rc = fread(kmers + i*nwords, kmer_size,1,kmer_fp[i]);
+			if (rc != 1) {
+				todo--;
+				btally[i]=0;
+			}
+			else
+				btally[i] = pos2value(offset[i]++,batch_values[i],batch_counts[i]);
+		}
 		// choose min
+		size_t mindex = find_min(kmers,btally);
+		word_t distinct [nwords];
+		memcpy(distinct,kmers + mindex*nwords, kmer_size);
+		tally.push_back(btally[mindex]);
 		// replace min
 		// iterate until there's nothing left to do
+		while(todo>0) {
+			size_t rc = fread(kmers + mindex*nwords,kmer_size,1,kmer_fp[mindex]);
+			if (rc != 1) {
+				todo--;
+				btally[mindex]=0;
+				if (todo==0) break;
+			}
+			else
+				btally[mindex] = pos2value(offset[mindex]++,batch_values[mindex],batch_counts[mindex]);
+			mindex = find_min(kmers,btally);
+			if (memcmp(kmers + mindex*nwords,distinct)==0)
+				tally.back() += btally[mindex];
+			else {
+				size_t rc = fwrite(distinct,kmer_size,1,ofp);
+				if (rc != 1) {
+					fprintf(stderr,"error writing distinct kmer to output file\n");
+					exit(1);
+				}
+				memcpy(distinct,kmers+mindex*nwords,kmer_size);
+				tally.push_back(btally[mindex]);
+			}
+		}
+		range_index(tally,kmer_freq[bin],counts[bin]);
 		// close output file
+		fclose(ofp);
 		// close input files
+		for(size_t i=0;i<batches;i++)
+			fclose(kmer_fp[i]);
+		
+		char counts_file [100];
+		sprintf(counts_file,"%s/%zi-mers.%zi.idx",outdir,k,bin);
+		fp = fopen(counts_file, "wb");
+		// first write the number of distinct values
+		// then write the distinct values
+		// for each distinct value, write out the bvec (size,count,rle,words.size(),words)
+		int n_distinct = kmer_freq[bin].size();
+		fwrite(&n_distinct,sizeof(int),1,fp);
+		fwrite(kmer_freq[bin].data(),sizeof(uint32_t),n_distinct,fp);
+		for(size_t i=0;i<n_distinct;i++) {
+			// I want this DIY serialization/deserialization in bvec
+			uint32_t u = counts[bin][i]->size;
+			fwrite(&u,sizeof(uint32_t),1,fp);
+			uint32_t c = counts[bin][i]->count();
+			fwrite(&c,sizeof(uint32_t),1,fp);
+			bool rle = counts[bin][i]->rle;
+			fwrite(&rle,sizeof(bool),1,fp);
+			uint32_t s = counts[bin][i]->words.size();
+			fwrite(&s,sizeof(uint32_t),1,fp);
+			fwrite(counts[bin][i]->words.data(),sizeof(uint32_t),s,fp);
+		}
+		fclose(fp);
 		// delete input files
+		
 	}
 }
 
+inline size_t kmerizer::find_min(const word_t* kmers, const uint32_t* kcounts) {
+	size_t mindex = 0;
+	while (kcounts[mindex] == 0) mindex++;
+	for(size_t i=mindex+1;i<batches;i++)
+		if (kcounts[mindex] != 0)
+			if (memcmp(kmers + i*nwords,kmers + mindex*nwords,kmer_size) < 0)
+				mindex = i;
+
+	return mindex;
+}
 
 // for each distinct value in the vec create a bitvector
 // indexing the positions in the vec holding a value <= v
-void range_index(vector<uint32_t> &vec, vector<uint32_t> &values, vector<bvec32*> &index) {
+void kmerizer::range_index(vector<uint32_t> &vec, vector<uint32_t> &values, vector<bvec32*> &index) {
 	// find the distinct values in vec
 	values.clear();
 	values.reserve(vec.size());
@@ -321,4 +402,14 @@ void range_index(vector<uint32_t> &vec, vector<uint32_t> &values, vector<bvec32*
 		index[i] = new bvec32(range[i]);
 		fprintf(stderr,"index[%zi]->bytes()=%u\n",i,index[i]->bytes());
 	}
+}
+
+void read_index(const char* idxfile,vector<uint32_t> &values, vector<bvec32*> &index) {
+	// open idxfile
+	// fread to repopulate values and bvecs
+	// need bvec32 constructor?
+}
+uint32_t pos2value(size_t pos, vector<uint32_t> &values, vector<bvec32*> &index) {
+	// lookup the value in the pos bit
+	// find the first bvec where this bit is set
 }

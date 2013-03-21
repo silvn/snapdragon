@@ -1,6 +1,7 @@
 #include "countkmers/kseq.h"
 #include <zlib.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <vector>
 #include <algorithm>
 #include <ctime>

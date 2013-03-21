@@ -1,6 +1,6 @@
 AC_COPYRIGHT((c) 2013 Cold Spring Harbor Laboratory)
 
-AC_PREREQ([2.69])
+AC_PREREQ([2.68])
 AC_INIT([snapdragon],[0.2],[olson@warelab.org])
 AC_CONFIG_AUX_DIR([.])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
@@ -57,7 +57,6 @@ AC_SUBST(BUILD_FASTBIT)
 AC_CHECK_HEADERS([stdlib.h string.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
-AC_CHECK_HEADER_STDBOOL
 AC_C_INLINE
 AC_TYPE_SIZE_T
 AC_TYPE_UINT32_T

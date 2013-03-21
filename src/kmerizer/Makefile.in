@@ -50,7 +50,7 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-bin_PROGRAMS = packmers$(EXEEXT)
+bin_PROGRAMS = packmers$(EXEEXT) kmerizer$(EXEEXT)
 subdir = src/kmerizer
 DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
 	$(top_srcdir)/depcomp
@@ -67,13 +67,16 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
-am_packmers_OBJECTS = packmers64.$(OBJEXT)
-packmers_OBJECTS = $(am_packmers_OBJECTS)
-packmers_LDADD = $(LDADD)
+am_kmerizer_OBJECTS = kmerizer.$(OBJEXT)
+kmerizer_OBJECTS = $(am_kmerizer_OBJECTS)
+kmerizer_LDADD = $(LDADD)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
 am__v_lt_1 = 
+am_packmers_OBJECTS = packmers64.$(OBJEXT)
+packmers_OBJECTS = $(am_packmers_OBJECTS)
+packmers_LDADD = $(LDADD)
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -108,8 +111,8 @@ AM_V_CXXLD = $(am__v_CXXLD_@AM_V@)
 am__v_CXXLD_ = $(am__v_CXXLD_@AM_DEFAULT_V@)
 am__v_CXXLD_0 = @echo "  CXXLD   " $@;
 am__v_CXXLD_1 = 
-SOURCES = $(packmers_SOURCES)
-DIST_SOURCES = $(packmers_SOURCES)
+SOURCES = $(kmerizer_SOURCES) $(packmers_SOURCES)
+DIST_SOURCES = $(kmerizer_SOURCES) $(packmers_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -174,7 +177,9 @@ INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
 LIBOBJS = @LIBOBJS@
-LIBS = -lz -lboost_thread$(suff) -lboost_system$(suff)
+LIBS = -lbvec -lz -lboost_thread$(suff) -lboost_system$(suff) \
+	 -lboost_serialization$(suff)
+
 LIBTOOL = @LIBTOOL@
 LIPO = @LIPO@
 LN_S = @LN_S@
@@ -257,6 +262,9 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 packmers_SOURCES = packmers64.cpp
+kmerizer_SOURCES = kmerizer.cpp
+AM_CPPFLAGS = -I../countkmers
+AM_LDFLAGS = -L../countkmers/.libs
 @MACOS_TRUE@suff = -mt
 all: all-am
 
@@ -341,6 +349,9 @@ clean-binPROGRAMS:
 	list=`for p in $$list; do echo "$$p"; done | sed 's/$(EXEEXT)$$//'`; \
 	echo " rm -f" $$list; \
 	rm -f $$list
+kmerizer$(EXEEXT): $(kmerizer_OBJECTS) $(kmerizer_DEPENDENCIES) $(EXTRA_kmerizer_DEPENDENCIES) 
+	@rm -f kmerizer$(EXEEXT)
+	$(AM_V_CXXLD)$(CXXLINK) $(kmerizer_OBJECTS) $(kmerizer_LDADD) $(LIBS)
 packmers$(EXEEXT): $(packmers_OBJECTS) $(packmers_DEPENDENCIES) $(EXTRA_packmers_DEPENDENCIES) 
 	@rm -f packmers$(EXEEXT)
 	$(AM_V_CXXLD)$(CXXLINK) $(packmers_OBJECTS) $(packmers_LDADD) $(LIBS)
@@ -351,6 +362,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/kmerizer.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/packmers64.Po@am__quote@
 
 .cpp.o:

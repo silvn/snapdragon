@@ -1,5 +1,6 @@
 #include "kmerizer.h"
 #include <boost/thread.hpp>
+#include <boost/bind.hpp>
 #include <algorithm> // stl sort
 #include <cstdlib> // qsort()
 #include <cstdio>  // sprintf()
@@ -181,9 +182,9 @@ void kmerizer::serialize() {
 
 int kmerizer::uniqify() {
 	boost::thread_group tg;
-	for(size_t i=0;i<NBINS;i+=thread_bins) {
-		size_t j=(i+thread_bins>NBINS) ? NBINS : i+thread_bins;
-		tg.create_thread(boost::bind(do_unique,i,j));
+	for(size_t i = 0; i < NBINS; i += thread_bins) {
+		size_t j = (i + thread_bins > NBINS) ? NBINS : i + thread_bins;
+		tg.create_thread(boost::bind(&kmerizer::do_unique, this, i, j));
 	}
 	tg.join_all();
 	state = QUERY;
@@ -191,9 +192,9 @@ int kmerizer::uniqify() {
 
 int kmerizer::writeBatch() {
 	boost::thread_group tg;
-	for(size_t i=0;i<NBINS;i+=thread_bins) {
-		size_t j=(i+thread_bins>NBINS) ? NBINS : i+thread_bins;
-		tg.create_thread(boost::bind(do_writeBatch,i,j));
+	for(size_t i = 0; i < NBINS; i += thread_bins) {
+		size_t j = (i + thread_bins > NBINS) ? NBINS : i + thread_bins;
+		tg.create_thread(boost::bind(&kmerizer::do_writeBatch, this, i, j));
 	}
 	tg.join_all();
 }
@@ -202,23 +203,24 @@ int kmerizer::mergeBatches() {
 	boost::thread_group tg;
 	for(size_t i=0;i<NBINS;i+=thread_bins) {
 		size_t j=(i+thread_bins>NBINS) ? NBINS : i+thread_bins;
-		tg.create_thread(boost::bind(do_mergeBatches,i,j));
+		tg.create_thread(boost::bind(&kmerizer::do_mergeBatches, this, i, j));
 	}
 	tg.join_all();
 	batches=1;
 }
 
 void kmerizer::do_unique(const size_t from, const size_t to) {
-	for(size_t bin=from; bin<to; bin++) {
+	for (size_t bin = from; bin < to; bin++) {
 		// sort
-		qsort(kmer_buf[bin], bin_tally[bin], kmer_size, compare_kmers);
+		std::sort(kmer_buf[bin], &kmer_buf[bin][bin_tally[bin]]);
 		// uniq
 		uint32_t distinct = 0;
 		vector<uint32_t> tally;
 		tally.push_back(1); // first kmer
-		for(size_t i=1;i<bin_tally[bin];i++) {
-			word_t *ith = kmer_buf[bin] + i*nwords;
-			if(compare_kmers(kmer_buf[bin] + distinct*nwords, ith) == 0)
+		for(size_t i = 1; i < bin_tally[bin]; i++) {
+			word_t *ith = kmer_buf[bin] + i * nwords;
+			if (kmerizer::compare_kmers(kmer_buf[bin] + distinct * nwords, ith)
+				== 0)
 				tally.back()++;
 			else {
 				distinct++;
@@ -228,7 +230,7 @@ void kmerizer::do_unique(const size_t from, const size_t to) {
 		}
 		bin_tally[bin] = distinct+1;
 		// create a bitmap index for the tally vector
-		range_index(tally,kmer_freq[bin],counts[bin]);
+		range_index(tally, kmer_freq[bin], counts[bin]);
 	}
 }
 
@@ -398,12 +400,28 @@ void kmerizer::range_index(vector<uint32_t> &vec, vector<uint32_t> &values, vect
 	}
 }
 
-void kmerizer::read_index(const char* idxfile,vector<uint32_t> &values, vector<bvec32*> &index) {
+void
+kmerizer::read_index(
+	const char* idxfile,
+	vector<uint32_t> &values,
+	vector<bvec32*> &index
+) {
 	// open idxfile
 	// fread to repopulate values and bvecs
 	// need bvec32 constructor?
 }
-uint32_t kmerizer::pos2value(size_t pos, vector<uint32_t> &values, vector<bvec32*> &index) {
+
+uint32_t
+kmerizer::pos2value(
+	size_t pos,
+	vector<uint32_t> &values,
+	vector<bvec32*> &index
+) {
 	// lookup the value in the pos bit
 	// find the first bvec where this bit is set
+	return 0;
+}
+
+int main (int argc, char const *argv[]) {
+	return 0;
 }

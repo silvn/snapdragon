@@ -29,10 +29,10 @@ class kmerizer {
 	char state;
 	char *outdir;
 
-	word_t* kmer_buf [NBINS]; // raw unsorted kmers (padded), or qsort|uniq'ed kmers
-	uint32_t bin_tally [NBINS]; // number of kmers in each bin (or number of distinct kmers)
-	vector<uint32_t> kmer_freq [NBINS]; // sorted distinct kmer frequencies
-	vector<bvec32*> counts [NBINS]; // bitmap index of frequency counts
+	word_t* kmer_buf[NBINS]; // raw unsorted padded kmers, or sort|uniq'ed kmers
+	uint32_t bin_tally[NBINS]; // number of kmers in each bin (or number of distinct kmers)
+	vector<uint32_t> kmer_freq[NBINS]; // sorted distinct kmer frequencies
+	vector<bvec32*> counts[NBINS]; // bitmap index of frequency counts
 
 public:
 	kmerizer(const size_t _k, const size_t _threads, char* _outdir, const char _mode);
@@ -46,7 +46,7 @@ private:
 	inline word_t twobit(const word_t val) const; // pack nucleotides into 2 bits
 	inline word_t revcomp(const word_t val) const; // reverse complement
 	inline uint8_t hashkmer(const word_t *kmer, const uint8_t seed) const; // to select a bin
-	inline int compare_kmers(const void *k1, const void *v2) const; // for qsort
+	inline int compare_kmers(const word_t *k1, const word_t *k2) const; // for qsort
 	inline word_t* canonicalize(word_t *packed, word_t *rcpack) const;
 	void serialize(); // kmer_buf is full. uniqify and write batch to disk
 	int uniqify(); // qsort each kmer_buf, update bin_tally, and fill counts
@@ -152,8 +152,8 @@ inline uint8_t kmerizer::hashkmer(const word_t *kmer, const uint8_t seed) const 
 	return h;
 }
 
-inline int kmerizer::compare_kmers(const void *k1, const void *k2) const {
-	return memcmp(k1,k2,kmer_size);
+inline int kmerizer::compare_kmers(const word_t *k1, const word_t *k2) const {
+	return memcmp(k1, k2, kmer_size);
 }
 
 inline word_t* kmerizer::canonicalize(word_t *packed, word_t *rcpack) const {

@@ -6,8 +6,10 @@ ACLOCAL_AMFLAGS = -I m4
 AM_CPPFLAGS = -I../src -I$(top_srcdir)/../src -I$(top_srcdir)/../test
 TESTS = $(check_PROGRAMS)
 AM_LDFLAGS = -L$(top_srcdir)/src
-LIBS = -lsnapdragon
 if MACOS
     suff = -mt
 endif
-LDADD = -lboost_serialization$(suff) -lboost_thread$(suff) -lboost_system$(suff)
+LDADD = -lsnapdragon \
+	-lboost_serialization$(suff) \
+	-lboost_thread$(suff) \
+	-lboost_system$(suff)

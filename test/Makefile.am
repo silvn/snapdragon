@@ -5,10 +5,9 @@ CC = g++
 ACLOCAL_AMFLAGS = -I m4
 AM_CPPFLAGS = -I../src -I$(top_srcdir)/../src -I$(top_srcdir)/../test
 TESTS = $(check_PROGRAMS)
-AM_LDFLAGS = -L../src/countkmers/.libs
-LIBS = -lbvec
+AM_LDFLAGS = -L$(top_srcdir)/src
+LIBS = -lsnapdragon
 if MACOS
-LDADD = -lboost_serialization-mt
-else
-LDADD = -lboost_serialization
+    suff = -mt
 endif
+LDADD = -lboost_serialization$(suff) -lboost_thread$(suff) -lboost_system$(suff)

@@ -97,8 +97,8 @@ void bvec32::construct_rle(vector<uint32_t>& vals) {
 		else {
 			if (word == ALL1S)
 				if ((words.size() != 0) &&
-                    ((words.back() & ONEFILL) == ONEFILL) &&
-                    (words.back() != ONEFULL))
+					((words.back() & ONEFILL) == ONEFILL) &&
+					(words.back() != ONEFULL))
 					words.back()++;
 				else
 					words.push_back(ONEFILL1);
@@ -113,14 +113,14 @@ void bvec32::construct_rle(vector<uint32_t>& vals) {
 				words.push_back(gap_words | BIT1);
 			word_end += (gap_words+1)*LITERAL_SIZE;
 			word = (word_end - *ii == LITERAL_SIZE)
-                ? 1 : (uint32_t)1 << (word_end - *ii);
+				? 1 : (uint32_t)1 << (word_end - *ii);
 		}
 	}
 	// add the last word
 	if (word == ALL1S) {
 		if ((words.size() != 0) &&
-            ((words.back() & ONEFILL) == ONEFILL) &&
-                (words.back() != ONEFULL))
+			((words.back() & ONEFILL) == ONEFILL) &&
+				(words.back() != ONEFULL))
 			words.back()++;
 		else
 			words.push_back(ONEFILL1);
@@ -131,15 +131,15 @@ void bvec32::construct_rle(vector<uint32_t>& vals) {
 }
 
 void bvec32::compress() {
-    if (rle) { /* Throw exception? */ return; }
+	if (rle) { /* Throw exception? */ return; }
 	vector<uint32_t> tmp;
 	tmp.swap(words);
 	construct_rle(tmp);
-    rle = true;
+	rle = true;
 }
 
 void bvec32::decompress() {
-    if (!rle) { /* Throw exception? */ return; }
+	if (!rle) { /* Throw exception? */ return; }
 	// retrieve the set bits from the compressed vector
 	vector<uint32_t> res;
 	res.reserve(cnt());
@@ -218,17 +218,17 @@ bvec32* bvec32::operator&(bvec32& rhs) {
 }
 
 bool bvec32::operator==(bvec32& other) const {
-    return (words == other.words) &&
-           (count == other.count) &&
-           (size  == other.size)  &&
-           (rle   == other.rle);
+	return (words == other.words) &&
+		   (count == other.count) &&
+		   (size  == other.size)  &&
+		   (rle	  == other.rle);
 }
 
 bool bvec32::equals(const bvec32& other) const {
-    return (words == other.words) &&
-           (count == other.count) &&
-           (size  == other.size)  &&
-           (rle   == other.rle);
+	return (words == other.words) &&
+		   (count == other.count) &&
+		   (size  == other.size)  &&
+		   (rle	  == other.rle);
 }
 
 void bvec32::non_OR_non(bvec32& bv) {

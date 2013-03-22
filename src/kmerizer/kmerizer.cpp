@@ -133,21 +133,21 @@ int kmerizer::histogram() {
 	uint32_t key=1; // min kmer frequency
 	while (todo > 0) {
 		uint32_t val = 0;
-		for(size_t i=0;i<NBINS;i++) {
+		for (size_t i=0;i<NBINS;i++) {
 			if (done[i]==0) {
 				if (kmer_freq[i][offset[i]] == key) {
 					val += counts[i][offset[i]]->cnt();
 					if (offset[i]>0) // undo the range encoding <=
 						val -= counts[i][offset[i-1]]->cnt();
 					offset[i]++;
-					if(offset[i] == kmer_freq[i].size()) {
+					if (offset[i] == kmer_freq[i].size()) {
 						done[i]=1;
 						todo--;
 					}
 				}
 			}
 		}
-		if (val>0) {
+		if (val > 0) {
 			printf("%u %u\n",key,val);
 		}
 		key++;
@@ -450,9 +450,5 @@ uint32_t kmerizer::pos2value(size_t pos, vector<uint32_t> &values, vector<bvec32
 	for(size_t i=0;i<values.size();i++)
 		if (index[i]->find(pos))
 			return values[i];
-	return 0;
-}
-
-int main (int argc, char const *argv[]) {
 	return 0;
 }

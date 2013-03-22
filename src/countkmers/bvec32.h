@@ -150,22 +150,22 @@ inline bvec32& bvec32::copy(const bvec32& bv) {
     return *this;
 }
 
-ostream & operator<<(ostream &os, const vector<uint32_t> vec) {
+inline ostream & operator<<(ostream &os, const vector<uint32_t> vec) {
     return os << vec;
 }
 
-ostream & operator<<(ostream &os, const bvec32 &vec) {
+inline ostream & operator<<(ostream &os, const bvec32 &vec) {
     return os << vec;
 }
 
-void
+inline void
 save_to_file(const bvec32 &bv, const char *filename) {
     std::ofstream ofs(filename);
     boost::archive::text_oarchive oa(ofs);
     oa << bv;
 }
 
-void
+inline void
 restore_from_file(bvec32 &bv, const char *filename) {
     std::ifstream ifs(filename);
     boost::archive::text_iarchive ia(ifs);

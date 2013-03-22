@@ -1,10 +1,12 @@
-bin_PROGRAMS = packmers kmerizer
-packmers_SOURCES = packmers64.cpp
-kmerizer_SOURCES = kmerizer.cpp
-AM_CPPFLAGS = -I../countkmers
-AM_LDFLAGS  = -L../countkmers/.libs
 if MACOS
     suff=-mt
 endif
-LIBS = -lbvec -lz -lboost_thread$(suff) -lboost_system$(suff) \
-	 -lboost_serialization$(suff)
+AM_CPPFLAGS = -I../countkmers
+
+bin_PROGRAMS = packmers
+packmers_SOURCES = packmers64.cpp kmerizer.h
+packmers_LDFLAGS  = -L../countkmers/.libs -lz -lboost_thread$(suff) \
+	-lboost_system$(suff) -lboost_serialization$(suff)
+
+noinst_LTLIBRARIES = libkmerizer.la
+libkmerizer_la_SOURCES = kmerizer.cpp kmerizer.h

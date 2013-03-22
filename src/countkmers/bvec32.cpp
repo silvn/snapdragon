@@ -569,7 +569,7 @@ bool bvec32::find(uint32_t x) {
 	if (rle)
 		return rle_find(x);
 	else
-		return binary_search(words.begin(), words.end(), x));
+		return binary_search(words.begin(), words.end(), x);
 }
 
 bool bvec32::rle_find(uint32_t x) {
@@ -579,7 +579,7 @@ bool bvec32::rle_find(uint32_t x) {
 		if (*it & BIT1) { // fill word
 			pos += (*it & FILLMASK) * LITERAL_SIZE;
 			if (pos >= x) {
-				if (*id & BIT2) // 1-fill
+				if (*it & BIT2) // 1-fill
 					return true;
 				return false;
 			}

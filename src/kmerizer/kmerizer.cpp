@@ -292,7 +292,24 @@ void kmerizer::do_writeBatch(const size_t from, const size_t to) {
 	}
 }
 
-void read_index(const char* fname, vector<uint32_t> &values, vector<bvec32*> &index);
+void kmerizer::read_index(const char* idxfile, vector<uint32_t> &values, vector<bvec32*> &index) {
+	// open idxfile
+	FILE *fp;
+	fp = fopen(idxfile,"rb");
+	// fread to repopulate values and bvecs
+	int n_distinct;
+	fread(&n_distinct,sizeof(int),1,fp);
+	values.resize(n_distinct);
+	fread(values.data(),sizeof(uint32_t),n_distinct,fp);
+	for(size_t i=0;i<n_distinct;i++) {
+		size_t bytes;
+		fread(&bytes,sizeof(size_t),1,fp);
+		size_t words = bytes/sizeof(uint32_t);
+		uint32_t buf [words];
+		fread(buf,sizeof(uint32_t),words,fp);
+		index[i] = new bvec32(buf);
+	}
+}
 
 void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
 	for(size_t bin=from; bin<to; bin++) {
@@ -426,16 +443,6 @@ void kmerizer::range_index(vector<uint32_t> &vec, vector<uint32_t> &values, vect
 	}
 }
 
-void
-kmerizer::read_index(
-	const char* idxfile,
-	vector<uint32_t> &values,
-	vector<bvec32*> &index
-) {
-	// open idxfile
-	// fread to repopulate values and bvecs
-	// need bvec32 constructor?
-}
 
 uint32_t
 kmerizer::pos2value(

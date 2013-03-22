@@ -444,14 +444,12 @@ void kmerizer::range_index(vector<uint32_t> &vec, vector<uint32_t> &values, vect
 }
 
 
-uint32_t
-kmerizer::pos2value(
-	size_t pos,
-	vector<uint32_t> &values,
-	vector<bvec32*> &index
-) {
+uint32_t kmerizer::pos2value(size_t pos, vector<uint32_t> &values, vector<bvec32*> &index) {
 	// lookup the value in the pos bit
 	// find the first bvec where this bit is set
+	for(size_t i=0;i<values.size();i++)
+		if (index[i]->find(pos))
+			return values[i];
 	return 0;
 }
 

@@ -85,6 +85,7 @@ private:
     void rle_AND_non(bvec32& rhs);
     void non_AND_rle(bvec32& rhs);
     void non_AND_non(bvec32& rhs);
+	bool rle_find(uint32_t x);
     inline uint32_t popcount(uint32_t val) const;
 };
 

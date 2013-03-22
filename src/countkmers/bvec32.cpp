@@ -565,3 +565,33 @@ void bvec32::rle_AND_rle(bvec32& bv) {
 	count=0;
 }
 
+bool bvec32::find(uint32_t x) {
+	if (rle)
+		return rle_find(x);
+	else
+		return binary_search(words.begin(), words.end(), x));
+}
+
+bool bvec32::rle_find(uint32_t x) {
+	uint32_t pos=0;
+	for(vector<uint32_t>::iterator it=words.begin();it!=words.end();++it) {
+		// what type of word is it?
+		if (*it & BIT1) { // fill word
+			pos += (*it & FILLMASK) * LITERAL_SIZE;
+			if (pos >= x) {
+				if (*id & BIT2) // 1-fill
+					return true;
+				return false;
+			}
+		}
+		else { // literal word
+			pos += LITERAL_SIZE;
+			if (pos >= x) {
+				if ((1UL << (pos-x)) & *it)
+					return true;
+				return false;
+			}
+		}
+	}
+	return false;
+}

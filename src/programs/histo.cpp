@@ -29,6 +29,8 @@ int main(int argc, char *argv[])
 	while ((length = kseq_read(seq)) >= 0)
 		if ((size_t)length >= k)
 			rc = counter->addSequence(seq->seq.s,length);
+	kseq_destroy(seq);
+	gzclose(fp);
 	rc = counter->histogram();
 	return 0;
 }

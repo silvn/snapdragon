@@ -258,6 +258,11 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 histo_SOURCES = histo.cpp
 AM_CXXFLAGS = -I../kmerizer -I../countkmers
+@MACOS_TRUE@suff = -mt
+AM_LDFLAGS = -L../kmerizer -L../countkmers \
+	-lkmerizer -lbvec -lz \
+	-lboost_serialization$(suff) -lboost_system$(suff) -lboost_thread$(suff)
+
 all: all-am
 
 .SUFFIXES:

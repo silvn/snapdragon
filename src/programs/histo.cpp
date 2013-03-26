@@ -1,4 +1,5 @@
 #include <zlib.h>
+#include <sys/stat.h> // mkdir()
 #include "kseq.h"
 #include "kmerizer.h"
 
@@ -13,14 +14,14 @@ int main(int argc, char *argv[])
 	gzFile fp;
 	fp = gzopen(argv[1], "r");
 	size_t k = atoi(argv[2]);
-	threads = atoi(argv[3]);
+	size_t threads = atoi(argv[3]);
 	size_t cap_bits = atoi(argv[4]);
-	char mode = argv[5]
-	outprefix = argv[6];
+	char* mode = argv[5];
+	char* outprefix = argv[6];
 	// create output directory if it doesn't exist
 	mkdir(outprefix,0755);
 
-	kmerizer counter = new kmerizer(k, threads, outprefix, mode);
+	kmerizer *counter = new kmerizer(k, threads, outprefix, mode[0]);
 	int rc = counter->allocate(1ULL<<cap_bits);
 
 	// process each seq from input

@@ -258,7 +258,7 @@ top_srcdir = @top_srcdir@
 AM_DEFAULT_SOURCE_EXT = .cpp
 SOURCES = split_nt.cpp
 # FIXME: distcheck popping up _build and into src/
-AM_CPPFLAGS = -I.. -I$(top_srcdir)/../src
+AM_CXXFLAGS = -I.. -I$(top_srcdir)/../src
 all: all-am
 
 .SUFFIXES:

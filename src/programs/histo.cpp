@@ -23,15 +23,18 @@ int main(int argc, char *argv[])
 
 	kmerizer *counter = new kmerizer(k, threads, outprefix, mode[0]);
 	int rc = counter->allocate(1ULL<<cap_bits);
-
+	if (rc != 0) {
+		fprintf(stderr,"failed to allocate %llu bytes\n",1ULL<<cap_bits);
+		exit(1);
+	}
 	// process each seq from input
 	kseq_t *seq = kseq_init(fp);
 	int length;
 	while ((length = kseq_read(seq)) >= 0)
 		if ((size_t)length >= k)
-			rc = counter->addSequence(seq->seq.s,length);
+			counter->addSequence(seq->seq.s,length);
 	kseq_destroy(seq);
 	gzclose(fp);
-	rc = counter->histogram();
+	counter->histogram();
 	return 0;
 }

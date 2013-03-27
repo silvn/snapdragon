@@ -33,20 +33,20 @@ vector<uint32_t>& bvec32::get_words() {
 	return words;
 }
 // DIY serialization
-size_t bvec32::dump(uint32_t *buf) {
+size_t bvec32::dump(uint32_t **buf) {
 	// allocate space in buf
-	size_t bytes = sizeof(uint32_t)*(3 + words.size());
-	buf = (uint32_t*) malloc(bytes);
-	if (buf == NULL) {
-		fprintf(stderr,"failed to allocate %zi bytes\n",bytes);
+	size_t dbytes = sizeof(uint32_t)*(3 + words.size());
+	*buf = (uint32_t*)malloc(dbytes);
+	if (*buf == NULL) {
+		fprintf(stderr,"failed to allocate %zi bytes\n",dbytes);
 		return 0;
 	}
-	buf[0] = words.size();
-	if (rle) buf[0] |= BIT1;
-	buf[1] = size;
-	buf[2] = count;
-	memcpy(buf + 3, words.data(), bytes);
-	return bytes;
+	(*buf)[0] = words.size();
+	if (rle) (*buf)[0] |= BIT1;
+	(*buf)[1] = size;
+	(*buf)[2] = count;
+	memcpy(*buf + 3, words.data(), bytes());
+	return dbytes;
 }
 
 bool bvec32::low_density(vector<uint32_t>& vals) {

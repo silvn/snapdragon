@@ -52,7 +52,7 @@ public:
     void print();
     void compress();
     void decompress();
-    size_t dump(uint32_t *buf); // DIY serialization
+    size_t dump(uint32_t **buf); // DIY serialization
 
     // logical set operations
     void operator|=(bvec32& rhs);

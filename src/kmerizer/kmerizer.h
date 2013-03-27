@@ -37,22 +37,24 @@ class kmerizer {
 public:
 	kmerizer(const size_t _k, const size_t _threads, char* _outdir, const char _mode);
 	int allocate(const size_t maximem); // allocates memory for each kmer_buf
-	int addSequence(const char* seq,const int length); // extract (canonicalized) kmers from the sequence
-	int save(); // writes distinct kmers and rle counts to disk (merging multiple batches)
-	int histogram(); // output the kmer count frequency distribution
+	void addSequence(const char* seq,const int length); // extract (canonicalized) kmers from the sequence
+	void save(); // writes distinct kmers and rle counts to disk (merging multiple batches)
+	void histogram(); // output the kmer count frequency distribution
 	~kmerizer() {};
 
 private:
 	inline word_t twobit(const word_t val) const; // pack nucleotides into 2 bits
+	inline void next_kmer(word_t* kmer, const char nucl); // shift kmer to make room for nucl
+	inline void unpack(word_t* kmer, char *seq);
 	inline word_t revcomp(const word_t val) const; // reverse complement
 	inline uint8_t hashkmer(const word_t *kmer, const uint8_t seed) const; // to select a bin
 	inline word_t* canonicalize(word_t *packed, word_t *rcpack) const;
 	void serialize(); // kmer_buf is full. uniqify and write batch to disk
-	int uniqify(); // qsort each kmer_buf, update bin_tally, and fill counts
+	void uniqify(); // qsort each kmer_buf, update bin_tally, and fill counts
 	void do_unique(const size_t from, const size_t to); // for parallelization
-	int writeBatch();
+	void writeBatch();
 	void do_writeBatch(const size_t from, const size_t to); // for parallelization
-	int mergeBatches();
+	void mergeBatches();
 	void do_mergeBatches(const size_t from, const size_t to);
 	// is this too generic to go here?
 	void range_index(vector<uint32_t> &vec, vector<uint32_t> &values, vector<bvec32*> &index);
@@ -82,6 +84,35 @@ inline word_t kmerizer::twobit(const word_t val) const {
 		0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 	};
 	return (word_t)table[val];
+}
+
+inline void kmerizer::next_kmer(word_t* kmer, const char nucl) {
+	// shift first kmer by 2 bits
+	kmer[0] <<= 2;
+	for(size_t w=1;w<nwords-1;w++) { // middle (full length) words
+		kmer[w-1] |= kmer[w] >> 62; // move the top two bits
+		kmer[w] <<= 2; // make room for the next word
+	}
+	// last word (if not the first)
+	if(nwords>1) {
+		kmer[nwords-2] |= kmer[nwords-1] >> shiftlastby;
+		kmer[nwords-1] <<= 2;
+	}
+	kmer[nwords-1] |= twobit(nucl);
+	kmer[nwords-1] &= kmask;
+}
+
+inline void kmerizer::unpack(word_t* kmer, char* seq) {
+	static const char table[4] = {65, 67, 71, 84};
+	for(size_t i=0;i<k;i++) {
+		// which word, which nucl
+		size_t w = i>>5;
+		if (w == nwords-1) // not a full length word
+			seq[i] = table[(kmer[w] >> (2*(k%32 - i%32) - 2)) & 3];
+		else
+			seq[i] = table[(kmer[w] >> (2*(i%32) - 2)) & 3];
+	}
+	seq[k] = '\0';
 }
 
 inline word_t kmerizer::revcomp(const word_t val) const {

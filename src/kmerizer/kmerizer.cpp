@@ -12,14 +12,9 @@ kmerizer::kmerizer(const size_t _k, const size_t _threads, char* _outdir, const 
 	k = _k;
 	kmask = 0xFFFFFFFFFFFFFFFF;
 	shiftlastby = 62;
-	if (k<32) {
-		kmask = (1ULL << (k*2)) - 1;
-		rshift = 64 - k*2;
-	}
-	if (k>32 & k%32 > 0) {
+	if (k%32 > 0) {
 		kmask = (1ULL << (2*(k%32))) - 1;
 		shiftlastby = 2*(k%32) - 2;
-		rshift = 64 - 2*(k%32);
 	}
 	nwords = ((k-1)>>5)+1;
 	kmer_size = nwords*sizeof(word_t);
@@ -41,17 +36,17 @@ int kmerizer::allocate(const size_t maximem) {
 	return 0;
 }
 
-int kmerizer::addSequence(const char* seq, const int length) {
-	if (length < k) return 1;
+void kmerizer::addSequence(const char* seq, const int length) {
+	if (length < k) return;
 	word_t packed [nwords];
 	word_t rcpack [nwords];
 	memset(packed,0,kmer_size);
-	packed[0] = twobit(seq[0]);
-	for(size_t i=1;i<k;i++) {
-		size_t word = i>>5;
-		packed[word] <<= 2;
-		packed[word] |= twobit(seq[i]);
-	}
+	for(size_t i=0;i<k;i++)
+		next_kmer(packed,seq[i]);
+//	fprintf(stderr,"orig_seq   : %s\n",seq);
+	// char unpacked [k+1];
+	// unpack(packed,unpacked);
+	// fprintf(stderr,"unpacked[0]: %s\n",unpacked);
 	word_t *kmer = packed;
 	size_t bin;
 	if (mode == CANONICAL) {
@@ -60,7 +55,7 @@ int kmerizer::addSequence(const char* seq, const int length) {
 	if (mode == BOTH) {
 		kmer = canonicalize(packed,rcpack);
 		bin = hashkmer(packed,0);
-		memcpy(kmer_buf[bin] + nwords*bin_tally[bin], kmer, kmer_size);
+		memcpy(kmer_buf[bin] + nwords*bin_tally[bin], packed, kmer_size);
 		bin_tally[bin]++;
 		if (bin_tally[bin] == max_kmers_per_bin) serialize();
 		kmer = rcpack;
@@ -71,24 +66,14 @@ int kmerizer::addSequence(const char* seq, const int length) {
 	if (bin_tally[bin] == max_kmers_per_bin) serialize();
 	// pack the rest of the sequence
 	for(size_t i=k; i<(size_t)length;i++) {
-		packed[0] <<= 2;
-		if (k<32) packed[0] &= kmask;
-		for(size_t word=1;word<nwords-1;word++) {
-			packed[word-1] |= packed[word] >> 62;
-			packed[word] <<= 2;
-		}
-		if (nwords>1) {
-			packed[nwords-2] |= packed[nwords-1] >> shiftlastby;
-			packed[nwords-1] &= kmask;
-		}
-		packed[nwords-1] |= twobit(seq[i]);
+		next_kmer(packed, seq[i]);
 		if (mode == CANONICAL) {
 			kmer = canonicalize(packed,rcpack);
 		}
 		if (mode == BOTH) {
 			kmer = canonicalize(packed,rcpack);
 			bin = hashkmer(packed,0);
-			memcpy(kmer_buf[bin] + nwords*bin_tally[bin], kmer, kmer_size);
+			memcpy(kmer_buf[bin] + nwords*bin_tally[bin], packed, kmer_size);
 			bin_tally[bin]++;
 			if (bin_tally[bin] == max_kmers_per_bin) serialize();
 			kmer = rcpack;
@@ -98,32 +83,22 @@ int kmerizer::addSequence(const char* seq, const int length) {
 		bin_tally[bin]++;
 		if (bin_tally[bin] == max_kmers_per_bin) serialize();
 	}
-	return 0;
 }
 
-int kmerizer::save() {
+void kmerizer::save() {
 	serialize();
 	
-	if (batches>1) {
-		int rc = mergeBatches();
-		fprintf(stderr,"error merging batches\n");
-		return 1;
-	}
+	if (batches>1)
+		mergeBatches();
 }
 
-int kmerizer::histogram() {
-	if (batches>1) {
-		int rc = save();
-		fprintf(stderr,"error saving\n");
-		exit(1);
-	}
-	if (state == READING) {
-		int rc = uniqify();
-		if (rc != 0) {
-			fprintf(stderr,"error uniqifying kmers\n");
-			return 1;
-		}
-	}
+void kmerizer::histogram() {
+	if (batches>1)
+		save();
+
+	if (state == READING)
+		uniqify();
+
 	// merge the NBINS counts bvecs
 	uint32_t todo = NBINS;
 	size_t offset [NBINS];
@@ -152,24 +127,14 @@ int kmerizer::histogram() {
 		}
 		key++;
 	}
-	return 0;
 }
 
 void kmerizer::serialize() {
 	batches++;
 	// unique the batch
-	int rc = uniqify();
-	if (rc != 0) {
-		fprintf(stderr,"error uniqifying a batch of kmers\n");
-		exit(1);
-	}
-
+	uniqify();
 	// write to disk
-	rc = writeBatch();
-	if (rc != 0) {
-		fprintf(stderr,"error writing a batch of kmers to disk\n");
-		exit(1);
-	}
+	writeBatch();
 
 	// zero the data
 	memset(bin_tally,0,sizeof(uint32_t)*NBINS);
@@ -180,7 +145,7 @@ void kmerizer::serialize() {
 	state = READING;
 }
 
-int kmerizer::uniqify() {
+void kmerizer::uniqify() {
 	boost::thread_group tg;
 	for(size_t i = 0; i < NBINS; i += thread_bins) {
 		size_t j = (i + thread_bins > NBINS) ? NBINS : i + thread_bins;
@@ -188,20 +153,18 @@ int kmerizer::uniqify() {
 	}
 	tg.join_all();
 	state = QUERY;
-	return 0;
 }
 
-int kmerizer::writeBatch() {
+void kmerizer::writeBatch() {
 	boost::thread_group tg;
 	for(size_t i = 0; i < NBINS; i += thread_bins) {
 		size_t j = (i + thread_bins > NBINS) ? NBINS : i + thread_bins;
 		tg.create_thread(boost::bind(&kmerizer::do_writeBatch, this, i, j));
 	}
 	tg.join_all();
-	return 0;
 }
 
-int kmerizer::mergeBatches() {
+void kmerizer::mergeBatches() {
 	boost::thread_group tg;
 	for(size_t i=0;i<NBINS;i+=thread_bins) {
 		size_t j=(i+thread_bins>NBINS) ? NBINS : i+thread_bins;
@@ -209,7 +172,6 @@ int kmerizer::mergeBatches() {
 	}
 	tg.join_all();
 	batches=1;
-	return 0;
 }
 
 
@@ -281,16 +243,17 @@ void kmerizer::do_writeBatch(const size_t from, const size_t to) {
 		// first write the number of distinct values
 		// then write the distinct values
 		// for each distinct value, write out the bvec (size,count,rle,words.size(),words)
-		int n_distinct = kmer_freq[bin].size();
-		fwrite(&n_distinct,sizeof(int),1,fp);
+		size_t n_distinct = kmer_freq[bin].size();
+		fwrite(&n_distinct,sizeof(size_t),1,fp);
 		fwrite(kmer_freq[bin].data(),sizeof(uint32_t),n_distinct,fp);
 		for(size_t i=0;i<n_distinct;i++) {
-			uint32_t* buf;
-			size_t bytes = counts[bin][i]->dump(buf);
+			uint32_t *buf;
+			size_t bytes = counts[bin][i]->dump(&buf);
 			// how many bytes are we writing
 			fwrite(&bytes,sizeof(size_t),1,fp);
 			// write them
 			fwrite(buf,1,bytes,fp);
+			free(buf);
 		}
 		fclose(fp);
 	}
@@ -301,18 +264,20 @@ void kmerizer::read_index(const char* idxfile, vector<uint32_t> &values, vector<
 	FILE *fp;
 	fp = fopen(idxfile,"rb");
 	// fread to repopulate values and bvecs
-	int n_distinct;
-	fread(&n_distinct,sizeof(int),1,fp);
+	size_t n_distinct;
+	fread(&n_distinct,sizeof(size_t),1,fp);
 	values.resize(n_distinct);
 	fread(values.data(),sizeof(uint32_t),n_distinct,fp);
+	index.resize(n_distinct);
 	for(size_t i=0;i<n_distinct;i++) {
 		size_t bytes;
 		fread(&bytes,sizeof(size_t),1,fp);
 		size_t words = bytes/sizeof(uint32_t);
 		uint32_t buf [words];
-		fread(buf,sizeof(uint32_t),words,fp);
+		fread(buf,1,bytes,fp);
 		index[i] = new bvec32(buf);
 	}
+	fclose(fp);
 }
 
 void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
@@ -322,11 +287,11 @@ void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
 		vector<bvec32*> batch_counts [batches];
 		vector<uint32_t> batch_values [batches];
 		FILE *kmer_fp [batches];
-		for(size_t i=1;i<=batches;i++) {
+		for(size_t i=0;i<batches;i++) {
 			char fname [100];
-			sprintf(fname,"%s/%zi-mers.%zi.%zi",outdir,k,bin,i);
-			kmer_fp[i-1] = fopen(fname, "rb");
-			sprintf(fname,"%s/%zi-mers.%zi.%zi.idx",outdir,k,bin,i);
+			sprintf(fname,"%s/%zi-mers.%zi.%zi",outdir,k,bin,i+1);
+			kmer_fp[i] = fopen(fname, "rb");
+			sprintf(fname,"%s/%zi-mers.%zi.%zi.idx",outdir,k,bin,i+1);
 			read_index(fname,batch_values[i],batch_counts[i]);
 		}
 		// open an output file for the merged distinct kmers
@@ -358,6 +323,9 @@ void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
 		// replace min
 		// iterate until there's nothing left to do
 		while(todo>0) {
+			char distinct_seq [k];
+			unpack(distinct,distinct_seq);
+//			fprintf(stderr,"mindex: %zi distinct: %s\n",mindex,distinct_seq);
 			size_t rc = fread(kmers + mindex*nwords,kmer_size,1,kmer_fp[mindex]);
 			if (rc != 1) {
 				todo--;
@@ -398,13 +366,18 @@ void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
 		for(size_t i=0;i<n_distinct;i++) {
 			// I want this DIY serialization/deserialization in bvec
 			uint32_t *buf;
-			size_t bytes = counts[bin][i]->dump(buf);
+			size_t bytes = counts[bin][i]->dump(&buf);
 			fwrite(&bytes,sizeof(size_t),1,ofp);
 			fwrite(counts[bin][i]->get_words().data(),1,counts[bin][i]->bytes(),ofp);
 		}
 		fclose(ofp);
 		// delete input files
-		
+		for(size_t i=0;i<batches;i++) {
+			sprintf(fname,"%s/%zi-mers.%zi.%zi",outdir,k,bin,i+1);
+			if (remove(fname) != 0) perror("error deleting file");
+			sprintf(fname,"%s/%zi-mers.%zi.%zi.idx",outdir,k,bin,i+1);
+			if (remove(fname) != 0) perror("error deleting file");
+		}
 	}
 }
 

@@ -1,0 +1,12 @@
+#!/bin/bash
+
+echo 1..1
+
+histo=../src/programs/histo
+
+usage=$($histo | sed 's/[^A-Za-z].*$//')
+if [ "$usage" = "Usage" ]; then
+    echo "ok 1 - histo prints usage with no args."
+else
+    echo "not ok 1 - histo doesn't print usage."
+fi

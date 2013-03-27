@@ -54,7 +54,11 @@ subdir = .
 DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
 	$(top_srcdir)/configure $(am__configure_deps) \
 	$(srcdir)/config.h.in $(dist_doc_DATA) COPYING INSTALL ar-lib \
-	config.guess config.sub depcomp install-sh missing ltmain.sh
+	config.guess config.sub depcomp install-sh missing ltmain.sh \
+	$(top_srcdir)/test/ar-lib $(top_srcdir)/test/config.guess \
+	$(top_srcdir)/test/config.sub $(top_srcdir)/test/install-sh \
+	$(top_srcdir)/test/ltmain.sh $(top_srcdir)/test/missing \
+	$(top_srcdir)/test/tap-driver.sh
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/libtool.m4 \
 	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \

@@ -5,7 +5,7 @@ int main(int argc, char *argv[])
 {
 	// parse args
 	if (argc != 4) {
-		fprintf(stderr, "Usage: %s <k> <threads> <input dir>\n", argv[0]);
+		fprintf(stdout, "Usage: %s <k> <threads> <input dir>\n", argv[0]);
 		return 1;
 	}
 	size_t k = atoi(argv[1]);

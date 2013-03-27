@@ -31,14 +31,15 @@ class kmerizer {
 
 	word_t* kmer_buf[NBINS]; // raw unsorted padded kmers, or sort|uniq'ed kmers
 	uint32_t bin_tally[NBINS]; // number of kmers in each bin (or number of distinct kmers)
-	vector<uint32_t> kmer_freq[NBINS]; // sorted distinct kmer frequencies
-	vector<bvec32*> counts[NBINS]; // bitmap index of frequency counts
+	vector<uint32_t> kmer_freq [NBINS]; // sorted distinct kmer frequencies
+	vector<bvec32*> counts [NBINS]; // bitmap index of frequency counts
 
 public:
 	kmerizer(const size_t _k, const size_t _threads, char* _outdir, const char _mode);
 	int allocate(const size_t maximem); // allocates memory for each kmer_buf
 	void addSequence(const char* seq,const int length); // extract (canonicalized) kmers from the sequence
 	void save(); // writes distinct kmers and rle counts to disk (merging multiple batches)
+	void load(); // reads kmer indexes into memory
 	void histogram(); // output the kmer count frequency distribution
 	~kmerizer() {};
 
@@ -56,6 +57,7 @@ private:
 	void do_writeBatch(const size_t from, const size_t to); // for parallelization
 	void mergeBatches();
 	void do_mergeBatches(const size_t from, const size_t to);
+	void do_loadIndex(const size_t from, const size_t to);
 	// is this too generic to go here?
 	void range_index(vector<uint32_t> &vec, vector<uint32_t> &values, vector<bvec32*> &index);
 	void read_index(const char* idxfile,vector<uint32_t> &values, vector<bvec32*> &index);

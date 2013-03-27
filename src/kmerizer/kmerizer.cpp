@@ -90,6 +90,29 @@ void kmerizer::save() {
 	
 	if (batches>1)
 		mergeBatches();
+	else
+		for(size_t bin=0;bin<NBINS;bin++) {
+			char ofname [100];
+			char nfname [100];
+			sprintf(ofname,"%s/%zi-mers.%zi.1",outdir,k,bin);
+			sprintf(nfname,"%s/%zi-mers.%zi",outdir,k,bin);
+			if (rename(ofname,nfname) != 0)
+				perror("error renaming file");
+			sprintf(ofname,"%s/%zi-mers.%zi.1.idx",outdir,k,bin);
+			sprintf(nfname,"%s/%zi-mers.%zi.idx",outdir,k,bin);
+			if (rename(ofname,nfname) != 0)
+				perror("error renaming file");
+		}
+}
+
+void kmerizer::load() {
+	boost::thread_group tg;
+	for(size_t i = 0; i < NBINS; i += thread_bins) {
+		size_t j = (i + thread_bins > NBINS) ? NBINS : i + thread_bins;
+		tg.create_thread(boost::bind(&kmerizer::do_loadIndex, this, i, j));
+	}
+	tg.join_all();
+	state = QUERY;
 }
 
 void kmerizer::histogram() {
@@ -278,6 +301,14 @@ void kmerizer::read_index(const char* idxfile, vector<uint32_t> &values, vector<
 		index[i] = new bvec32(buf);
 	}
 	fclose(fp);
+}
+
+void kmerizer::do_loadIndex(const size_t from, const size_t to) {
+	for(size_t bin=from; bin<to;bin++) {
+		char fname [100];
+		sprintf(fname,"%s/%zi-mers.%zi.idx",outdir,k,bin);
+		read_index(fname,kmer_freq[bin],counts[bin]);
+	}
 }
 
 void kmerizer::do_mergeBatches(const size_t from, const size_t to) {

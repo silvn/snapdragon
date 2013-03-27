@@ -1,5 +1,6 @@
-bin_PROGRAMS = histo
+bin_PROGRAMS = histo kcount
 histo_SOURCES = histo.cpp
+kcount_SOURCES = kcount.cpp
 AM_CXXFLAGS = -I../kmerizer -I../countkmers
 if MACOS
    suff = -mt

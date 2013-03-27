@@ -50,7 +50,7 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-bin_PROGRAMS = histo$(EXEEXT)
+bin_PROGRAMS = histo$(EXEEXT) kcount$(EXEEXT)
 subdir = src/programs
 DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
 	$(top_srcdir)/depcomp
@@ -74,6 +74,9 @@ AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
 am__v_lt_1 = 
+am_kcount_OBJECTS = kcount.$(OBJEXT)
+kcount_OBJECTS = $(am_kcount_OBJECTS)
+kcount_LDADD = $(LDADD)
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -108,8 +111,8 @@ AM_V_CXXLD = $(am__v_CXXLD_@AM_V@)
 am__v_CXXLD_ = $(am__v_CXXLD_@AM_DEFAULT_V@)
 am__v_CXXLD_0 = @echo "  CXXLD   " $@;
 am__v_CXXLD_1 = 
-SOURCES = $(histo_SOURCES)
-DIST_SOURCES = $(histo_SOURCES)
+SOURCES = $(histo_SOURCES) $(kcount_SOURCES)
+DIST_SOURCES = $(histo_SOURCES) $(kcount_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -257,6 +260,7 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 histo_SOURCES = histo.cpp
+kcount_SOURCES = kcount.cpp
 AM_CXXFLAGS = -I../kmerizer -I../countkmers
 @MACOS_TRUE@suff = -mt
 AM_LDFLAGS = -L../kmerizer -L../countkmers \
@@ -349,6 +353,9 @@ clean-binPROGRAMS:
 histo$(EXEEXT): $(histo_OBJECTS) $(histo_DEPENDENCIES) $(EXTRA_histo_DEPENDENCIES) 
 	@rm -f histo$(EXEEXT)
 	$(AM_V_CXXLD)$(CXXLINK) $(histo_OBJECTS) $(histo_LDADD) $(LIBS)
+kcount$(EXEEXT): $(kcount_OBJECTS) $(kcount_DEPENDENCIES) $(EXTRA_kcount_DEPENDENCIES) 
+	@rm -f kcount$(EXEEXT)
+	$(AM_V_CXXLD)$(CXXLINK) $(kcount_OBJECTS) $(kcount_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -357,6 +364,7 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/histo.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/kcount.Po@am__quote@
 
 .cpp.o:
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXXCOMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<

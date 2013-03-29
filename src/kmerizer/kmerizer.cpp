@@ -1,6 +1,7 @@
 #include "kmerizer.h"
 #include <boost/thread.hpp>
 #include <boost/bind.hpp>
+#include <bitset>
 #include <algorithm> // stl sort
 #include <cstdlib> // qsort()
 #include <cstdio>  // sprintf()
@@ -427,11 +428,29 @@ inline size_t kmerizer::find_min(const word_t* kmers, const uint32_t* kcounts) {
 // indexing the positions in the vec holding a value <= v
 void kmerizer::range_index(vector<uint32_t> &vec, vector<uint32_t> &values, vector<bvec32*> &index) {
 	// find the distinct values in vec
-	values = vec;
-	sort(values.begin(),values.end());
+	values.clear();
+	// use a bitset to mark the distinct values (from 0-255)
+	// and another vector for overflow (which we'll sort/uniq later)
+	bitset<256> mybits;
+	vector<uint32_t> overflow;
 	vector<uint32_t>::iterator it;
-	it = unique(values.begin(),values.end());
-	values.resize(it - values.begin());
+	for(it = vec.begin(); it < vec.end(); ++it) {
+		if (*it >= 256) 
+			overflow.push_back(*it);
+		else
+			mybits[*it]=1;
+	}
+	// populate values vector with set bits in mybits
+	for(uint32_t i=0;i<256;i++)
+		if (mybits.test(i))
+			values.push_back(i);
+	
+	if (overflow.size() > 0) {
+		sort(overflow.begin(),overflow.end());
+		it = unique(overflow.begin(),overflow.end());
+		values.insert(values.end(),overflow.begin(),it);
+	}
+
 	// setup a vector for each range
 	vector<uint32_t> vrange [values.size()];
 	// iterate over the vec and push the offset onto each range

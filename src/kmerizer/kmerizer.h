@@ -18,7 +18,7 @@ class kmerizer {
 	size_t k;
 	word_t kmask;
 	size_t shiftlastby;
-	size_t rshift;
+	size_t rshift, lshift;
 	size_t nwords;
 	size_t kmer_size; // in bytes
 	size_t threads;
@@ -41,15 +41,17 @@ public:
 	void save(); // writes distinct kmers and rle counts to disk (merging multiple batches)
 	void load(); // reads kmer indexes into memory
 	void histogram(); // output the kmer count frequency distribution
+	uint32_t find(char* query);
 	~kmerizer() {};
 
 private:
 	inline word_t twobit(const word_t val) const; // pack nucleotides into 2 bits
-	inline void next_kmer(word_t* kmer, const char nucl); // shift kmer to make room for nucl
+	void next_kmer(word_t* kmer, const char nucl); // shift kmer to make room for nucl
 	inline void unpack(word_t* kmer, char *seq);
 	inline word_t revcomp(const word_t val) const; // reverse complement
 	inline uint8_t hashkmer(const word_t *kmer, const uint8_t seed) const; // to select a bin
-	inline word_t* canonicalize(word_t *packed, word_t *rcpack) const;
+	word_t* canonicalize(word_t *packed, word_t *rcpack) const;
+	uint32_t find(word_t *kmer, size_t bin);
 	void serialize(); // kmer_buf is full. uniqify and write batch to disk
 	void uniqify(); // qsort each kmer_buf, update bin_tally, and fill counts
 	void do_unique(const size_t from, const size_t to); // for parallelization
@@ -63,10 +65,12 @@ private:
 	void read_index(const char* idxfile,vector<uint32_t> &values, vector<bvec32*> &index);
 	size_t find_min(const word_t* kmers, const uint32_t* kcounts);
 	uint32_t pos2value(size_t pos, vector<uint32_t> &values, vector<bvec32*> &index);
+	void print_kmer(word_t *kmer);
+	void bit_slice(word_t *kmers, const size_t n, bvec32 **kmer_slices, size_t nbits);
 };
 
 inline word_t kmerizer::twobit(const word_t val) const {
-	static const uint8_t table[256] =
+	static const word_t table[256] =
 	{
 		0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 		0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -85,23 +89,7 @@ inline word_t kmerizer::twobit(const word_t val) const {
 		0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 		0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 	};
-	return (word_t)table[val];
-}
-
-inline void kmerizer::next_kmer(word_t* kmer, const char nucl) {
-	// shift first kmer by 2 bits
-	kmer[0] <<= 2;
-	for(size_t w=1;w<nwords-1;w++) { // middle (full length) words
-		kmer[w-1] |= kmer[w] >> 62; // move the top two bits
-		kmer[w] <<= 2; // make room for the next word
-	}
-	// last word (if not the first)
-	if(nwords>1) {
-		kmer[nwords-2] |= kmer[nwords-1] >> shiftlastby;
-		kmer[nwords-1] <<= 2;
-	}
-	kmer[nwords-1] |= twobit(nucl);
-	kmer[nwords-1] &= kmask;
+	return table[val];
 }
 
 inline void kmerizer::unpack(word_t* kmer, char* seq) {
@@ -110,44 +98,44 @@ inline void kmerizer::unpack(word_t* kmer, char* seq) {
 		// which word, which nucl
 		size_t w = i>>5;
 		if (w == nwords-1) // not a full length word
-			seq[i] = table[(kmer[w] >> (2*(k%32 - i%32) - 2)) & 3];
+			seq[i] = table[(kmer[w] >> 2*(k-i)-2) & 3];
 		else
-			seq[i] = table[(kmer[w] >> (2*(i%32) - 2)) & 3];
+			seq[i] = table[(kmer[w] >> (62 - 2*(i%32))) & 3];
 	}
 	seq[k] = '\0';
 }
 
 inline word_t kmerizer::revcomp(const word_t val) const {
 	// bitwise reverse complement of values from 0 to 255
-	static const uint8_t table[256] =
+	static const word_t table[256] =
 	{
-		255,127,191,63,223,95,159,31,239,111,175,47,207,79,143,15,
-		247,119,183,55,215,87,151,23,231,103,167,39,199,71,135,7,
-		251,123,187,59,219,91,155,27,235,107,171,43,203,75,139,11,
-		243,115,179,51,211,83,147,19,227,99,163,35,195,67,131,3,
-		253,125,189,61,221,93,157,29,237,109,173,45,205,77,141,13,
-		245,117,181,53,213,85,149,21,229,101,165,37,197,69,133,5,
-		249,121,185,57,217,89,153,25,233,105,169,41,201,73,137,9,
-		241,113,177,49,209,81,145,17,225,97,161,33,193,65,129,1,
-		254,126,190,62,222,94,158,30,238,110,174,46,206,78,142,14,
-		246,118,182,54,214,86,150,22,230,102,166,38,198,70,134,6,
-		250,122,186,58,218,90,154,26,234,106,170,42,202,74,138,10,
-		242,114,178,50,210,82,146,18,226,98,162,34,194,66,130,2,
-		252,124,188,60,220,92,156,28,236,108,172,44,204,76,140,12,
-		244,116,180,52,212,84,148,20,228,100,164,36,196,68,132,4,
-		248,120,184,56,216,88,152,24,232,104,168,40,200,72,136,8,
-		240,112,176,48,208,80,144,16,224,96,160,32,192,64,128,0
+		255,191,127,63,239,175,111,47,223,159,95,31,207,143,79,15,
+		251,187,123,59,235,171,107,43,219,155,91,27,203,139,75,11,
+		247,183,119,55,231,167,103,39,215,151,87,23,199,135,71,7,
+		243,179,115,51,227,163,99,35,211,147,83,19,195,131,67,3,
+		254,190,126,62,238,174,110,46,222,158,94,30,206,142,78,14,
+		250,186,122,58,234,170,106,42,218,154,90,26,202,138,74,10,
+		246,182,118,54,230,166,102,38,214,150,86,22,198,134,70,6,
+		242,178,114,50,226,162,98,34,210,146,82,18,194,130,66,2,
+		253,189,125,61,237,173,109,45,221,157,93,29,205,141,77,13,
+		249,185,121,57,233,169,105,41,217,153,89,25,201,137,73,9,
+		245,181,117,53,229,165,101,37,213,149,85,21,197,133,69,5,
+		241,177,113,49,225,161,97,33,209,145,81,17,193,129,65,1,
+		252,188,124,60,236,172,108,44,220,156,92,28,204,140,76,12,
+		248,184,120,56,232,168,104,40,216,152,88,24,200,136,72,8,
+		244,180,116,52,228,164,100,36,212,148,84,20,196,132,68,4,
+		240,176,112,48,224,160,96,32,208,144,80,16,192,128,64,0,
 	};
 	
 	return
-		((word_t)table[val&0xFFUL]<<56) |
-		((word_t)table[(val>>8)&0xFFUL]<<48) |
-		((word_t)table[(val>>16)&0xFFUL]<<40) |
-		((word_t)table[(val>>24)&0xFFUL]<<32) |
-		((word_t)table[(val>>32)&0xFFUL]<<24) |
-		((word_t)table[(val>>40)&0xFFUL]<<16) |
-		((word_t)table[(val>>48)&0xFFUL]<<8) |
-		((word_t)table[(val>>56)&0xFFUL]);
+		(table[val&0xFFUL]<<56) |
+		(table[(val>>8)&0xFFUL]<<48) |
+		(table[(val>>16)&0xFFUL]<<40) |
+		(table[(val>>24)&0xFFUL]<<32) |
+		(table[(val>>32)&0xFFUL]<<24) |
+		(table[(val>>40)&0xFFUL]<<16) |
+		(table[(val>>48)&0xFFUL]<<8) |
+		(table[(val>>56)&0xFFUL]);
 }
 
 inline uint8_t kmerizer::hashkmer(const word_t *kmer, const uint8_t seed) const {
@@ -184,23 +172,5 @@ inline uint8_t kmerizer::hashkmer(const word_t *kmer, const uint8_t seed) const 
 	return h;
 }
 
-inline word_t* kmerizer::canonicalize(word_t *packed, word_t *rcpack) const {
-	int cmp=0;
-	for(size_t i=0;i<nwords;i++) {
-		rcpack[i] = revcomp(packed[nwords-1-i]);
-		if (rshift && i==nwords-1)
-			rcpack[i] >>= rshift;
-		if (cmp == 0) {
-			if (packed[i] < rcpack[i])
-				cmp = -1;
-			else if (packed[i] > rcpack[i])
-				cmp = 1;
-		}
-	}
-	if(cmp > 0)
-		return rcpack;
-	else
-		return packed;
-}
 
 #endif

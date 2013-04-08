@@ -13,5 +13,8 @@ After all the sequences have been read in, another round of sort/uniq/serializat
 
 Generating a histogram of kmer frequencies is done by reading the counts files from each bin. You generate a histogram for each bin and then merge them.
 
-
 But how do you store the counts? bitmap index! A set of range encoded WAH bitvectors will let you quickly fetch kmers by frequency and generate histograms.
+
+The largest component of the run time is the IO required to write distinct k-mers to disk in the serialization and merging steps. Therefore, reducing the size of the distinct k-mers files will have a large impact on the performance of the software.
+
+Once we have a batch of distinct sorted kmers ready to write to disk, we create a bit-sliced bitmap index of ~2*k WAH compressed bitvectors. In practice, this reduces the size of the output files by 75%.

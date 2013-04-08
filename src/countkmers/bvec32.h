@@ -13,6 +13,7 @@
 #define ONEFILL1 0xC0000001UL
 #define ONEFULL  0xFFFFFFFFUL
 #define ZEROFULL 0xAFFFFFFFUL
+#define ZEROFILL1 0x80000001UL
 
 #include <iostream>
 #include <fstream>
@@ -66,6 +67,10 @@ public:
 
     // is x in the set?
     bool find(uint32_t x);
+	// insert x into an existing bvec (at the end is faster)
+	void setBit(uint32_t x);
+	// for constructing a rle bvec one bit at a time
+	void appendFill(bool bit, uint32_t cnt);
 
     // basic metrics
     inline uint32_t cnt();

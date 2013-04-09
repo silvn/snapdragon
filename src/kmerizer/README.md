@@ -7,7 +7,7 @@ kmers are packed (2 bits per nucleotide) into 64 bit words. But before you do an
 
 kmers are binned uniformly into 256 bins using a hash function with a random lookup table to distribute load evenly.
 
-When the chunk of memory gets full, we take a break from reading input sequences, and sort and uniqify the kmers in each bin. qsort lets you do this by specifying a comparison function. We are using memcmp() because OS developers are probably better programmers. Once sorted, write the distinct kmers and their counts to output files. Then you reuse the huge chunk of memory and resume parsing kmers from the input sequences.
+When the chunk of memory gets full, we take a break from reading input sequences, and sort and uniqify the kmers in each bin. qsort lets you do this by specifying a comparison function. Once sorted, write the distinct kmers and their counts to output files. Then you reuse the huge chunk of memory and resume parsing kmers from the input sequences.
 
 After all the sequences have been read in, another round of sort/uniq/serialization happens for the last batch of kmers. Then, if necessary, batches are merged.
 
@@ -17,4 +17,4 @@ But how do you store the counts? bitmap index! A set of range encoded WAH bitvec
 
 The largest component of the run time is the IO required to write distinct k-mers to disk in the serialization and merging steps. Therefore, reducing the size of the distinct k-mers files will have a large impact on the performance of the software.
 
-Once we have a batch of distinct sorted kmers ready to write to disk, we create a bit-sliced bitmap index of ~2*k WAH compressed bitvectors. In practice, this reduces the size of the output files by 75%.
+Once again, compressed bitvectors are our savior. When we have a batch of distinct sorted kmers ready to write to disk, we create a bit-sliced bitmap index of ~2*k WAH compressed bitvectors. In practice, this reduces the size of the output files by 75%.

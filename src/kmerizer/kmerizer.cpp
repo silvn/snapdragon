@@ -7,6 +7,8 @@
 #include <cstdio>  // sprintf()
 #include <cstring> // memcpy()
 #include <sys/stat.h> // mkdir()
+#include <ctime> // clock_t clock() CLOCKS_PER_SEC
+
 
 // constructor
 kmerizer::kmerizer(const size_t _k, const size_t _threads, char* _outdir, const char _mode) {
@@ -32,13 +34,16 @@ kmerizer::kmerizer(const size_t _k, const size_t _threads, char* _outdir, const 
 }
 
 int kmerizer::allocate(const size_t maximem) {
-	fprintf(stderr,"kmerizer::allocate(%zi)\n",maximem);
+	fprintf(stderr,"kmerizer::allocate(%zi)",maximem);
+	clock_t start = clock();
 	memset(bin_tally,0,sizeof(uint32_t)*NBINS);
 	max_kmers_per_bin = maximem/kmer_size/NBINS;
 	for(size_t i=0; i<NBINS; i++) {
 		kmer_buf[i] = (word_t*) calloc(max_kmers_per_bin, kmer_size);
 		if (kmer_buf[i]==NULL) return 1;
 	}
+	fprintf(stderr," took %f seconds\n",((float)(clock()-start))/CLOCKS_PER_SEC);
+	
 	return 0;
 }
 
@@ -151,7 +156,8 @@ void kmerizer::save() {
 }
 
 void kmerizer::load() {
-	fprintf(stderr,"kmerizer::load()\n");
+	fprintf(stderr,"kmerizer::load()");
+	clock_t start = clock();
 	boost::thread_group tg;
 	for(size_t i = 0; i < NBINS; i += thread_bins) {
 		size_t j = (i + thread_bins > NBINS) ? NBINS : i + thread_bins;
@@ -159,6 +165,7 @@ void kmerizer::load() {
 	}
 	tg.join_all();
 	state = QUERY;
+	fprintf(stderr," took %f seconds\n",((float)(clock()-start))/CLOCKS_PER_SEC);
 }
 
 // given one kmer, pack it, canonicalize it, hash it, find it
@@ -192,7 +199,6 @@ uint32_t kmerizer::find(word_t *kmer, size_t bin) {
 }
 
 void kmerizer::histogram() {
-	fprintf(stderr,"kmerizer::histogram()\n");
 	if (batches>1)
 		save();
 
@@ -230,7 +236,6 @@ void kmerizer::histogram() {
 }
 
 void kmerizer::serialize() {
-	fprintf(stderr,"kmerizer::serialize()\n");
 	batches++;
 	// unique the batch
 	uniqify();
@@ -247,7 +252,8 @@ void kmerizer::serialize() {
 }
 
 void kmerizer::uniqify() {
-	fprintf(stderr,"kmerizer::uniqify()\n");
+	fprintf(stderr,"kmerizer::uniqify()");
+	clock_t start = clock();
 	boost::thread_group tg;
 	for(size_t i = 0; i < NBINS; i += thread_bins) {
 		size_t j = (i + thread_bins > NBINS) ? NBINS : i + thread_bins;
@@ -255,20 +261,24 @@ void kmerizer::uniqify() {
 	}
 	tg.join_all();
 	state = QUERY;
+	fprintf(stderr," took %f seconds\n",((float)(clock()-start))/CLOCKS_PER_SEC);
 }
 
 void kmerizer::writeBatch() {
-	fprintf(stderr,"kmerizer::writeBatch()\n");
+	fprintf(stderr,"kmerizer::writeBatch()");
+	clock_t start = clock();
 	boost::thread_group tg;
 	for(size_t i = 0; i < NBINS; i += thread_bins) {
 		size_t j = (i + thread_bins > NBINS) ? NBINS : i + thread_bins;
 		tg.create_thread(boost::bind(&kmerizer::do_writeBatch, this, i, j));
 	}
 	tg.join_all();
+	fprintf(stderr," took %f seconds\n",((float)(clock()-start))/CLOCKS_PER_SEC);
 }
 
 void kmerizer::mergeBatches() {
-	fprintf(stderr,"kmerizer::mergeBatches()\n");
+	fprintf(stderr,"kmerizer::mergeBatches()");
+	clock_t start=clock();
 	boost::thread_group tg;
 	for(size_t i=0;i<NBINS;i+=thread_bins) {
 		size_t j=(i+thread_bins>NBINS) ? NBINS : i+thread_bins;
@@ -276,6 +286,7 @@ void kmerizer::mergeBatches() {
 	}
 	tg.join_all();
 	batches=1;
+	fprintf(stderr," took %f seconds\n",((float)(clock()-start))/CLOCKS_PER_SEC);
 }
 
 
@@ -405,7 +416,7 @@ void kmerizer::bit_slice(word_t *kmers, const size_t n, bvec32 **kmer_slices, si
 	size_t bpw = 8*sizeof(word_t); // bits per word
 	for(size_t b=0;b<nbits;b++) {
 		bword[b] = b/bpw;
-		bpos[b] = 1ULL << (bpw - b - 1);
+		bpos[b] = 1ULL << (bpw - b%bpw - 1);
 		brun[b] = 0;
 		bbit[b] = false;
 	}
@@ -566,7 +577,7 @@ void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
 		size_t bpw = 8*sizeof(word_t); // bits per word
 		for(size_t b=0;b<nbits;b++) {
 			bword[b] = b/bpw;
-			bpos[b] = 1ULL << (bpw - b - 1);
+			bpos[b] = 1ULL << (bpw - b%bpw - 1);
 			brun[b] = 0;
 			merged_slices[b] = new bvec32();
 		}
@@ -614,14 +625,14 @@ void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
 							brun[b]++;
 						else {
 							if(brun[b]>0)
-								merged_slices[b]->appendFill(1,brun[b]);
+								merged_slices[b]->appendFill(true,brun[b]);
 							brun[b]=1;
 						}
 					}
 					else { // bth bit is not set in prev
 						if (kmers[mindex*nwords+bword[b]] & bpos[b]) { // bth bit is set in next
 							if(brun[b]>0)
-								merged_slices[b]->appendFill(0,brun[b]);
+								merged_slices[b]->appendFill(false,brun[b]);
 							brun[b]=1;
 						}
 						else
@@ -635,7 +646,7 @@ void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
 		// finish the bitvectors
 		for(size_t b=0; b<nbits; b++)
 			if(brun[b]>0)
-				merged_slices[b]->appendFill(distinct[bword[b]] & bpos[b],brun[b]);
+				merged_slices[b]->appendFill((distinct[bword[b]] & bpos[b] != 0),brun[b]);
 		
 		range_index(tally,kmer_freq[bin],counts[bin]);
 
@@ -693,7 +704,7 @@ inline size_t kmerizer::find_min(const word_t* kmers, const uint32_t* kcounts) {
 	size_t mindex = 0;
 	while (kcounts[mindex] == 0) mindex++;
 	for(size_t i=mindex+1;i<batches;i++)
-		if (kcounts[mindex] != 0)
+		if (kcounts[i] != 0)
 			if (kmercmp(kmers + i*nwords,kmers + mindex*nwords,nwords) < 0)
 				mindex = i;
 
@@ -744,9 +755,11 @@ void kmerizer::range_index(vector<uint32_t> &vec, vector<uint32_t> &values, vect
 size_t kmerizer::pos2kmer(size_t pos, word_t *kmer, vector<bvec32*> &index) {
 	if (pos >= index[0]->get_size()) return 1;
 	size_t bpw = 8*sizeof(word_t);
+	// need to zero the kmer first
+	memset(kmer,0,kmer_size);
 	for(size_t b=0;b<8*kmer_size;b++)
 		if (index[b]->find(pos))
-			kmer[b/bpw] |= 1ULL << (bpw - b - 1);
+			kmer[b/bpw] |= 1ULL << (bpw - b%bpw - 1);
 	return 0;
 }
 

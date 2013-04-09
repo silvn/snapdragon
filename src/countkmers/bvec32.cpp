@@ -28,6 +28,8 @@ bvec32::bvec32(uint32_t *buf) {
 	}
 	words.resize(nwords);
 	memcpy(words.data(),buf+3,nwords*4);
+	frontier.active_word = words.begin();
+	frontier.bit_pos=0;
 }
 
 vector<uint32_t>& bvec32::get_words() {
@@ -78,6 +80,8 @@ void bvec32::print() {
 
 void bvec32::construct_rle(vector<uint32_t>& vals) {
 	rle = true;
+	frontier.active_word = words.begin();
+	frontier.bit_pos=0;
 	if (vals.size() == 0) {
 		size=0;
 		count=0;
@@ -581,25 +585,33 @@ bool bvec32::find(uint32_t x) {
 }
 
 bool bvec32::rle_find(uint32_t x) {
-	uint32_t pos=0;
-	for(vector<uint32_t>::iterator it=words.begin();it!=words.end();++it) {
+	// This function may be called on a sequence of increasing values
+	// Use a checkpoint to determine if we can start at the active word
+	// or if we need to go back to words.begin().
+	if (frontier.bit_pos > x) {
+		frontier.active_word = words.begin();
+		frontier.bit_pos = 0;
+	}
+	while(frontier.active_word != words.end()) {
 		// what type of word is it?
-		if (*it & BIT1) { // fill word
-			pos += (*it & FILLMASK) * LITERAL_SIZE;
-			if (pos >= x) {
-				if (*it & BIT2) // 1-fill
+		if (*(frontier.active_word) & BIT1) { // fill word
+			uint32_t span = (*(frontier.active_word) & FILLMASK) * LITERAL_SIZE;
+			if (frontier.bit_pos + span >= x) {
+				if (*(frontier.active_word) & BIT2) // 1-fill
 					return true;
 				return false;
 			}
+			frontier.bit_pos += span;
 		}
 		else { // literal word
-			pos += LITERAL_SIZE;
-			if (pos >= x) {
-				if ((1UL << (pos-x)) & *it)
+			if (frontier.bit_pos + LITERAL_SIZE >= x) {
+				if ((1UL << (frontier.bit_pos + LITERAL_SIZE - x)) & *(frontier.active_word))
 					return true;
 				return false;
 			}
+			frontier.bit_pos += LITERAL_SIZE;
 		}
+		frontier.active_word++;
 	}
 	return false;
 }

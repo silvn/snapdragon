@@ -74,6 +74,7 @@ public:
 
     // basic metrics
     inline uint32_t cnt();
+	uint32_t get_size() { return size; }
     inline uint32_t bytes() { return 4*words.size(); }
 
 private:
@@ -92,6 +93,12 @@ private:
     void non_AND_non(bvec32& rhs);
 	bool rle_find(uint32_t x);
     inline uint32_t popcount(uint32_t val) const;
+	// checkpoint: active word and associated info
+	struct checkpoint {
+		vector<uint32_t>::iterator active_word;
+		uint32_t bit_pos;
+	} frontier;
+
 };
 
 inline uint32_t bvec32::popcount(uint32_t val) const {

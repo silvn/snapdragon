@@ -32,6 +32,7 @@ kmerizer::kmerizer(const size_t _k, const size_t _threads, char* _outdir, const 
 }
 
 int kmerizer::allocate(const size_t maximem) {
+	fprintf(stderr,"kmerizer::allocate(%zi)\n",maximem);
 	memset(bin_tally,0,sizeof(uint32_t)*NBINS);
 	max_kmers_per_bin = maximem/kmer_size/NBINS;
 	for(size_t i=0; i<NBINS; i++) {
@@ -150,6 +151,7 @@ void kmerizer::save() {
 }
 
 void kmerizer::load() {
+	fprintf(stderr,"kmerizer::load()\n");
 	boost::thread_group tg;
 	for(size_t i = 0; i < NBINS; i += thread_bins) {
 		size_t j = (i + thread_bins > NBINS) ? NBINS : i + thread_bins;
@@ -190,6 +192,7 @@ uint32_t kmerizer::find(word_t *kmer, size_t bin) {
 }
 
 void kmerizer::histogram() {
+	fprintf(stderr,"kmerizer::histogram()\n");
 	if (batches>1)
 		save();
 
@@ -227,6 +230,7 @@ void kmerizer::histogram() {
 }
 
 void kmerizer::serialize() {
+	fprintf(stderr,"kmerizer::serialize()\n");
 	batches++;
 	// unique the batch
 	uniqify();
@@ -243,6 +247,7 @@ void kmerizer::serialize() {
 }
 
 void kmerizer::uniqify() {
+	fprintf(stderr,"kmerizer::uniqify()\n");
 	boost::thread_group tg;
 	for(size_t i = 0; i < NBINS; i += thread_bins) {
 		size_t j = (i + thread_bins > NBINS) ? NBINS : i + thread_bins;
@@ -253,6 +258,7 @@ void kmerizer::uniqify() {
 }
 
 void kmerizer::writeBatch() {
+	fprintf(stderr,"kmerizer::writeBatch()\n");
 	boost::thread_group tg;
 	for(size_t i = 0; i < NBINS; i += thread_bins) {
 		size_t j = (i + thread_bins > NBINS) ? NBINS : i + thread_bins;
@@ -262,7 +268,7 @@ void kmerizer::writeBatch() {
 }
 
 void kmerizer::mergeBatches() {
-	return;
+	fprintf(stderr,"kmerizer::mergeBatches()\n");
 	boost::thread_group tg;
 	for(size_t i=0;i<NBINS;i+=thread_bins) {
 		size_t j=(i+thread_bins>NBINS) ? NBINS : i+thread_bins;
@@ -413,7 +419,7 @@ void kmerizer::bit_slice(word_t *kmers, const size_t n, bvec32 **kmer_slices, si
 				else {
 					if(brun[b]>0) 
 						kmer_slices[b]->appendFill(bbit[b],brun[b]);
-					brun[b] = 0;
+					brun[b] = 1;
 					bbit[b]=true;
 				}
 			}
@@ -422,7 +428,7 @@ void kmerizer::bit_slice(word_t *kmers, const size_t n, bvec32 **kmer_slices, si
 				if (bbit[b]) {
 					if(brun[b]>0)
 						kmer_slices[b]->appendFill(bbit[b],brun[b]);
-					brun[b]=0;
+					brun[b]=1;
 					bbit[b]=false;
 				}
 				else
@@ -460,6 +466,10 @@ void kmerizer::do_writeBatch(const size_t from, const size_t to) {
 			fp = fopen(kmer_file, "wb");
 			size_t n_slices = 8*sizeof(word_t);
 			fwrite(&n_slices,sizeof(size_t),1,fp);
+			for(size_t b=0;b<n_slices;b++) {
+				uint32_t c = kmer_slices[b]->cnt();
+				fwrite(&c,sizeof(uint32_t),1,fp);
+			}
 			// fprintf(stderr,"bin_tally[%zi]: %u\n",bin,bin_tally[bin]);
 			for(size_t b=0;b<n_slices;b++) {
 				uint32_t *buf;
@@ -495,7 +505,9 @@ void kmerizer::do_writeBatch(const size_t from, const size_t to) {
 	}
 }
 
-void kmerizer::read_index(const char* idxfile, vector<uint32_t> &values, vector<bvec32*> &index) {
+// when reading counts, values is the array of kmer_frequencies
+// when reading kmers, values is the number of set bits in each bit slice
+void kmerizer::read_bitmap(const char* idxfile, vector<uint32_t> &values, vector<bvec32*> &index) {
 	// open idxfile
 	FILE *fp;
 	fp = fopen(idxfile,"rb");
@@ -520,44 +532,56 @@ void kmerizer::do_loadIndex(const size_t from, const size_t to) {
 	for(size_t bin=from; bin<to;bin++) {
 		char fname [100];
 		sprintf(fname,"%s/%zi-mers.%zi.idx",outdir,k,bin);
-		read_index(fname,kmer_freq[bin],counts[bin]);
+		read_bitmap(fname,kmer_freq[bin],counts[bin]);
 	}
 }
 
 void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
 	for(size_t bin=from; bin<to; bin++) {
-		// read the counts for each batch
-		// and open the files of sorted distinct kmers
+		// read the counts and kmers for each batch
 		vector<bvec32*> batch_counts [batches];
 		vector<uint32_t> batch_values [batches];
-		FILE *kmer_fp [batches];
+		vector<bvec32*> batch_slices [batches];
+		vector<uint32_t> batch_slice_cnts [batches];
 		for(size_t i=0;i<batches;i++) {
 			char fname [100];
 			sprintf(fname,"%s/%zi-mers.%zi.%zi",outdir,k,bin,i+1);
-			kmer_fp[i] = fopen(fname, "rb");
+			read_bitmap(fname,batch_slice_cnts[i],batch_slices[i]);
 			sprintf(fname,"%s/%zi-mers.%zi.%zi.idx",outdir,k,bin,i+1);
-			read_index(fname,batch_values[i],batch_counts[i]);
+			read_bitmap(fname,batch_values[i],batch_counts[i]);
 		}
-		// open an output file for the merged distinct kmers
-		FILE *ofp;
-		char fname [100];
-		sprintf(fname,"%s/%zi-mers.%zi",outdir,k,bin);
-		ofp = fopen(fname,"wb");
-		vector<uint32_t> tally;
-		// read the first kmer from each batch
-		word_t kmers [batches*nwords];
-		uint32_t btally [batches];
-		uint32_t todo = batches;
-		size_t offset [batches];
+
+		word_t kmers [batches*nwords]; // next kmer in each active batch
+		uint32_t btally [batches]; // frequency of next kmer in each batch
+		size_t offset [batches]; // keep track of position in each batch
 		memset(offset,0,sizeof(size_t)*batches);
+		uint32_t todo = batches; // number of batches to process
+		vector<uint32_t> tally;
+
+		const size_t nbits = 8*kmer_size;
+		bvec32* merged_slices [nbits];
+		size_t bword [nbits]; // which word does the bth bit live in?
+		word_t bpos [nbits]; // what's the position of the bth bit?
+		word_t brun [nbits]; // how many same bits have we seen in the bth bit?
+		size_t bpw = 8*sizeof(word_t); // bits per word
+		for(size_t b=0;b<nbits;b++) {
+			bword[b] = b/bpw;
+			bpos[b] = 1ULL << (bpw - b - 1);
+			brun[b] = 0;
+			merged_slices[b] = new bvec32();
+		}
+
+		// read the first kmer and counts from each batch
 		for(size_t i=0;i<batches;i++) {
-			size_t rc = fread(kmers + i*nwords, kmer_size,1,kmer_fp[i]);
-			if (rc != 1) {
+			size_t err = pos2kmer(offset[i],kmers + i*nwords, batch_slices[i]);
+			if (err != 0) {
 				todo--;
 				btally[i]=0;
 			}
-			else
+			else {
 				btally[i] = pos2value(offset[i]++,batch_values[i],batch_counts[i]);
+				brun[i]++;
+			}
 		}
 		// choose min
 		size_t mindex = find_min(kmers,btally);
@@ -567,11 +591,8 @@ void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
 		// replace min
 		// iterate until there's nothing left to do
 		while(todo>0) {
-			char distinct_seq [k];
-			unpack(distinct,distinct_seq);
-//			fprintf(stderr,"mindex: %zi distinct: %s\n",mindex,distinct_seq);
-			size_t rc = fread(kmers + mindex*nwords,kmer_size,1,kmer_fp[mindex]);
-			if (rc != 1) {
+			size_t err = pos2kmer(offset[mindex],kmers + mindex*nwords, batch_slices[mindex]);
+			if (err != 0) {
 				todo--;
 				btally[mindex]=0;
 				if (todo==0) break;
@@ -579,24 +600,67 @@ void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
 			else
 				btally[mindex] = pos2value(offset[mindex]++,batch_values[mindex],batch_counts[mindex]);
 			mindex = find_min(kmers,btally);
-			if (kmercmp(kmers + mindex*nwords,distinct,nwords)==0)
+			if (kmercmp(kmers + mindex*nwords,distinct,nwords)==0) {
+				// kmers are the same, increment brun for all bits
+				for(size_t b=0;b<nbits;b++) brun[b]++;
 				tally.back() += btally[mindex];
+			}
 			else {
-				size_t rc = fwrite(distinct,kmer_size,1,ofp);
-				if (rc != 1) {
-					fprintf(stderr,"error writing distinct kmer to output file\n");
-					exit(1);
+				// current kmer differs in at least one bit position
+				// find out which ones, and appendFill, otherwise increment brun
+				for(size_t b=0;b<nbits;b++) {
+					if (distinct[bword[b]] & bpos[b]) { // bth bit is set in prev
+						if (kmers[mindex*nwords+bword[b]] & bpos[b]) // bth bit is set in next
+							brun[b]++;
+						else {
+							if(brun[b]>0)
+								merged_slices[b]->appendFill(1,brun[b]);
+							brun[b]=1;
+						}
+					}
+					else { // bth bit is not set in prev
+						if (kmers[mindex*nwords+bword[b]] & bpos[b]) { // bth bit is set in next
+							if(brun[b]>0)
+								merged_slices[b]->appendFill(0,brun[b]);
+							brun[b]=1;
+						}
+						else
+							brun[b]++;
+					}
 				}
 				memcpy(distinct,kmers+mindex*nwords,kmer_size);
 				tally.push_back(btally[mindex]);
 			}
 		}
+		// finish the bitvectors
+		for(size_t b=0; b<nbits; b++)
+			if(brun[b]>0)
+				merged_slices[b]->appendFill(distinct[bword[b]] & bpos[b],brun[b]);
+		
 		range_index(tally,kmer_freq[bin],counts[bin]);
-		// close output file
+
+		// open an output file for the merged distinct kmers
+		FILE *ofp;
+		char fname [100];
+		sprintf(fname,"%s/%zi-mers.%zi",outdir,k,bin);
+		ofp = fopen(fname,"wb");
+
+		fwrite(&nbits,sizeof(size_t),1,ofp);
+		for(size_t b=0;b<nbits;b++) {
+			uint32_t c = merged_slices[b]->cnt();
+			fwrite(&c,sizeof(uint32_t),1,ofp);
+		}
+		for(size_t b=0;b<nbits;b++) {
+			uint32_t *buf;
+			size_t bytes = merged_slices[b]->dump(&buf);
+			// fprintf(stderr,"%zi: %zi,",b,bytes);
+			fwrite(&bytes,sizeof(size_t),1,ofp);
+			fwrite(buf,1,bytes,ofp);
+			free(buf);
+		}
+
+
 		fclose(ofp);
-		// close input files
-		for(size_t i=0;i<batches;i++)
-			fclose(kmer_fp[i]);
 		
 		char counts_file [100];
 		sprintf(counts_file,"%s/%zi-mers.%zi.idx",outdir,k,bin);
@@ -616,12 +680,12 @@ void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
 		}
 		fclose(ofp);
 		// delete input files
-		for(size_t i=0;i<batches;i++) {
-			sprintf(fname,"%s/%zi-mers.%zi.%zi",outdir,k,bin,i+1);
-			if (remove(fname) != 0) perror("error deleting file");
-			sprintf(fname,"%s/%zi-mers.%zi.%zi.idx",outdir,k,bin,i+1);
-			if (remove(fname) != 0) perror("error deleting file");
-		}
+		// for(size_t i=0;i<batches;i++) {
+		// 	sprintf(fname,"%s/%zi-mers.%zi.%zi",outdir,k,bin,i+1);
+		// 	if (remove(fname) != 0) perror("error deleting file");
+		// 	sprintf(fname,"%s/%zi-mers.%zi.%zi.idx",outdir,k,bin,i+1);
+		// 	if (remove(fname) != 0) perror("error deleting file");
+		// }
 	}
 }
 
@@ -677,6 +741,14 @@ void kmerizer::range_index(vector<uint32_t> &vec, vector<uint32_t> &values, vect
 		index[i] = new bvec32(vrange[i]);
 }
 
+size_t kmerizer::pos2kmer(size_t pos, word_t *kmer, vector<bvec32*> &index) {
+	if (pos >= index[0]->get_size()) return 1;
+	size_t bpw = 8*sizeof(word_t);
+	for(size_t b=0;b<8*kmer_size;b++)
+		if (index[b]->find(pos))
+			kmer[b/bpw] |= 1ULL << (bpw - b - 1);
+	return 0;
+}
 
 uint32_t kmerizer::pos2value(size_t pos, vector<uint32_t> &values, vector<bvec32*> &index) {
 	// lookup the value in the pos bit

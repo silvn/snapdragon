@@ -62,9 +62,10 @@ private:
 	void do_loadIndex(const size_t from, const size_t to);
 	// is this too generic to go here?
 	void range_index(vector<uint32_t> &vec, vector<uint32_t> &values, vector<bvec32*> &index);
-	void read_index(const char* idxfile,vector<uint32_t> &values, vector<bvec32*> &index);
+	void read_bitmap(const char* idxfile, vector<uint32_t> &values, vector<bvec32*> &index);
 	size_t find_min(const word_t* kmers, const uint32_t* kcounts);
 	uint32_t pos2value(size_t pos, vector<uint32_t> &values, vector<bvec32*> &index);
+	size_t pos2kmer(size_t pos, word_t *kmer, vector<bvec32*> &index);
 	void print_kmer(word_t *kmer);
 	void bit_slice(word_t *kmers, const size_t n, bvec32 **kmer_slices, size_t nbits);
 };

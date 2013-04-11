@@ -291,8 +291,8 @@ void kmerizer::mergeBatches() {
 
 
 int compare_kmers1(const void *k1, const void *k2) {
-	if (*(word_t*)k1 < *(word_t*)k2) return -1;
 	if (*(word_t*)k1 > *(word_t*)k2) return 1;
+	if (*(word_t*)k1 < *(word_t*)k2) return -1;
 	return 0;
 }
 int compare_kmers2(const void *k1, const void *k2) {
@@ -352,27 +352,109 @@ int kmercmp(const void *k1, const void *k2, size_t nwords) {
 	}
 	return 0;
 }
+struct kmer1_t { word_t first_word; };
+struct kmer2_t { word_t first_word; };
+struct kmer3_t { word_t first_word; };
+struct kmer4_t { word_t first_word; };
+struct kmer5_t { word_t first_word; };
+struct kmer6_t { word_t first_word; };
+struct kmer7_t { word_t first_word; };
+struct kmer8_t { word_t first_word; };
+bool operator<(const kmer1_t& a, const kmer1_t& b) {
+	return a.first_word < b.first_word;
+}
+bool operator<(const kmer2_t& a, const kmer2_t& b) {
+	for(size_t i=0;i<2;i++) {
+		if (*(&a.first_word+i) < *(&b.first_word+i)) return true;
+		if (*(&a.first_word+i) > *(&b.first_word+i)) return false;
+	}
+	return false;
+}
+bool operator<(const kmer3_t& a, const kmer3_t& b) {
+	for(size_t i=0;i<3;i++) {
+		if (*(&a.first_word+i) < *(&b.first_word+i)) return true;
+		if (*(&a.first_word+i) > *(&b.first_word+i)) return false;
+	}
+	return false;
+}
+bool operator<(const kmer4_t& a, const kmer4_t& b) {
+	for(size_t i=0;i<4;i++) {
+		if (*(&a.first_word+i) < *(&b.first_word+i)) return true;
+		if (*(&a.first_word+i) > *(&b.first_word+i)) return false;
+	}
+	return false;
+}
+bool operator<(const kmer5_t& a, const kmer5_t& b) {
+	for(size_t i=0;i<5;i++) {
+		if (*(&a.first_word+i) < *(&b.first_word+i)) return true;
+		if (*(&a.first_word+i) > *(&b.first_word+i)) return false;
+	}
+	return false;
+}
+bool operator<(const kmer6_t& a, const kmer6_t& b) {
+	for(size_t i=0;i<6;i++) {
+		if (*(&a.first_word+i) < *(&b.first_word+i)) return true;
+		if (*(&a.first_word+i) > *(&b.first_word+i)) return false;
+	}
+	return false;
+}
+bool operator<(const kmer7_t& a, const kmer7_t& b) {
+	for(size_t i=0;i<7;i++) {
+		if (*(&a.first_word+i) < *(&b.first_word+i)) return true;
+		if (*(&a.first_word+i) > *(&b.first_word+i)) return false;
+	}
+	return false;
+}
+bool operator<(const kmer8_t& a, const kmer8_t& b) {
+	for(size_t i=0;i<8;i++) {
+		if (*(&a.first_word+i) < *(&b.first_word+i)) return true;
+		if (*(&a.first_word+i) > *(&b.first_word+i)) return false;
+	}
+	return false;
+}
+
 
 void kmerizer::do_unique(const size_t from, const size_t to) {
 	for(size_t bin=from; bin<to; bin++) {
-		// sort
-		switch(nwords) {
-			case 1:
-				qsort(kmer_buf[bin], bin_tally[bin], kmer_size, compare_kmers1);
-			case 2:
-				qsort(kmer_buf[bin], bin_tally[bin], kmer_size, compare_kmers2);
-			case 3:
-				qsort(kmer_buf[bin], bin_tally[bin], kmer_size, compare_kmers3);
-			case 4:
-				qsort(kmer_buf[bin], bin_tally[bin], kmer_size, compare_kmers4);
-			case 5:
-				qsort(kmer_buf[bin], bin_tally[bin], kmer_size, compare_kmers5);
-			case 6:
-				qsort(kmer_buf[bin], bin_tally[bin], kmer_size, compare_kmers6);
-			case 7:
-				qsort(kmer_buf[bin], bin_tally[bin], kmer_size, compare_kmers7);
-			case 8:
-				qsort(kmer_buf[bin], bin_tally[bin], kmer_size, compare_kmers8);
+		if (1) {
+		// stl sort
+			if (nwords==1)
+				sort((kmer1_t*)kmer_buf[bin], (kmer1_t*)(kmer_buf[bin]) + bin_tally[bin]);
+			if (nwords==2)
+				sort((kmer2_t*)kmer_buf[bin], (kmer2_t*)(kmer_buf[bin] + bin_tally[bin]));
+			if (nwords==3)
+				sort((kmer3_t*)kmer_buf[bin], (kmer3_t*)(kmer_buf[bin] + bin_tally[bin]));
+			if (nwords==4)
+				sort((kmer4_t*)kmer_buf[bin], (kmer4_t*)(kmer_buf[bin] + bin_tally[bin]));
+			if (nwords==5)
+				sort((kmer5_t*)kmer_buf[bin], (kmer5_t*)(kmer_buf[bin] + bin_tally[bin]));
+			if (nwords==6)
+				sort((kmer6_t*)kmer_buf[bin], (kmer6_t*)(kmer_buf[bin] + bin_tally[bin]));
+			if (nwords==7)
+				sort((kmer7_t*)kmer_buf[bin], (kmer7_t*)(kmer_buf[bin] + bin_tally[bin]));
+			if (nwords==8)
+				sort((kmer8_t*)kmer_buf[bin], (kmer8_t*)(kmer_buf[bin] + bin_tally[bin]));
+		}
+		if (0) {
+			// qsort
+			switch(nwords) {
+				case 1:
+					qsort(kmer_buf[bin], bin_tally[bin], kmer_size, compare_kmers1);
+				case 2:
+					qsort(kmer_buf[bin], bin_tally[bin], kmer_size, compare_kmers2);
+				case 3:
+					qsort(kmer_buf[bin], bin_tally[bin], kmer_size, compare_kmers3);
+				case 4:
+					qsort(kmer_buf[bin], bin_tally[bin], kmer_size, compare_kmers4);
+				case 5:
+					qsort(kmer_buf[bin], bin_tally[bin], kmer_size, compare_kmers5);
+				case 6:
+					qsort(kmer_buf[bin], bin_tally[bin], kmer_size, compare_kmers6);
+				case 7:
+					qsort(kmer_buf[bin], bin_tally[bin], kmer_size, compare_kmers7);
+				case 8:
+					qsort(kmer_buf[bin], bin_tally[bin], kmer_size, compare_kmers8);
+			}
 		}
 		// uniq
 		uint32_t distinct = 0;
@@ -406,51 +488,41 @@ void kmerizer::print_kmer(word_t *kmer) {
 	fprintf(stderr,"\n");
 }
 void kmerizer::bit_slice(word_t *kmers, const size_t n, bvec32 **kmer_slices, size_t nbits) {
+	// initialize WAH compressed bitvectors
 	for(size_t i=0;i<nbits;i++) {
-		kmer_slices[i] = new bvec32();
+		kmer_slices[i] = new bvec32(true);
 	}
-	size_t bword [nbits]; // which word does the bth bit live in?
-	word_t bpos [nbits]; // what's the position of the bth bit?
-	word_t brun [nbits]; // how many same bits have we seen in the bth bit?
-	bool bbit [nbits]; // which bit did we have here last time?
-	size_t bpw = 8*sizeof(word_t); // bits per word
-	for(size_t b=0;b<nbits;b++) {
-		bword[b] = b/bpw;
-		bpos[b] = 1ULL << (bpw - b%bpw - 1);
-		brun[b] = 0;
-		bbit[b] = false;
+	bitset<256> bbit; // for keeping track of the set bits
+	size_t boff [nbits]; // beginning of the current run of 1's or 0's
+	memset(boff,0,nbits*sizeof(size_t)); // initialize to 0
+	unsigned int bpw = 8*sizeof(word_t); // bits per word
+
+	// mark the set bits in the first kmer
+	for(size_t w=0;w<nwords;w++) {
+		unsigned int count = popcount(kmers[w]);
+		for(unsigned int r=1; r<=count; r++)
+			bbit.set(selectbit(kmers[w],r) + w*bpw,1);
 	}
-	for(size_t i=0;i<n;i++) {
-		for(size_t b=0;b<nbits;b++) {
-			// check the bth bit
-			if (kmers[i*nwords + bword[b]] & bpos[b]) { // bth bit is set
-				// extend the 1-run or appendFill?
-				if (bbit[b])
-					brun[b]++;
-				else {
-					if(brun[b]>0) 
-						kmer_slices[b]->appendFill(bbit[b],brun[b]);
-					brun[b] = 1;
-					bbit[b]=true;
-				}
-			}
-			else { // bth bit is not set
-				// extend the 0-run or appendFill?
-				if (bbit[b]) {
-					if(brun[b]>0)
-						kmer_slices[b]->appendFill(bbit[b],brun[b]);
-					brun[b]=1;
-					bbit[b]=false;
-				}
-				else
-					brun[b]++;
+	for(size_t i=1;i<n;i++) {
+		// when n is large the number of different bits between kmer i and kmer i-1 is small
+		// so use xor, popcount, and selectbit to identify the changed bit positions
+		word_t *kmer = kmers + i*nwords;
+		word_t *prev = kmer - nwords;
+		for(size_t w=0;w<nwords;w++) {
+			word_t x = kmer[w] ^ prev[w];
+			unsigned int count = popcount(x);
+			for(unsigned int r = 1; r<=count; r++) {
+				unsigned int b = selectbit(x,r) + w*bpw;
+				kmer_slices[b]->appendFill(bbit.test(b),i-boff[b]);
+				bbit.flip(b);
+				boff[b] = i;
 			}
 		}
 	}
 	// append the last runs
 	for(size_t b=0; b<nbits; b++)
-		if(brun[b]>0)
-			kmer_slices[b]->appendFill(bbit[b],brun[b]);
+		if(boff[b] < n-1)
+			kmer_slices[b]->appendFill(bbit.test(b),n-boff[b]);
 }
 
 void kmerizer::do_writeBatch(const size_t from, const size_t to) {
@@ -465,7 +537,7 @@ void kmerizer::do_writeBatch(const size_t from, const size_t to) {
 		if (0) {
 			// open output file for kmer_buf
 			char kmer_file [100];
-			sprintf(kmer_file,"%s/%zi-mers.%zi.%zi.uncompressed",outdir,k,bin,batches);
+			sprintf(kmer_file,"%s/%zi-mers.%zi.%zi",outdir,k,bin,batches);
 			fp = fopen(kmer_file, "wb");
 			fwrite(kmer_buf[bin],kmer_size,bin_tally[bin],fp);
 			fclose(fp);

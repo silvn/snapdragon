@@ -636,25 +636,20 @@ void bvec32::setBit(uint32_t x) {
 	}
 }
 
-// size holds the last meaningful bit although the last word may contain space for other bits
 void bvec32::appendFill(bool bit, uint32_t n) {
-	if (!rle) compress();
-//	fprintf(stderr,"appendFill(%i,%u) words.size(): %zi\n",bit ? 1 : 0 , n, words.size());
-	if (n==0) return;
-//	print();
 	if ((words.back() & BIT1) == 0) { // current word is a literal word
-		// size % LITERAL_SIZE is the number of bits already used
 		uint32_t bits_available = LITERAL_SIZE - size % LITERAL_SIZE;
 //		fprintf(stderr,"bits_available: %u\n",bits_available);
 		if(bit) {
 			// append some ones
-			uint32_t append = (1 << bits_available) - 1;
+			uint32_t append;
 			if (n < bits_available) {
 				append = ((1 << n) - 1) << (bits_available - n);
 				size += n;
 				n=0;
 			}
 			else {
+				append = (1 << bits_available) - 1;
 				size += bits_available;
 				n -= bits_available;
 				// the word is full, check if we should convert to a 1-fill

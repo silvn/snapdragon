@@ -48,6 +48,7 @@ public:
 
     // Constructors
     bvec32() : rle(false), count(0), size(0) {};
+	bvec32(bool wah) : rle(false), count(0), size(0) {compress();};
     bvec32(vector<uint32_t>& vals);
 	bvec32(uint32_t* buf); // DIY deserialization
     void print();

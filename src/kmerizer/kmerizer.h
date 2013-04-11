@@ -34,6 +34,7 @@ class kmerizer {
 	vector<uint32_t> kmer_freq [NBINS]; // sorted distinct kmer frequencies
 	vector<bvec32*> counts [NBINS]; // bitmap index of frequency counts
 
+
 public:
 	kmerizer(const size_t _k, const size_t _threads, char* _outdir, const char _mode);
 	int allocate(const size_t maximem); // allocates memory for each kmer_buf
@@ -50,6 +51,9 @@ private:
 	inline void unpack(word_t* kmer, char *seq);
 	inline word_t revcomp(const word_t val) const; // reverse complement
 	inline uint8_t hashkmer(const word_t *kmer, const uint8_t seed) const; // to select a bin
+	inline unsigned int popcount(word_t v) const; // count set bits in a kmer (actually XOR of 2 kmers)
+	inline unsigned int selectbit(word_t v, unsigned int r); // returns the position of the rth set bit in v
+	
 	word_t* canonicalize(word_t *packed, word_t *rcpack) const;
 	uint32_t find(word_t *kmer, size_t bin);
 	void serialize(); // kmer_buf is full. uniqify and write batch to disk
@@ -68,6 +72,7 @@ private:
 	size_t pos2kmer(size_t pos, word_t *kmer, vector<bvec32*> &index);
 	void print_kmer(word_t *kmer);
 	void bit_slice(word_t *kmers, const size_t n, bvec32 **kmer_slices, size_t nbits);
+
 };
 
 inline word_t kmerizer::twobit(const word_t val) const {
@@ -91,6 +96,67 @@ inline word_t kmerizer::twobit(const word_t val) const {
 		0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 	};
 	return table[val];
+}
+
+// quickly count the number of set bits in a k-mer
+inline unsigned int kmerizer::popcount(word_t v) const {
+	// number of 1 bits in a value between 0 and 255
+	static const unsigned char t[256] = {
+	0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,
+	1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+	1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+	2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+	1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+	2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+	2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+	3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+	1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+	2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+	2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+	3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+	2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+	3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+	3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+	4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8};
+	unsigned char * p = (unsigned char *) &v;
+	return t[p[0]]+t[p[1]]+t[p[2]]+t[p[3]]+t[p[4]]+t[p[5]]+t[p[6]]+t[p[7]];
+}
+
+// select the bit position given the rank
+inline unsigned int kmerizer::selectbit(word_t v, unsigned int r) {
+	unsigned int s;
+	word_t a, b, c, d;
+	unsigned int t;
+	// a = (v & 0x5555...) + ((v >> 1) & 0x5555...);
+	a =  v - ((v >> 1) & ~0UL/3);
+	// b = (a & 0x3333...) + ((a >> 2) & 0x3333...);
+	b = (a & ~0UL/5) + ((a >> 2) & ~0UL/5);
+	// c = (b & 0x0f0f...) + ((b >> 4) & 0x0f0f...);
+	c = (b + (b >> 4)) & ~0UL/0x11;
+	// d = (c & 0x00ff...) + ((c >> 8) & 0x00ff...);
+	d = (c + (c >> 8)) & ~0UL/0x101;
+	t = (d >> 32) + (d >> 48);
+	// Now do branchless select!                                                
+	s  = 64;
+	// if (r > t) {s -= 32; r -= t;}
+	s -= ((t - r) & 256) >> 3; r -= (t & ((t - r) >> 8));
+	t  = (d >> (s - 16)) & 0xff;
+	// if (r > t) {s -= 16; r -= t;}
+	s -= ((t - r) & 256) >> 4; r -= (t & ((t - r) >> 8));
+	t  = (c >> (s - 8)) & 0xf;
+	// if (r > t) {s -= 8; r -= t;}
+	s -= ((t - r) & 256) >> 5; r -= (t & ((t - r) >> 8));
+	t  = (b >> (s - 4)) & 0x7;
+	// if (r > t) {s -= 4; r -= t;}
+	s -= ((t - r) & 256) >> 6; r -= (t & ((t - r) >> 8));
+	t  = (a >> (s - 2)) & 0x3;
+	// if (r > t) {s -= 2; r -= t;}
+	s -= ((t - r) & 256) >> 7; r -= (t & ((t - r) >> 8));
+	t  = (v >> (s - 1)) & 0x1;
+	// if (r > t) s--;
+	s -= ((t - r) & 256) >> 8;
+	s = 65 - s;
+	return s-1;
 }
 
 inline void kmerizer::unpack(word_t* kmer, char* seq) {

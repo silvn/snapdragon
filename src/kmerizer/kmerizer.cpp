@@ -662,16 +662,14 @@ void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
 
 		const size_t nbits = 8*kmer_size;
 		bvec32* merged_slices [nbits];
-		size_t bword [nbits]; // which word does the bth bit live in?
-		word_t bpos [nbits]; // what's the position of the bth bit?
-		word_t brun [nbits]; // how many same bits have we seen in the bth bit?
-		size_t bpw = 8*sizeof(word_t); // bits per word
-		for(size_t b=0;b<nbits;b++) {
-			bword[b] = b/bpw;
-			bpos[b] = 1ULL << (bpw - b%bpw - 1);
-			brun[b] = 0;
-			merged_slices[b] = new bvec32();
-		}
+		bitset<256> bbit;
+		unsigned int boff [nbits];
+		unsigned int n=0;
+		memset(boff,0,nbits*sizeof(size_t));
+		const unsigned int bpw = 8*sizeof(word_t); // bits per word
+
+		for(size_t b=0;b<nbits;b++)
+			merged_slices[b] = new bvec32(true);
 
 		// read the first kmer and counts from each batch
 		for(size_t i=0;i<batches;i++) {
@@ -682,7 +680,6 @@ void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
 			}
 			else {
 				btally[i] = pos2value(offset[i]++,batch_values[i],batch_counts[i]);
-				brun[i]++;
 			}
 		}
 		// choose min
@@ -690,8 +687,15 @@ void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
 		word_t distinct [nwords];
 		memcpy(distinct,kmers + mindex*nwords, kmer_size);
 		tally.push_back(btally[mindex]);
+		// mark the set bits in the first distinct kmer
+		for(size_t w=0;w<nwords;w++) {
+			unsigned int count = popcount(distinct[w]);
+			for(unsigned int r=1; r<=count; r++)
+				bbit.set(selectbit(distinct[w],r)+w*bpw,1);
+		}
 		// replace min
 		// iterate until there's nothing left to do
+		
 		while(todo>0) {
 			size_t err = pos2kmer(offset[mindex],kmers + mindex*nwords, batch_slices[mindex]);
 			if (err != 0) {
@@ -702,42 +706,31 @@ void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
 			else
 				btally[mindex] = pos2value(offset[mindex]++,batch_values[mindex],batch_counts[mindex]);
 			mindex = find_min(kmers,btally);
-			if (kmercmp(kmers + mindex*nwords,distinct,nwords)==0) {
-				// kmers are the same, increment brun for all bits
-				for(size_t b=0;b<nbits;b++) brun[b]++;
+			// compare to distinct
+			if (kmercmp(kmers + mindex*nwords, distinct, nwords) == 0) // same kmer
 				tally.back() += btally[mindex];
-			}
-			else {
-				// current kmer differs in at least one bit position
-				// find out which ones, and appendFill, otherwise increment brun
-				for(size_t b=0;b<nbits;b++) {
-					if (distinct[bword[b]] & bpos[b]) { // bth bit is set in prev
-						if (kmers[mindex*nwords+bword[b]] & bpos[b]) // bth bit is set in next
-							brun[b]++;
-						else {
-							if(brun[b]>0)
-								merged_slices[b]->appendFill(true,brun[b]);
-							brun[b]=1;
-						}
-					}
-					else { // bth bit is not set in prev
-						if (kmers[mindex*nwords+bword[b]] & bpos[b]) { // bth bit is set in next
-							if(brun[b]>0)
-								merged_slices[b]->appendFill(false,brun[b]);
-							brun[b]=1;
-						}
-						else
-							brun[b]++;
-					}
-				}
-				memcpy(distinct,kmers+mindex*nwords,kmer_size);
+			else { // find the changed bits
 				tally.push_back(btally[mindex]);
+				n++;
+				word_t *minkmer = kmers + mindex*nwords;
+				for(size_t w=0;w<nwords;w++) {
+					word_t x = distinct[w] ^ minkmer[w];
+					unsigned int count = popcount(x);
+					for(unsigned int r = 1; r<=count; r++) {
+						unsigned int b = selectbit(x,r) + w*bpw;
+						merged_slices[b]->appendFill(bbit.test(b),n-boff[b]);
+						bbit.flip(b);
+						boff[b]=n;
+					}
+					distinct[w] = minkmer[w];
+				}
 			}
 		}
 		// finish the bitvectors
+		n++;
 		for(size_t b=0; b<nbits; b++)
-			if(brun[b]>0)
-				merged_slices[b]->appendFill((distinct[bword[b]] & bpos[b] != 0),brun[b]);
+			if(boff[b]<n-1)
+				merged_slices[b]->appendFill(bbit.test(b),n-boff[b]);
 		
 		range_index(tally,kmer_freq[bin],counts[bin]);
 
@@ -843,22 +836,3 @@ void kmerizer::range_index(vector<uint32_t> &vec, vector<uint32_t> &values, vect
 		index[i] = new bvec32(vrange[i]);
 }
 
-size_t kmerizer::pos2kmer(size_t pos, word_t *kmer, vector<bvec32*> &index) {
-	if (pos >= index[0]->get_size()) return 1;
-	size_t bpw = 8*sizeof(word_t);
-	// need to zero the kmer first
-	memset(kmer,0,kmer_size);
-	for(size_t b=0;b<8*kmer_size;b++)
-		if (index[b]->find(pos))
-			kmer[b/bpw] |= 1ULL << (bpw - b%bpw - 1);
-	return 0;
-}
-
-uint32_t kmerizer::pos2value(size_t pos, vector<uint32_t> &values, vector<bvec32*> &index) {
-	// lookup the value in the pos bit
-	// find the first bvec where this bit is set
-	for(size_t i=0;i<values.size();i++)
-		if (index[i]->find(pos))
-			return values[i];
-	return 0;
-}

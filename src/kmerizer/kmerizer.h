@@ -53,6 +53,8 @@ private:
 	inline uint8_t hashkmer(const word_t *kmer, const uint8_t seed) const; // to select a bin
 	inline unsigned int popcount(word_t v) const; // count set bits in a kmer (actually XOR of 2 kmers)
 	inline unsigned int selectbit(word_t v, unsigned int r); // returns the position of the rth set bit in v
+	inline size_t pos2kmer(size_t pos, word_t *kmer, vector<bvec32*> &index);
+	inline uint32_t pos2value(size_t pos, vector<uint32_t> &values, vector<bvec32*> &index);
 	
 	word_t* canonicalize(word_t *packed, word_t *rcpack) const;
 	uint32_t find(word_t *kmer, size_t bin);
@@ -68,8 +70,8 @@ private:
 	void range_index(vector<uint32_t> &vec, vector<uint32_t> &values, vector<bvec32*> &index);
 	void read_bitmap(const char* idxfile, vector<uint32_t> &values, vector<bvec32*> &index);
 	size_t find_min(const word_t* kmers, const uint32_t* kcounts);
-	uint32_t pos2value(size_t pos, vector<uint32_t> &values, vector<bvec32*> &index);
-	size_t pos2kmer(size_t pos, word_t *kmer, vector<bvec32*> &index);
+	// uint32_t pos2value(size_t pos, vector<uint32_t> &values, vector<bvec32*> &index);
+	// size_t pos2kmer(size_t pos, word_t *kmer, vector<bvec32*> &index);
 	void print_kmer(word_t *kmer);
 	void bit_slice(word_t *kmers, const size_t n, bvec32 **kmer_slices, size_t nbits);
 
@@ -237,6 +239,26 @@ inline uint8_t kmerizer::hashkmer(const word_t *kmer, const uint8_t seed) const 
 		h = Rand8[h ^ (uint8_t)kmer[i] & 255];
 	}
 	return h;
+}
+
+inline size_t kmerizer::pos2kmer(size_t pos, word_t *kmer, vector<bvec32*> &index) {
+	if (pos >= index[0]->get_size()) return 1;
+	size_t bpw = 8*sizeof(word_t);
+	// need to zero the kmer first
+	memset(kmer,0,kmer_size);
+	for(size_t b=0;b<8*kmer_size;b++)
+		if (index[b]->find(pos))
+			kmer[b/bpw] |= 1ULL << (bpw - b%bpw - 1);
+	return 0;
+}
+
+inline uint32_t kmerizer::pos2value(size_t pos, vector<uint32_t> &values, vector<bvec32*> &index) {
+	// lookup the value in the pos bit
+	// find the first bvec where this bit is set
+	for(size_t i=0;i<values.size();i++)
+		if (index[i]->find(pos))
+			return values[i];
+	return 0;
 }
 
 

@@ -80,15 +80,16 @@ void bvec32::print() {
 
 void bvec32::construct_rle(vector<uint32_t>& vals) {
 	rle = true;
-	frontier.active_word = words.begin();
 	frontier.bit_pos=0;
 	if (vals.size() == 0) {
 		size=0;
 		count=0;
 		words.clear();
 		words.push_back(0); // current word is an empty literal
+		frontier.active_word = words.begin();
 		return;
 	}
+	frontier.active_word = words.begin();
 	uint32_t word_end = LITERAL_SIZE - 1;
 	uint32_t word=0;
 	uint32_t gap_words = vals.front()/LITERAL_SIZE;
@@ -147,7 +148,6 @@ void bvec32::compress() {
 	vector<uint32_t> tmp;
 	tmp.swap(words);
 	construct_rle(tmp);
-	rle = true;
 }
 
 void bvec32::decompress() {
@@ -636,40 +636,45 @@ void bvec32::setBit(uint32_t x) {
 	}
 }
 
+// use the frontier instead of words.back() because we have frontier.bit_pos
+// advance the frontier after appending
 void bvec32::appendFill(bool bit, uint32_t n) {
-	if ((words.back() & BIT1) == 0) { // current word is a literal word
-		uint32_t bits_available = LITERAL_SIZE - size % LITERAL_SIZE;
+	if ((*(frontier.active_word) & BIT1) == 0) { // current word is a literal word
+		uint32_t bits_available = LITERAL_SIZE - frontier.bit_pos; // size % LITERAL_SIZE;
 //		fprintf(stderr,"bits_available: %u\n",bits_available);
 		if(bit) {
 			// append some ones
-			uint32_t append;
 			if (n < bits_available) {
-				append = ((1 << n) - 1) << (bits_available - n);
 				size += n;
-				n=0;
+				frontier.bit_pos += n;
+				*(frontier.active_word) |= ((1UL << n) - 1) << (bits_available - n);
+				return;
 			}
 			else {
-				append = (1 << bits_available) - 1;
 				size += bits_available;
 				n -= bits_available;
+				frontier.bit_pos = 0;
+				*(frontier.active_word) |= (1 << bits_available) - 1;
 				// the word is full, check if we should convert to a 1-fill
-				if (words.back() == ALL1S) {
-					words.back() = ONEFILL1;
+				if (*(frontier.active_word) == ALL1S) {
+					*(frontier.active_word) = ONEFILL1;
 				}
 			}
-			words.back() |= append;
 		}
 		else {
+			// append some zeros
 			if (n < bits_available) {
 				size += n;
-				n=0;
+				frontier.bit_pos += n;
+				return;
 			}
 			else {
 				size += bits_available;
 				n -= bits_available;
+				frontier.bit_pos = 0;
 				// the word is full, check if we should convert to a 0-fill
-				if (words.back() == 0) {
-					words.back() = ZEROFILL1;
+				if (*(frontier.active_word) == 0) {
+					*(frontier.active_word) = ZEROFILL1;
 				}
 			}
 		}
@@ -680,31 +685,34 @@ void bvec32::appendFill(bool bit, uint32_t n) {
 	uint32_t n_fills = n/LITERAL_SIZE;
 	if (n_fills > 0) {
 		if (bit) {
-			if (words.back() & ONEFILL) { // extend previous 1-fill
-				words.back() += n_fills;
+			if (*(frontier.active_word) & ONEFILL) { // extend previous 1-fill
+				*(frontier.active_word) += n_fills;
 			}
 			else { // append a 1-fill
 				words.push_back(ONEFILL | n_fills);
+				frontier.active_word = words.end() - 1;
 			}
 		}
 		else {
-			if (words.back() & BIT1 && !(words.back() & BIT2)) { // extend previous 0-fill
-				words.back() += n_fills;
+			if (*(frontier.active_word) & BIT1 && !(*frontier.active_word & BIT2)) { // extend previous 0-fill
+				*(frontier.active_word) += n_fills;
 			}
 			else { // append a 1-fill
 				words.push_back(BIT1 | n_fills);
+				frontier.active_word = words.end()-1;
 			}
 		}
 		n -= n_fills*LITERAL_SIZE;
 		size += n_fills*LITERAL_SIZE;
 	}
-//	print();
-	if (n==0) return;
 	// add the remaining bits to a literal word
-	if (bit)
-		words.push_back(((1<<n)-1) << (LITERAL_SIZE - n));
-	else
-		words.push_back(0);
-	size += n;
-//	print();
+	if (n>0) {
+		if (bit)
+			words.push_back(((1<<n)-1) << (LITERAL_SIZE - n));
+		else
+			words.push_back(0);
+		size += n;
+		frontier.active_word = words.end() - 1;
+		frontier.bit_pos = n;
+	}
 }

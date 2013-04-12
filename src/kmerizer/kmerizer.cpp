@@ -498,21 +498,40 @@ void kmerizer::bit_slice(word_t *kmers, const size_t n, bvec32 **kmer_slices, si
 	unsigned int bpw = 8*sizeof(word_t); // bits per word
 
 	// mark the set bits in the first kmer
-	for(size_t w=0;w<nwords;w++) {
-		unsigned int count = popcount(kmers[w]);
-		for(unsigned int r=1; r<=count; r++)
-			bbit.set(selectbit(kmers[w],r) + w*bpw,1);
-	}
-	for(size_t i=1;i<n;i++) {
-		// when n is large the number of different bits between kmer i and kmer i-1 is small
-		// so use xor, popcount, and selectbit to identify the changed bit positions
-		word_t *kmer = kmers + i*nwords;
-		word_t *prev = kmer - nwords;
+	if (nwords>1) {
 		for(size_t w=0;w<nwords;w++) {
-			word_t x = kmer[w] ^ prev[w];
+			unsigned int count = popcount(kmers[w]);
+			for(unsigned int r=1; r<=count; r++)
+				bbit.set(selectbit(kmers[w],r) + w*bpw,1);
+		}
+		for(size_t i=1;i<n;i++) {
+			// when n is large the number of different bits between kmer i and kmer i-1 is small
+			// so use xor, popcount, and selectbit to identify the changed bit positions
+			word_t *kmer = kmers + i*nwords;
+			word_t *prev = kmer - nwords;
+			for(size_t w=0;w<nwords;w++) {
+				word_t x = kmer[w] ^ prev[w];
+				unsigned int count = popcount(x);
+				for(unsigned int r = 1; r<=count; r++) {
+					unsigned int b = selectbit(x,r) + w*bpw;
+					kmer_slices[b]->appendFill(bbit.test(b),i-boff[b]);
+					bbit.flip(b);
+					boff[b] = i;
+				}
+			}
+		}
+	}
+	else { // stripped down version for nwords=1
+		unsigned int count = popcount(kmers[0]);
+		for(unsigned int r=1; r<=count; r++)
+			bbit.set(selectbit(kmers[0],r),1);
+		for(size_t i=1;i<n;i++) {
+			// when n is large the number of different bits between kmer i and kmer i-1 is small
+			// so use xor, popcount, and selectbit to identify the changed bit positions
+			word_t x = kmers[i] ^ kmers[i-1];
 			unsigned int count = popcount(x);
 			for(unsigned int r = 1; r<=count; r++) {
-				unsigned int b = selectbit(x,r) + w*bpw;
+				unsigned int b = selectbit(x,r);
 				kmer_slices[b]->appendFill(bbit.test(b),i-boff[b]);
 				bbit.flip(b);
 				boff[b] = i;

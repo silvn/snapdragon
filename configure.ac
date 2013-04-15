@@ -46,6 +46,23 @@ AC_PROG_LIBTOOL
 AC_CHECK_LIB([z], [deflateInit])
 AC_CHECK_LIB([boost_serialization], [serialize])
 
+AC_MSG_CHECKING(whether to enable extra optimization)
+AC_ARG_ENABLE(xopt,
+	      [AS_HELP_STRING([--enable-xopt],[turn on extra optimization (default: no, leave the default CXXFLAGS alone)])],
+	      [if test "$enableval" = "yes" ; then xopt="yes" ; else xopt="no" ; fi],[xopt="no"])
+AC_MSG_RESULT($xopt)
+if test "x$xopt" = "xyes" ; then
+   # add -O5 if the compiler accepts it, otherwise -O3
+   OLDCXXFLAGS=$CXXFLAGS;
+   CXXFLAGS="$CXXFLAGS -O5";
+   AC_COMPILE_IFELSE([
+      AC_LANG_PROGRAM([[
+	#include <cmath>
+	]], [[
+	return (1 == static_cast<int>(std::sqrt(2.0)));
+   	]])], [], [CXXFLAGS="$OLDCXXFLAGS -O3"])
+fi
+
 AC_ARG_ENABLE(fastbit,
 	[AS_HELP_STRING([--enable-fastbit],
 		[Enable FastBit library and wrappers [default=no]])],

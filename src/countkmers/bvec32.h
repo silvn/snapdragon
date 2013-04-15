@@ -57,6 +57,8 @@ public:
     size_t dump(uint32_t **buf); // DIY serialization
 
     // logical set operations
+	void flip();
+	bvec32* copyflip();
     void operator|=(bvec32& rhs);
     bvec32* operator|(bvec32&);
     void operator&=(bvec32& rhs);

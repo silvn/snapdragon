@@ -33,7 +33,7 @@ class kmerizer {
 	uint32_t bin_tally[NBINS]; // number of kmers in each bin (or number of distinct kmers)
 	vector<uint32_t> kmer_freq [NBINS]; // sorted distinct kmer frequencies
 	vector<bvec32*> counts [NBINS]; // bitmap index of frequency counts
-
+	vector<bvec32*> slices [NBINS]; // bitmap self index of kmers
 
 public:
 	kmerizer(const size_t _k, const size_t _threads, char* _outdir, const char _mode);

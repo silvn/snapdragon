@@ -243,6 +243,34 @@ bool bvec32::equals(const bvec32& other) const {
 		   (rle	  == other.rle);
 }
 
+bvec32* bvec32::copyflip() {
+	bvec32 *res = new bvec32();
+	res->copy(*this);
+	res->flip();
+	return res;
+}
+
+void bvec32::flip() {
+	if (!rle)
+		compress();
+	for(vector<uint32_t>::iterator it = words.begin(); it!=words.end(); ++it) {
+		if (*it & BIT1) { // fill word - flip BIT2
+			if (*it & BIT2) { // 1-fill
+				// convert to 0-fill
+				*it &= ~BIT2;
+			}
+			else {
+				// convert to 1-fill
+				*it |= BIT2;
+			}
+		}
+		else { // literal word - flip all bits
+			*it = ~*it;
+		}
+	}
+	count = size-count;
+}
+
 void bvec32::non_OR_non(bvec32& bv) {
 	
 	vector<uint32_t> res;
@@ -639,6 +667,7 @@ void bvec32::setBit(uint32_t x) {
 // use the frontier instead of words.back() because we have frontier.bit_pos
 // advance the frontier after appending
 void bvec32::appendFill(bool bit, uint32_t n) {
+	if (bit) count += n;
 	if ((*(frontier.active_word) & BIT1) == 0) { // current word is a literal word
 		uint32_t bits_available = LITERAL_SIZE - frontier.bit_pos; // size % LITERAL_SIZE;
 //		fprintf(stderr,"bits_available: %u\n",bits_available);

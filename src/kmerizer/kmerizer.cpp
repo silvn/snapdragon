@@ -183,20 +183,48 @@ uint32_t kmerizer::find(char* seq) {
 		kmer = canonicalize(packed,rcpack);
 	}
 
-	//hash it
+	// hash it
 	size_t bin = hashkmer(kmer,0);
 
-	// find it
-	return find(kmer,bin);
+	// check if we've loaded the bit slices for this bin
+	if (slices[bin].empty()) {
+		// load the kmer slices for this bin
+		char fname [100];
+		sprintf(fname,"%s/%zi-mers.%zi",outdir,k,bin);
+		vector<uint32_t> junk;
+		read_bitmap(fname,junk,slices[bin]);
+	}
+
+	// search the index by iterative boolean operations
+	bvec32 *res = new bvec32(true); // first create an empty bitvector
+	res->appendFill(true,slices[bin][0]->get_size()); // then make it all 1's
+	for (size_t w=0;w<nwords;w++) {
+		for(size_t b=0;b<64;b++) {
+			if (kmer[w] & (1ULL << 63-b))
+				*res &= *(slices[bin][w*nwords + b]);
+			else
+				*res &= *(slices[bin][w*nwords + b]->copyflip());
+			if (res->cnt() == 0) return 0;
+		}
+	}
+	// if we've reached this point, there should be one set bit in res
+	if (res->cnt() != 1) {
+		fprintf(stderr,"expected only 1, but cnt() returned %u\n",res->cnt());
+		exit(1);
+	}
+	// need to figure out which bit
+	// and lookup the associated count
+	res->decompress();
+	vector<uint32_t> hits = res->get_words();
+	size_t key=1;
+	while (key<kmer_freq[bin].size())
+		if (counts[bin][key]->find(hits[0]))
+			key++;
+		else
+			break;
+	return kmer_freq[bin][key-1];
 }
 
-uint32_t kmerizer::find(word_t *kmer, size_t bin) {
-	if (kmer_buf[bin]==NULL) {
-		// try to mmap the file into the kmer_buf
-		// if mmap fails, do a linear scan of the file and return the associated count
-	}
-	// we've got the data in kmer_buf[bin]
-}
 
 void kmerizer::histogram() {
 	if (batches>1)
@@ -767,7 +795,6 @@ void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
 		fwrite(&n_distinct,sizeof(int),1,ofp);
 		fwrite(kmer_freq[bin].data(),sizeof(uint32_t),n_distinct,ofp);
 		for(size_t i=0;i<n_distinct;i++) {
-			// I want this DIY serialization/deserialization in bvec
 			uint32_t *buf;
 			size_t bytes = counts[bin][i]->dump(&buf);
 			fwrite(&bytes,sizeof(size_t),1,ofp);

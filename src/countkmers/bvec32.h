@@ -70,6 +70,9 @@ public:
 
     // is x in the set?
     bool find(uint32_t x);
+	// find the position of the next set bit after x
+	uint32_t nextOne(uint32_t x);
+	
 	// insert x into an existing bvec (at the end is faster)
 	void setBit(uint32_t x);
 	// for constructing a rle bvec one bit at a time
@@ -94,7 +97,6 @@ private:
     void rle_AND_non(bvec32& rhs);
     void non_AND_rle(bvec32& rhs);
     void non_AND_non(bvec32& rhs);
-	bool rle_find(uint32_t x);
     inline uint32_t popcount(uint32_t val) const;
 	// checkpoint: active word and associated info
 	struct checkpoint {

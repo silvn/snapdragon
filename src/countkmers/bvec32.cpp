@@ -178,6 +178,37 @@ void bvec32::decompress() {
 	rle = false;
 }
 
+// only works with compressed - return the position of the next set bit after position x
+uint32_t bvec32::nextOne(uint32_t x) {
+	if (!rle) { fprintf(stderr,"nextOne() only works on compressed bitvectors\n"); exit(1); }
+
+	x++;
+	if (frontier.bit_pos > x) {
+		frontier.active_word = words.begin();
+		frontier.bit_pos = 0;
+	}
+	
+	while(frontier.active_word != words.end()) {
+		// what type of word is it?
+		if (*(frontier.active_word) & BIT1) { // fill word
+			uint32_t span = (*(frontier.active_word) & FILLMASK) * LITERAL_SIZE;
+			if ((frontier.bit_pos + span >= x) && (*(frontier.active_word) & BIT2)) // x is within a 1-fill
+				return x;
+			frontier.bit_pos += span;
+			x += span;
+		}
+		else { // literal word
+			if ((frontier.bit_pos + LITERAL_SIZE >= x) &&
+				((1UL << (frontier.bit_pos + LITERAL_SIZE - x)) & *(frontier.active_word)))
+				return x;
+			frontier.bit_pos += LITERAL_SIZE;
+			x += LITERAL_SIZE;
+		}
+		frontier.active_word++;
+	}
+	return size; // no next set bit, so return the number of bits
+}
+
 // in place version of the bitwise OR operator.
 void bvec32::operator|=(bvec32& bv) {
 	// decide which version we'll be using
@@ -606,13 +637,7 @@ void bvec32::rle_AND_rle(bvec32& bv) {
 }
 
 bool bvec32::find(uint32_t x) {
-	if (rle)
-		return rle_find(x);
-	else
-		return binary_search(words.begin(), words.end(), x);
-}
-
-bool bvec32::rle_find(uint32_t x) {
+	if (!rle) return binary_search(words.begin(), words.end(), x);
 	// This function may be called on a sequence of increasing values
 	// Use a checkpoint to determine if we can start at the active word
 	// or if we need to go back to words.begin().

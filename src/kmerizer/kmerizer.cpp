@@ -863,5 +863,46 @@ void kmerizer::range_index(vector<uint32_t> &vec, vector<uint32_t> &values, vect
 		index[i] = new bvec32(vrange[i]);
 }
 
-// need an iterator that works with a bvec32 mask - need bvec32->nextOne(); - returns position of set bit
-// or number of bits 
+// need an iterator that works with a bvec32 mask bvec32->nextOne(); - returns position of set bit
+// or number of bits (invalid response)
+
+// We can do this in parallel if we figure out in advance the offset within the output file for each bin.
+// A frequency histogram can get us the number of 1 digit counts, 2 digit counts, 3 digit counts, etc.
+// So, if there are mask->cnt() set bits, we need n*(k+2) + n1 + 2n2 + 3n3 etc bytes. Each kmer takes k bytes, and you have a tab and a newline character on each line. n1 = 1 digit counts, n2 = 2 digit counts, etc...
+void kmerizer::dump(char *fname) {
+	// create a bitvector of all 1's for each bin
+	// and call dump(FILE *fp, bvec32 *mask)
+	bvec32 *mask [NBINS];
+	for(size_t i=0;i<NBINS;i++) {
+		mask[i] = new bvec32(true); // first create an empty bitvector
+		mask[i]->appendFill(true,counts[i][0]->get_size()); // then make it all 1's
+	}
+	dump(fname,mask);
+}
+
+// find kmers with frequencies in the given range [min,max]
+// when max < min, ignore max and find kmers with frequencies in the range [min,infinity]
+void kmerizer::filter(uint32_t min, uint32_t max, bvec32 **mask) {
+	// do range queries over each bin to build up an array of bvec32 masks.
+	boost::thread_group tg;
+	for(size_t i = 0; i < NBINS; i += thread_bins) {
+		size_t j = (i + thread_bins > NBINS) ? NBINS : i + thread_bins;
+		tg.create_thread(boost::bind(&kmerizer::do_filter, this, i, j, min, max, mask));
+	}
+	tg.join_all();
+}
+
+void kmerizer::dump(char *fname, bvec32 **mask) {
+	// determine the file size and offsets in advance so we can write in parallel
+	boost::thread_group tg;
+	for(size_t i = 0; i < NBINS; i += thread_bins) {
+		size_t j = (i + thread_bins > NBINS) ? NBINS : i + thread_bins;
+		FILE *fp;
+		// advance *fp to the beginning of bin i in the output file
+		tg.create_thread(boost::bind(&kmerizer::do_dump, this, i, j, fp, mask));
+	}
+	tg.join_all();
+}
+
+void kmerizer::do_dump(const size_t from, const size_t to, FILE *fp, bvec32 **mask) {}
+void kmerizer::do_filter(const size_t from, const size_t to, uint32_t min, uint32_t max, bvec32 **mask) {}

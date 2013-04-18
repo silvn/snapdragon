@@ -43,6 +43,9 @@ public:
 	void load(); // reads kmer indexes into memory
 	void histogram(); // output the kmer count frequency distribution
 	uint32_t find(char* query);
+	void dump(char *fname);
+	void dump(char *fname,bvec32 **mask);
+	void filter(uint32_t min, uint32_t max, bvec32 **mask);
 	~kmerizer() {};
 
 private:
@@ -66,6 +69,9 @@ private:
 	void mergeBatches();
 	void do_mergeBatches(const size_t from, const size_t to);
 	void do_loadIndex(const size_t from, const size_t to);
+	void do_dump(const size_t from, const size_t to, FILE *fp, bvec32 **mask);
+	void do_filter(const size_t from, const size_t to, uint32_t min, uint32_t max, bvec32 **mask);
+
 	// is this too generic to go here?
 	void range_index(vector<uint32_t> &vec, vector<uint32_t> &values, vector<bvec32*> &index);
 	void read_bitmap(const char* idxfile, vector<uint32_t> &values, vector<bvec32*> &index);

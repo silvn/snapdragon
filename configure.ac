@@ -23,7 +23,7 @@ AC_SUBST(CPPFLAGS, "$boost_cppflags $CPPFLAGS")
 
 AC_LANG_PUSH([C++])
 AC_CHECK_HEADERS([boost/foreach.hpp], [],
-    [AC_MSG_ERROR(You need the Boost libraries.)])
+	[AC_MSG_ERROR(You need the Boost libraries.)])
 AC_CHECK_HEADERS([zlib.h], [],
 	[AC_MSG_ERROR(You need zlib (http://zlib.net).)])
 AC_LANG_POP([C++])
@@ -48,19 +48,20 @@ AC_CHECK_LIB([boost_serialization], [serialize])
 
 AC_MSG_CHECKING(whether to enable extra optimization)
 AC_ARG_ENABLE(xopt,
-	      [AS_HELP_STRING([--enable-xopt],[turn on extra optimization (default: no, leave the default CXXFLAGS alone)])],
-	      [if test "$enableval" = "yes" ; then xopt="yes" ; else xopt="no" ; fi],[xopt="no"])
+	[AS_HELP_STRING([--enable-xopt],
+		[turn on extra optimization (default: no, leave the default CXXFLAGS alone)])],
+	[if test "$enableval" = "yes" ; then xopt="yes" ; else xopt="no" ; fi],[xopt="no"])
 AC_MSG_RESULT($xopt)
 if test "x$xopt" = "xyes" ; then
    # add -O5 if the compiler accepts it, otherwise -O3
    OLDCXXFLAGS=$CXXFLAGS;
    CXXFLAGS="$CXXFLAGS -O5";
    AC_COMPILE_IFELSE([
-      AC_LANG_PROGRAM([[
+	AC_LANG_PROGRAM([[
 	#include <cmath>
 	]], [[
 	return (1 == static_cast<int>(std::sqrt(2.0)));
-   	]])], [], [CXXFLAGS="$OLDCXXFLAGS -O3"])
+	]])], [], [CXXFLAGS="$OLDCXXFLAGS -O3"])
 fi
 
 AC_ARG_ENABLE(fastbit,
@@ -91,14 +92,12 @@ AC_CONFIG_FILES([
 	Makefile
 	src/Makefile
 	src/fastbit/Makefile
-    src/countkmers/Makefile
-    src/preprocessing/Makefile
+	src/countkmers/Makefile
+	src/preprocessing/Makefile
 	src/kmerizer/Makefile
 	src/programs/Makefile
-    test/Makefile
+	test/Makefile
 ])
-if test "$fastbit" = "yes"; then
-	AC_CONFIG_SUBDIRS([vendor/fastbit])
-fi
+AC_CONFIG_SUBDIRS([vendor/fastbit])
 LT_INIT
 AC_OUTPUT

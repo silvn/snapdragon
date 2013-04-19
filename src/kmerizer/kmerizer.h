@@ -268,4 +268,4 @@ inline uint32_t kmerizer::pos2value(size_t pos, vector<uint32_t> &values, vector
 }
 
 
-#endif
+#endif // #ifndef _KMERIZER_H_

@@ -1,4 +1,4 @@
-#include "countkmers/kseq.h"
+#include "bvec/kseq.h"
 #include <zlib.h>
 #include <stdio.h>
 #include <stdint.h>

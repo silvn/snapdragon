@@ -1,4 +1,5 @@
 #include "test.h"
+#include "kmerizer/kmerizer.h"
 
 int run_test_cases() {
 	return 0;

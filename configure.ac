@@ -92,7 +92,7 @@ AC_CONFIG_FILES([
 	Makefile
 	src/Makefile
 	src/fastbit/Makefile
-	src/countkmers/Makefile
+	src/bvec/Makefile
 	src/preprocessing/Makefile
 	src/kmerizer/Makefile
 	src/programs/Makefile

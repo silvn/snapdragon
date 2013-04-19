@@ -283,9 +283,9 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 @MACOS_TRUE@suff = -mt
-AM_CPPFLAGS = -I../countkmers
+AM_CPPFLAGS = -I../bvec
 packmers_SOURCES = packmers64.cpp kmerizer.h
-packmers_LDFLAGS = -L../countkmers/.libs -lz -lboost_thread$(suff) \
+packmers_LDFLAGS = -L../bvec/.libs -lz -lboost_thread$(suff) \
 	-lboost_system$(suff) -lboost_serialization$(suff)
 
 noinst_LTLIBRARIES = libkmerizer.la

@@ -1,15 +1,15 @@
 #ifndef BVEC_H
 #define BVEC_H
 
-#define WORD_SIZE 32
-#define LITERAL_SIZE 31
-#define BIT32 2147483648
-#define BIT31 1073741824
-#define FILLMASK 1073741823
-#define ALL1S 2147483647
-#define ONEFILL 3221225472
-#define ONEFILL1 3221225473
-#define ONEFILL2 4294967295
+#define WORD_SIZE            32
+#define LITERAL_SIZE         31
+#define BIT32        2147483648
+#define BIT31        1073741824
+#define FILLMASK     1073741823
+#define ALL1S        2147483647
+#define ONEFILL      3221225472
+#define ONEFILL1     3221225473
+#define ONEFILL2     4294967295
 
 #include <algorithm>
 #include <vector>

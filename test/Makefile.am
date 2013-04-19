@@ -1,6 +1,6 @@
-check_PROGRAMS = bvec_density serialize
+check_PROGRAMS = bvec_density serialize kmerize
 AM_DEFAULT_SOURCE_EXT = .cpp
-SOURCES = bvec_density.cpp serialize.cpp test.h
+SOURCES = bvec_density.cpp serialize.cpp kmerize.cpp test.h
 CC = g++
 ACLOCAL_AMFLAGS = -I m4
 AM_CXXFLAGS = -I../src -I$(top_srcdir)/../src -I$(top_srcdir)/../test

@@ -49,7 +49,8 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-check_PROGRAMS = bvec_density$(EXEEXT) serialize$(EXEEXT)
+check_PROGRAMS = bvec_density$(EXEEXT) serialize$(EXEEXT) \
+	kmerize$(EXEEXT)
 subdir = test
 DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am depcomp \
 	test-driver ar-lib config.guess config.sub install-sh missing \
@@ -73,6 +74,10 @@ AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
 am__v_lt_1 = 
+kmerize_SOURCES = kmerize.cpp
+kmerize_OBJECTS = kmerize.$(OBJEXT)
+kmerize_LDADD = $(LDADD)
+kmerize_DEPENDENCIES =
 serialize_SOURCES = serialize.cpp
 serialize_OBJECTS = serialize.$(OBJEXT)
 serialize_LDADD = $(LDADD)
@@ -111,7 +116,7 @@ AM_V_CXXLD = $(am__v_CXXLD_@AM_V@)
 am__v_CXXLD_ = $(am__v_CXXLD_@AM_DEFAULT_V@)
 am__v_CXXLD_0 = @echo "  CXXLD   " $@;
 am__v_CXXLD_1 = 
-DIST_SOURCES = bvec_density.cpp serialize.cpp
+DIST_SOURCES = bvec_density.cpp kmerize.cpp serialize.cpp
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -462,7 +467,7 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AM_DEFAULT_SOURCE_EXT = .cpp
-SOURCES = bvec_density.cpp serialize.cpp test.h
+SOURCES = bvec_density.cpp serialize.cpp kmerize.cpp test.h
 ACLOCAL_AMFLAGS = -I m4
 AM_CXXFLAGS = -I../src -I$(top_srcdir)/../src -I$(top_srcdir)/../test
 TESTS = $(check_PROGRAMS) histo.test
@@ -523,6 +528,9 @@ clean-checkPROGRAMS:
 bvec_density$(EXEEXT): $(bvec_density_OBJECTS) $(bvec_density_DEPENDENCIES) $(EXTRA_bvec_density_DEPENDENCIES) 
 	@rm -f bvec_density$(EXEEXT)
 	$(AM_V_CXXLD)$(CXXLINK) $(bvec_density_OBJECTS) $(bvec_density_LDADD) $(LIBS)
+kmerize$(EXEEXT): $(kmerize_OBJECTS) $(kmerize_DEPENDENCIES) $(EXTRA_kmerize_DEPENDENCIES) 
+	@rm -f kmerize$(EXEEXT)
+	$(AM_V_CXXLD)$(CXXLINK) $(kmerize_OBJECTS) $(kmerize_LDADD) $(LIBS)
 serialize$(EXEEXT): $(serialize_OBJECTS) $(serialize_DEPENDENCIES) $(EXTRA_serialize_DEPENDENCIES) 
 	@rm -f serialize$(EXEEXT)
 	$(AM_V_CXXLD)$(CXXLINK) $(serialize_OBJECTS) $(serialize_LDADD) $(LIBS)
@@ -534,6 +542,7 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/bvec_density.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/kmerize.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/serialize.Po@am__quote@
 
 .cpp.o:
@@ -766,6 +775,13 @@ bvec_density.log: bvec_density$(EXEEXT)
 serialize.log: serialize$(EXEEXT)
 	@p='serialize$(EXEEXT)'; \
 	b='serialize'; \
+	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
+	--log-file $$b.log --trs-file $$b.trs \
+	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
+	"$$tst" $(AM_TESTS_FD_REDIRECT)
+kmerize.log: kmerize$(EXEEXT)
+	@p='kmerize$(EXEEXT)'; \
+	b='kmerize'; \
 	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
 	--log-file $$b.log --trs-file $$b.trs \
 	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \

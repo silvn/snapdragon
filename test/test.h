@@ -2,6 +2,8 @@
 #define SNAPDRAGON_TEST_H
 
 #include <vector>
+#include <stdio.h>
+#include <stdint.h>
 
 using namespace std;
 

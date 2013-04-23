@@ -260,6 +260,7 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 histo_SOURCES = histo.cpp
+histo_DEPENDENCIES = ../kmerizer/libkmerizer.la
 kcount_SOURCES = kcount.cpp
 AM_CXXFLAGS = -I../kmerizer -I../bvec
 @MACOS_TRUE@suff = -mt

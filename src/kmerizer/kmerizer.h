@@ -1,5 +1,5 @@
-#ifndef KMERIZER_H
-#define KMERIZER_H
+#ifndef SNAPDRAGON_KMERIZER_H
+#define SNAPDRAGON_KMERIZER_H
 
 #define DEBUG false
 #define NBINS 256
@@ -36,7 +36,7 @@ class kmerizer {
     vector<bvec*> slices [NBINS]; // bitmap self index of kmers
 
 public:
-    kmerizer(const size_t _k, const size_t _threads, char* _outdir, const char _mode);
+    kmerizer(const size_t _k, const size_t _threads, const char* _outdir, const char _mode);
     int allocate(const size_t maximem); // allocates memory for each kmer_buf
     void addSequence(const char* seq,const int length); // extract (canonicalized) kmers from the sequence
     void save(); // writes distinct kmers and rle counts to disk (merging multiple batches)
@@ -268,4 +268,4 @@ inline uint32_t kmerizer::pos2value(size_t pos, vector<uint32_t> &values, vector
 }
 
 
-#endif // #ifndef _KMERIZER_H_
+#endif // #ifndef SNAPDRAGON_KMERIZER_H

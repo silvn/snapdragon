@@ -9,23 +9,27 @@
 #include <sys/stat.h> // mkdir()
 #include <ctime> // clock_t clock() CLOCKS_PER_SEC
 
-
-// constructor
-kmerizer::kmerizer(const size_t _k, const size_t _threads, char* _outdir, const char _mode) {
+kmerizer::kmerizer(
+    const size_t _k,
+    const size_t _threads,
+    const char * _outdir,
+    const char   _mode
+) {
     k = _k;
-    kmask = 0xFFFFFFFFFFFFFFFFULL;
+    kmask       = 0xFFFFFFFFFFFFFFFFULL;
     shiftlastby = 62;
-    lshift=0;
-    rshift=0;
-    if (k%32 > 0) {
-        kmask = (1ULL << (2*(k%32))) - 1;
+    lshift      = 0;
+    rshift      = 0;
+    if (k % 32 > 0) {
+        kmask = (1ULL << (2*(k%32 ))) - 1;
         shiftlastby = 2*(k%32) - 2;
         lshift = 2*(k%32);
         rshift = 64 - lshift;
     }
     nwords = ((k-1)>>5)+1;
-    kmer_size = nwords*sizeof(kword_t);
-    outdir = _outdir;
+    kmer_size = nwords * sizeof(kword_t);
+    outdir = new char[strlen(_outdir)];
+    strcpy(outdir, _outdir);
     mode = _mode;
     threads = _threads;
     thread_bins = NBINS/threads;

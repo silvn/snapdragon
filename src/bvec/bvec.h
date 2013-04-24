@@ -47,6 +47,9 @@ public:
     bvec(bool wah) : rle(false), count(0), size(0) {compress();};
     bvec(vector<word_t>& vals);
     bvec(word_t* buf); // DIY deserialization
+    
+    bvec& copy(const bvec& bv);
+    
     void print();
     void compress();
     void decompress();
@@ -66,11 +69,13 @@ public:
 
     // is x in the set?
     bool find(word_t x);
+
     // find the position of the next set bit after x
-    word_t next_one(word_t x);
-    
+    word_t nextOne(word_t x);
+
     // insert x into an existing bvec (at the end is faster)
     void setBit(word_t x);
+
     // for constructing a rle bvec one bit at a time
     void appendFill(bool bit, word_t count);
 
@@ -86,7 +91,6 @@ private:
 
     bool low_density(vector<word_t>& vals);
     void construct_rle(vector<word_t>& vals);
-    bvec& copy(const bvec& bv);
     void matchSize(bvec& bv);
     void rle_OR_rle(bvec& rhs);
     void rle_OR_non(bvec& rhs);

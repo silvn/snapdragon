@@ -15,71 +15,136 @@ typedef uint64_t kword_t;
 using namespace std;
 
 class kmerizer {
-    size_t k;
-    kword_t kmask;
-    size_t shiftlastby;
-    size_t rshift, lshift;
-    size_t nwords;
-    size_t kmer_size; // in bytes
-    size_t threads;
-    size_t thread_bins;
-    size_t batches;
-    size_t max_kmers_per_bin;
-    char mode;
-    char state;
-    char *outdir;
+    size_t           k;
+    kword_t          kmask;
+    size_t           shiftlastby;
+    size_t           rshift, lshift;
+    size_t           nwords;
+    size_t           kmer_size; // in bytes
+    size_t           threads;
+    size_t           thread_bins;
+    size_t           batches;
+    size_t           max_kmers_per_bin;
+    char             mode;
+    char             state;
+    char             *outdir;
 
-    kword_t* kmer_buf[NBINS]; // raw unsorted padded kmers, or sort|uniq'ed kmers
-    uint32_t bin_tally[NBINS]; // number of kmers in each bin (or number of distinct kmers)
-    vector<uint32_t> kmer_freq [NBINS]; // sorted distinct kmer frequencies
-    vector<bvec*> counts [NBINS]; // bitmap index of frequency counts
-    vector<bvec*> slices [NBINS]; // bitmap self index of kmers
+    // raw unsorted padded kmers, or sort|uniq'ed kmers
+    kword_t*         kmer_buf[NBINS];
+    
+    // number of kmers in each bin (or number of distinct kmers)
+    uint32_t         bin_tally[NBINS];
+    
+    // sorted distinct kmer frequencies
+    vector<uint32_t> kmer_freq[NBINS];
+
+    // bitmap index of frequency counts
+    vector<bvec*>    counts[NBINS];
+
+    // bitmap self index of kmers
+    vector<bvec*>    slices [NBINS];
 
 public:
-    kmerizer(const size_t _k, const size_t _threads, const char* _outdir, const char _mode);
-    int allocate(const size_t maximem); // allocates memory for each kmer_buf
-    void addSequence(const char* seq,const int length); // extract (canonicalized) kmers from the sequence
-    void save(); // writes distinct kmers and rle counts to disk (merging multiple batches)
-    void load(); // reads kmer indexes into memory
-    void histogram(); // output the kmer count frequency distribution
-    uint32_t find(char* query);
+    // constructor
+    kmerizer(const size_t k,
+             const size_t threads,
+             const char * outdir,
+             const char mode);
+
+    // allocate memory for each kmer_buf
+    int allocate(const size_t maximem);
+
+    // extract (canonicalized) kmers from the sequence
+    void addSequence(const char* seq,const int length);
+
+    // write distinct kmers and RLE counts to disk (merging multiple batches)
+    void save();
+
+    // read kmer indexes into memory
+    void load();
+
+    // output the kmer count frequency distribution
+    void histogram();
+    uint32_t find(const char* query);
     void dump(char *fname);
-    void dump(char *fname,bvec **mask);
+    void pdump(char *fname, bvec **mask);
+    void sdump(char *fname, bvec **mask);
     void filter(uint32_t min, uint32_t max, bvec **mask);
+    
+    uint32_t frequency(size_t bin, uint32_t pos);
+
     ~kmerizer() {};
 
 private:
-    inline kword_t twobit(const kword_t val) const; // pack nucleotides into 2 bits
-    void next_kmer(kword_t* kmer, const char nucl); // shift kmer to make room for nucl
+
+    // pack nucleotides into 2 bits
+    inline kword_t twobit(const kword_t val) const;
+
+    // shift kmer to make room for nucl
+    void next_kmer(kword_t* kmer, const char nucl);
+
     inline void unpack(kword_t* kmer, char *seq);
-    inline kword_t revcomp(const kword_t val) const; // reverse complement
-    inline uint8_t hashkmer(const kword_t *kmer, const uint8_t seed) const; // to select a bin
-    inline unsigned int popcount(kword_t v) const; // count set bits in a kmer (actually XOR of 2 kmers)
-    inline unsigned int selectbit(kword_t v, unsigned int r); // returns the position of the rth set bit in v
+
+    // reverse complement
+    inline kword_t revcomp(const kword_t val) const;
+
+    // to select a bin
+    inline uint8_t hashkmer(const kword_t *kmer, const uint8_t seed) const;
+
+    // count set bits in a kmer (actually XOR of 2 kmers)
+    inline unsigned int popcount(kword_t v) const;
+
+    // returns the position of the rth set bit in v
+    inline unsigned int selectbit(kword_t v, unsigned int r);
+
     inline size_t pos2kmer(size_t pos, kword_t *kmer, vector<bvec*> &index);
-    inline uint32_t pos2value(size_t pos, vector<uint32_t> &values, vector<bvec*> &index);
-    
+
+    inline uint32_t pos2value(size_t pos, vector<uint32_t> &values,
+                              vector<bvec*> &index);
+
     kword_t* canonicalize(kword_t *packed, kword_t *rcpack) const;
     uint32_t find(kword_t *kmer, size_t bin);
-    void serialize(); // kmer_buf is full. uniqify and write batch to disk
-    void uniqify(); // qsort each kmer_buf, update bin_tally, and fill counts
-    void do_unique(const size_t from, const size_t to); // for parallelization
+
+    // kmer_buf is full. uniqify and write batch to disk
+    void serialize();
+    
+    // qsort each kmer_buf, update bin_tally, and fill counts
+    void uniqify();
+    
+    // for parallelization
+    void do_unique(const size_t from, const size_t to);
     void writeBatch();
-    void do_writeBatch(const size_t from, const size_t to); // for parallelization
+    
+    // for parallelization
+    void do_writeBatch(const size_t from, const size_t to);
     void mergeBatches();
     void do_mergeBatches(const size_t from, const size_t to);
     void do_loadIndex(const size_t from, const size_t to);
     void do_dump(const size_t from, const size_t to, FILE *fp, bvec **mask);
-    void do_filter(const size_t from, const size_t to, uint32_t min, uint32_t max, bvec **mask);
-
+    void do_filter(const size_t from,
+                   const size_t to,
+                   uint32_t min,
+                   uint32_t max,
+                   bvec **mask);
+    void do_pdump(const size_t from,
+                  const size_t to,
+                  char *buff,
+                  bvec **mask);
     // is this too generic to go here?
-    void range_index(vector<uint32_t> &vec, vector<uint32_t> &values, vector<bvec*> &index);
-    void read_bitmap(const char* idxfile, vector<uint32_t> &values, vector<bvec*> &index);
+    void range_index(vector<uint32_t> &vec,
+                     vector<uint32_t> &values,
+                     vector<bvec*> &index);
+    void read_bitmap(const char* idxfile,
+                     vector<uint32_t> &values,
+                     vector<bvec*> &index);
     size_t find_min(const kword_t* kmers, const uint32_t* kcounts);
     // uint32_t pos2value(size_t pos, vector<uint32_t> &values, vector<bvec*> &index);
     // size_t pos2kmer(size_t pos, kword_t *kmer, vector<bvec*> &index);
     void print_kmer(kword_t *kmer);
-    void bit_slice(kword_t *kmers, const size_t n, bvec **kmer_slices, size_t nbits);
+    void bit_slice(kword_t *kmers,
+                   const size_t n,
+                   bvec **kmer_slices,
+                   size_t nbits);
 
 };
 
@@ -213,7 +278,8 @@ inline kword_t kmerizer::revcomp(const kword_t val) const {
         (table[(val>>56)&0xFFUL]);
 }
 
-inline uint8_t kmerizer::hashkmer(const kword_t *kmer, const uint8_t seed) const {
+inline uint8_t
+kmerizer::hashkmer(const kword_t *kmer, const uint8_t seed) const {
     static const uint8_t Rand8[256] =
     {
         105,193,195, 26,208, 80, 38,156,128,  2,101,205, 75,116,139, 61,
@@ -247,7 +313,8 @@ inline uint8_t kmerizer::hashkmer(const kword_t *kmer, const uint8_t seed) const
     return h;
 }
 
-inline size_t kmerizer::pos2kmer(size_t pos, kword_t *kmer, vector<bvec*> &index) {
+inline size_t
+kmerizer::pos2kmer(size_t pos, kword_t *kmer, vector<bvec*> &index) {
     if (pos >= index[0]->get_size()) return 1;
     size_t bpw = 8*sizeof(kword_t);
     // need to zero the kmer first
@@ -258,7 +325,12 @@ inline size_t kmerizer::pos2kmer(size_t pos, kword_t *kmer, vector<bvec*> &index
     return 0;
 }
 
-inline uint32_t kmerizer::pos2value(size_t pos, vector<uint32_t> &values, vector<bvec*> &index) {
+inline uint32_t
+kmerizer::pos2value(
+    size_t pos,
+    vector<uint32_t> &values,
+    vector<bvec*> &index)
+{
     // lookup the value in the pos bit
     // find the first bvec where this bit is set
     for(size_t i=0;i<values.size();i++)

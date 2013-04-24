@@ -9,25 +9,24 @@
 #include <sys/stat.h> // mkdir()
 #include <ctime> // clock_t clock() CLOCKS_PER_SEC
 
-kmerizer::kmerizer(
-    const size_t _k,
-    const size_t _threads,
-    const char * _outdir,
-    const char   _mode
-) {
+kmerizer::kmerizer(const size_t _k,
+                   const size_t _threads,
+                   const char * _outdir,
+                   const char   _mode)
+{
     k = _k;
     kmask       = 0xFFFFFFFFFFFFFFFFULL;
     shiftlastby = 62;
     lshift      = 0;
     rshift      = 0;
     if (k % 32 > 0) {
-        kmask = (1ULL << (2*(k%32 ))) - 1;
-        shiftlastby = 2*(k%32) - 2;
-        lshift = 2*(k%32);
+        kmask = (1ULL << (2 * (k % 32))) - 1;
+        shiftlastby = 2 * (k % 32) - 2;
+        lshift = 2 * (k % 32);
         rshift = 64 - lshift;
     }
     nwords = ((k-1)>>5)+1;
-    kmer_size = nwords * sizeof(kword_t);
+    kmer_size = nwords * sizeof(uint32_t);
     outdir = new char[strlen(_outdir)];
     strcpy(outdir, _outdir);
     mode = _mode;
@@ -40,10 +39,10 @@ kmerizer::kmerizer(
 int kmerizer::allocate(const size_t maximem) {
     fprintf(stderr,"kmerizer::allocate(%zi)",maximem);
     clock_t start = clock();
-    memset(bin_tally,0,sizeof(uint32_t)*NBINS);
-    max_kmers_per_bin = maximem/kmer_size/NBINS;
-    for(size_t i=0; i<NBINS; i++) {
-        kmer_buf[i] = (kword_t*) calloc(max_kmers_per_bin, kmer_size);
+    memset(bin_tally, 0, sizeof(uint32_t) * NBINS);
+    max_kmers_per_bin = maximem / kmer_size / NBINS;
+    for (size_t i=0; i<NBINS; i++) {
+        kmer_buf[i] = (kword_t *) calloc(max_kmers_per_bin, kmer_size);
         if (kmer_buf[i]==NULL) return 1;
     }
     fprintf(stderr," took %f seconds\n",((float)(clock()-start))/CLOCKS_PER_SEC);
@@ -51,18 +50,18 @@ int kmerizer::allocate(const size_t maximem) {
     return 0;
 }
 
-kword_t* kmerizer::canonicalize(kword_t *packed, kword_t *rcpack) const {
-    for(size_t i=0;i<nwords;i++) {
+kword_t * kmerizer::canonicalize(kword_t *packed, kword_t *rcpack) const {
+    for (size_t i=0;i<nwords;i++) {
         rcpack[i] = packed[nwords-1-i];
     }
     if (lshift) {
-        for(size_t i=0;i<nwords-1;i++) {
+        for (size_t i=0;i<nwords-1;i++) {
             rcpack[i] |= rcpack[i+1] << lshift;
             rcpack[i+1] >>= rshift;
         }
     }
     int cmp=0;
-    for(size_t i=0;i<nwords;i++) {
+    for (size_t i=0;i<nwords;i++) {
         rcpack[i] = revcomp(rcpack[i]);
         if (i==nwords-1) rcpack[i] >>=rshift;
         if (cmp == 0) {
@@ -81,7 +80,7 @@ kword_t* kmerizer::canonicalize(kword_t *packed, kword_t *rcpack) const {
 void kmerizer::next_kmer(kword_t* kmer, const char nucl) {
     // shift first kmer by 2 bits
     kmer[0] <<= 2;
-    for(size_t w=1;w<nwords-1;w++) { // middle (full length) words
+    for (size_t w = 1; w < nwords - 1; w++) { // middle (full length) words
         kmer[w-1] |= kmer[w] >> 62; // move the top two bits
         kmer[w] <<= 2; // make room for the next word
     }
@@ -96,11 +95,11 @@ void kmerizer::next_kmer(kword_t* kmer, const char nucl) {
 
 void kmerizer::addSequence(const char* seq, const int length) {
     if (length < k) return;
-    kword_t packed [nwords];
-    kword_t rcpack [nwords];
-    memset(packed,0,kmer_size);
+    kword_t packed[nwords];
+    kword_t rcpack[nwords];
+    memset(packed, 0, kmer_size);
 
-    for(size_t i=0;i<k;i++)
+    for (size_t i = 0; i < k; i++)
         next_kmer(packed,seq[i]);
 
     kword_t *kmer = packed;
@@ -120,7 +119,7 @@ void kmerizer::addSequence(const char* seq, const int length) {
     bin_tally[bin]++;
     if (bin_tally[bin] == max_kmers_per_bin) serialize();
     // pack the rest of the sequence
-    for(size_t i=k; i<(size_t)length;i++) {
+    for (size_t i=k; i<(size_t)length;i++) {
         next_kmer(packed, seq[i]);
         if (mode == CANONICAL)
             kmer = canonicalize(packed,rcpack);
@@ -145,9 +144,9 @@ void kmerizer::save() {
     if (batches>1)
         mergeBatches();
     else
-        for(size_t bin=0;bin<NBINS;bin++) {
-            char ofname [100];
-            char nfname [100];
+        for (size_t bin=0;bin<NBINS;bin++) {
+            char ofname[100];
+            char nfname[100];
             sprintf(ofname,"%s/%zi-mers.%zi.1",outdir,k,bin);
             sprintf(nfname,"%s/%zi-mers.%zi",outdir,k,bin);
             if (rename(ofname,nfname) != 0)
@@ -163,7 +162,7 @@ void kmerizer::load() {
     fprintf(stderr,"kmerizer::load()");
     clock_t start = clock();
     boost::thread_group tg;
-    for(size_t i = 0; i < NBINS; i += thread_bins) {
+    for (size_t i = 0; i < NBINS; i += thread_bins) {
         size_t j = (i + thread_bins > NBINS) ? NBINS : i + thread_bins;
         tg.create_thread(boost::bind(&kmerizer::do_loadIndex, this, i, j));
     }
@@ -173,12 +172,12 @@ void kmerizer::load() {
 }
 
 // given one kmer, pack it, canonicalize it, hash it, find it
-uint32_t kmerizer::find(char* seq) {
+uint32_t kmerizer::find(const char* seq) {
     // pack it
-    kword_t packed [nwords];
-    kword_t rcpack [nwords];
+    kword_t packed[nwords];
+    kword_t rcpack[nwords];
     memset(packed,0,kmer_size);
-    for(size_t i=0;i<k;i++)
+    for (size_t i = 0; i < k; i++)
         next_kmer(packed,seq[i]);
     kword_t *kmer = packed;
 
@@ -193,7 +192,7 @@ uint32_t kmerizer::find(char* seq) {
     // check if we've loaded the bit slices for this bin
     if (slices[bin].empty()) {
         // load the kmer slices for this bin
-        char fname [100];
+        char fname[100];
         sprintf(fname,"%s/%zi-mers.%zi",outdir,k,bin);
         vector<uint32_t> junk;
         read_bitmap(fname,junk,slices[bin]);
@@ -203,7 +202,7 @@ uint32_t kmerizer::find(char* seq) {
     bvec *res = new bvec(true); // first create an empty bitvector
     res->appendFill(true,slices[bin][0]->get_size()); // then make it all 1's
     for (size_t w=0;w<nwords;w++) {
-        for(size_t b=0;b<64;b++) {
+        for (size_t b=0;b<64;b++) {
             if (kmer[w] & (1ULL << 63-b))
                 *res &= *(slices[bin][w*nwords + b]);
             else
@@ -220,9 +219,13 @@ uint32_t kmerizer::find(char* seq) {
     // and lookup the associated count
     res->decompress();
     vector<uint32_t> hits = res->get_words();
+    return frequency(bin,hits[0]);
+}
+
+uint32_t kmerizer::frequency(size_t bin, uint32_t pos) {
     size_t key=1;
     while (key<kmer_freq[bin].size())
-        if (counts[bin][key]->find(hits[0]))
+        if (counts[bin][key]->find(pos))
             key++;
         else
             break;
@@ -239,8 +242,8 @@ void kmerizer::histogram() {
 
     // merge the NBINS counts bvecs
     uint32_t todo = NBINS;
-    size_t offset [NBINS];
-    size_t done [NBINS];
+    size_t offset[NBINS];
+    size_t done[NBINS];
     memset(offset,0,sizeof(size_t)*NBINS);
     memset(done,0,sizeof(size_t)*NBINS);
     uint32_t key=1; // min kmer frequency
@@ -276,8 +279,8 @@ void kmerizer::serialize() {
 
     // zero the data
     memset(bin_tally,0,sizeof(uint32_t)*NBINS);
-    for(size_t i=0;i<NBINS;i++) {
-        for(size_t j=0; j<counts[i].size(); j++)
+    for (size_t i=0;i<NBINS;i++) {
+        for (size_t j=0; j<counts[i].size(); j++)
             delete counts[i][j]; // bvec destructor
     }
     state = READING;
@@ -287,7 +290,7 @@ void kmerizer::uniqify() {
     fprintf(stderr,"kmerizer::uniqify()");
     clock_t start = clock();
     boost::thread_group tg;
-    for(size_t i = 0; i < NBINS; i += thread_bins) {
+    for (size_t i = 0; i < NBINS; i += thread_bins) {
         size_t j = (i + thread_bins > NBINS) ? NBINS : i + thread_bins;
         tg.create_thread(boost::bind(&kmerizer::do_unique, this, i, j));
     }
@@ -300,7 +303,7 @@ void kmerizer::writeBatch() {
     fprintf(stderr,"kmerizer::writeBatch()");
     clock_t start = clock();
     boost::thread_group tg;
-    for(size_t i = 0; i < NBINS; i += thread_bins) {
+    for (size_t i = 0; i < NBINS; i += thread_bins) {
         size_t j = (i + thread_bins > NBINS) ? NBINS : i + thread_bins;
         tg.create_thread(boost::bind(&kmerizer::do_writeBatch, this, i, j));
     }
@@ -312,7 +315,7 @@ void kmerizer::mergeBatches() {
     fprintf(stderr,"kmerizer::mergeBatches()");
     clock_t start=clock();
     boost::thread_group tg;
-    for(size_t i=0;i<NBINS;i+=thread_bins) {
+    for (size_t i=0;i<NBINS;i+=thread_bins) {
         size_t j=(i+thread_bins>NBINS) ? NBINS : i+thread_bins;
         tg.create_thread(boost::bind(&kmerizer::do_mergeBatches, this, i, j));
     }
@@ -323,122 +326,122 @@ void kmerizer::mergeBatches() {
 
 
 int compare_kmers1(const void *k1, const void *k2) {
-    if (*(kword_t*)k1 > *(kword_t*)k2) return 1;
-    if (*(kword_t*)k1 < *(kword_t*)k2) return -1;
+    if (*(uint32_t*)k1 > *(uint32_t*)k2) return 1;
+    if (*(uint32_t*)k1 < *(uint32_t*)k2) return -1;
     return 0;
 }
 int compare_kmers2(const void *k1, const void *k2) {
-    for(size_t i=0;i<2;i++) {
-        if (*((kword_t*)k1+i) < *((kword_t*)k2+i)) return -1;
-        if (*((kword_t*)k1+i) > *((kword_t*)k2+i)) return 1;
+    for (size_t i=0;i<2;i++) {
+        if (*((uint32_t*)k1+i) < *((uint32_t*)k2+i)) return -1;
+        if (*((uint32_t*)k1+i) > *((uint32_t*)k2+i)) return 1;
     }
     return 0;
 }
 int compare_kmers3(const void *k1, const void *k2) {
-    for(size_t i=0;i<3;i++) {
-        if (*((kword_t*)k1+i) < *((kword_t*)k2+i)) return -1;
-        if (*((kword_t*)k1+i) > *((kword_t*)k2+i)) return 1;
+    for (size_t i=0;i<3;i++) {
+        if (*((uint32_t*)k1+i) < *((uint32_t*)k2+i)) return -1;
+        if (*((uint32_t*)k1+i) > *((uint32_t*)k2+i)) return 1;
     }
     return 0;
 }
 int compare_kmers4(const void *k1, const void *k2) {
-    for(size_t i=0;i<4;i++) {
-        if (*((kword_t*)k1+i) < *((kword_t*)k2+i)) return -1;
-        if (*((kword_t*)k1+i) > *((kword_t*)k2+i)) return 1;
+    for (size_t i=0;i<4;i++) {
+        if (*((uint32_t*)k1+i) < *((uint32_t*)k2+i)) return -1;
+        if (*((uint32_t*)k1+i) > *((uint32_t*)k2+i)) return 1;
     }
     return 0;
 }
 int compare_kmers5(const void *k1, const void *k2) {
-    for(size_t i=0;i<5;i++) {
-        if (*((kword_t*)k1+i) < *((kword_t*)k2+i)) return -1;
-        if (*((kword_t*)k1+i) > *((kword_t*)k2+i)) return 1;
+    for (size_t i=0;i<5;i++) {
+        if (*((uint32_t*)k1+i) < *((uint32_t*)k2+i)) return -1;
+        if (*((uint32_t*)k1+i) > *((uint32_t*)k2+i)) return 1;
     }
     return 0;
 }
 int compare_kmers6(const void *k1, const void *k2) {
-    for(size_t i=0;i<6;i++) {
-        if (*((kword_t*)k1+i) < *((kword_t*)k2+i)) return -1;
-        if (*((kword_t*)k1+i) > *((kword_t*)k2+i)) return 1;
+    for (size_t i=0;i<6;i++) {
+        if (*((uint32_t*)k1+i) < *((uint32_t*)k2+i)) return -1;
+        if (*((uint32_t*)k1+i) > *((uint32_t*)k2+i)) return 1;
     }
     return 0;
 }
 int compare_kmers7(const void *k1, const void *k2) {
-    for(size_t i=0;i<7;i++) {
-        if (*((kword_t*)k1+i) < *((kword_t*)k2+i)) return -1;
-        if (*((kword_t*)k1+i) > *((kword_t*)k2+i)) return 1;
+    for (size_t i=0;i<7;i++) {
+        if (*((uint32_t*)k1+i) < *((uint32_t*)k2+i)) return -1;
+        if (*((uint32_t*)k1+i) > *((uint32_t*)k2+i)) return 1;
     }
     return 0;
 }
 int compare_kmers8(const void *k1, const void *k2) {
-    for(size_t i=0;i<8;i++) {
-        if (*((kword_t*)k1+i) < *((kword_t*)k2+i)) return -1;
-        if (*((kword_t*)k1+i) > *((kword_t*)k2+i)) return 1;
+    for (size_t i=0;i<8;i++) {
+        if (*((uint32_t*)k1+i) < *((uint32_t*)k2+i)) return -1;
+        if (*((uint32_t*)k1+i) > *((uint32_t*)k2+i)) return 1;
     }
     return 0;
 }
 
 int kmercmp(const void *k1, const void *k2, size_t nwords) {
-    for(size_t i=0;i<nwords;i++) {
-        if (*((kword_t*)k1+i) < *((kword_t*)k2+i)) return -1;
-        if (*((kword_t*)k1+i) > *((kword_t*)k2+i)) return 1;
+    for (size_t i=0;i<nwords;i++) {
+        if (*((uint32_t*)k1+i) < *((uint32_t*)k2+i)) return -1;
+        if (*((uint32_t*)k1+i) > *((uint32_t*)k2+i)) return 1;
     }
     return 0;
 }
-struct kmer1_t { kword_t first_word; };
-struct kmer2_t { kword_t first_word; };
-struct kmer3_t { kword_t first_word; };
-struct kmer4_t { kword_t first_word; };
-struct kmer5_t { kword_t first_word; };
-struct kmer6_t { kword_t first_word; };
-struct kmer7_t { kword_t first_word; };
-struct kmer8_t { kword_t first_word; };
+struct kmer1_t { uint32_t first_word; };
+struct kmer2_t { uint32_t first_word; };
+struct kmer3_t { uint32_t first_word; };
+struct kmer4_t { uint32_t first_word; };
+struct kmer5_t { uint32_t first_word; };
+struct kmer6_t { uint32_t first_word; };
+struct kmer7_t { uint32_t first_word; };
+struct kmer8_t { uint32_t first_word; };
 bool operator<(const kmer1_t& a, const kmer1_t& b) {
     return a.first_word < b.first_word;
 }
 bool operator<(const kmer2_t& a, const kmer2_t& b) {
-    for(size_t i=0;i<2;i++) {
+    for (size_t i=0;i<2;i++) {
         if (*(&a.first_word+i) < *(&b.first_word+i)) return true;
         if (*(&a.first_word+i) > *(&b.first_word+i)) return false;
     }
     return false;
 }
 bool operator<(const kmer3_t& a, const kmer3_t& b) {
-    for(size_t i=0;i<3;i++) {
+    for (size_t i=0;i<3;i++) {
         if (*(&a.first_word+i) < *(&b.first_word+i)) return true;
         if (*(&a.first_word+i) > *(&b.first_word+i)) return false;
     }
     return false;
 }
 bool operator<(const kmer4_t& a, const kmer4_t& b) {
-    for(size_t i=0;i<4;i++) {
+    for (size_t i=0;i<4;i++) {
         if (*(&a.first_word+i) < *(&b.first_word+i)) return true;
         if (*(&a.first_word+i) > *(&b.first_word+i)) return false;
     }
     return false;
 }
 bool operator<(const kmer5_t& a, const kmer5_t& b) {
-    for(size_t i=0;i<5;i++) {
+    for (size_t i=0;i<5;i++) {
         if (*(&a.first_word+i) < *(&b.first_word+i)) return true;
         if (*(&a.first_word+i) > *(&b.first_word+i)) return false;
     }
     return false;
 }
 bool operator<(const kmer6_t& a, const kmer6_t& b) {
-    for(size_t i=0;i<6;i++) {
+    for (size_t i=0;i<6;i++) {
         if (*(&a.first_word+i) < *(&b.first_word+i)) return true;
         if (*(&a.first_word+i) > *(&b.first_word+i)) return false;
     }
     return false;
 }
 bool operator<(const kmer7_t& a, const kmer7_t& b) {
-    for(size_t i=0;i<7;i++) {
+    for (size_t i=0;i<7;i++) {
         if (*(&a.first_word+i) < *(&b.first_word+i)) return true;
         if (*(&a.first_word+i) > *(&b.first_word+i)) return false;
     }
     return false;
 }
 bool operator<(const kmer8_t& a, const kmer8_t& b) {
-    for(size_t i=0;i<8;i++) {
+    for (size_t i=0;i<8;i++) {
         if (*(&a.first_word+i) < *(&b.first_word+i)) return true;
         if (*(&a.first_word+i) > *(&b.first_word+i)) return false;
     }
@@ -447,7 +450,7 @@ bool operator<(const kmer8_t& a, const kmer8_t& b) {
 
 
 void kmerizer::do_unique(const size_t from, const size_t to) {
-    for(size_t bin=from; bin<to; bin++) {
+    for (size_t bin=from; bin<to; bin++) {
         if (1) {
         // stl sort
             if (nwords==1)
@@ -492,7 +495,7 @@ void kmerizer::do_unique(const size_t from, const size_t to) {
         uint32_t distinct = 0;
         vector<uint32_t> tally;
         tally.push_back(1); // first kmer
-        for(size_t i=1;i<bin_tally[bin];i++) {
+        for (size_t i=1;i<bin_tally[bin];i++) {
             kword_t *ith = kmer_buf[bin] + i*nwords;
             if(kmercmp(kmer_buf[bin] + distinct*nwords, ith, nwords) == 0)
                 tally.back()++;
@@ -505,46 +508,53 @@ void kmerizer::do_unique(const size_t from, const size_t to) {
 //      fprintf(stderr,"uniqify[%zi] reduced from %u - %u = %u\n",bin,bin_tally[bin],distinct+1,bin_tally[bin] - distinct - 1);
         bin_tally[bin] = distinct+1;
         // create a bitmap index for the tally vector
-        range_index(tally,kmer_freq[bin],counts[bin]);
+        range_index(tally, kmer_freq[bin], counts[bin]);
     }
 }
 
-void kmerizer::print_kmer(kword_t *kmer) {
-    size_t bpw = 8*sizeof(kword_t);
-    for(size_t j=0;j<nwords;j++) {
+void kmerizer::print_kmer(kword_t * kmer) {
+    size_t bpw = 8 * sizeof(kword_t);
+    for (size_t j = 0; j < nwords; j++) {
         fprintf(stderr," ");
-        for(size_t b=0;b<bpw;b++) {
+        for (size_t b=0;b<bpw;b++) {
             fprintf(stderr,"%d",((*(kmer+j) & (1ULL << (bpw-b-1)))) ? 1 : 0);
         }
     }
     fprintf(stderr,"\n");
 }
-void kmerizer::bit_slice(kword_t *kmers, const size_t n, bvec **kmer_slices, size_t nbits) {
+
+void
+kmerizer::bit_slice(
+    kword_t *    kmers,
+    const size_t n,
+    bvec **      kmer_slices,
+    size_t       nbits)
+{
     // initialize WAH compressed bitvectors
-    for(size_t i=0;i<nbits;i++) {
+    for (size_t i = 0; i < nbits; i++) {
         kmer_slices[i] = new bvec(true);
     }
     bitset<256> bbit; // for keeping track of the set bits
-    size_t boff [nbits]; // beginning of the current run of 1's or 0's
+    size_t boff[nbits]; // beginning of the current run of 1's or 0's
     memset(boff,0,nbits*sizeof(size_t)); // initialize to 0
-    unsigned int bpw = 8*sizeof(kword_t); // bits per word
+    unsigned int bpw = 8*sizeof(uint32_t); // bits per word
 
     // mark the set bits in the first kmer
     if (nwords>1) {
-        for(size_t w=0;w<nwords;w++) {
+        for (size_t w=0;w<nwords;w++) {
             unsigned int count = popcount(kmers[w]);
-            for(unsigned int r=1; r<=count; r++)
+            for (unsigned int r=1; r<=count; r++)
                 bbit.set(selectbit(kmers[w],r) + w*bpw,1);
         }
-        for(size_t i=1;i<n;i++) {
+        for (size_t i=1;i<n;i++) {
             // when n is large the number of different bits between kmer i and kmer i-1 is small
             // so use xor, popcount, and selectbit to identify the changed bit positions
-            kword_t *kmer = kmers + i*nwords;
-            kword_t *prev = kmer - nwords;
-            for(size_t w=0;w<nwords;w++) {
+            kword_t * kmer = kmers + i * nwords;
+            kword_t * prev = kmer - nwords;
+            for (size_t w=0;w<nwords;w++) {
                 kword_t x = kmer[w] ^ prev[w];
                 unsigned int count = popcount(x);
-                for(unsigned int r = 1; r<=count; r++) {
+                for (unsigned int r = 1; r<=count; r++) {
                     unsigned int b = selectbit(x,r) + w*bpw;
                     kmer_slices[b]->appendFill(bbit.test(b),i-boff[b]);
                     bbit.flip(b);
@@ -555,14 +565,14 @@ void kmerizer::bit_slice(kword_t *kmers, const size_t n, bvec **kmer_slices, siz
     }
     else { // stripped down version for nwords=1
         unsigned int count = popcount(kmers[0]);
-        for(unsigned int r=1; r<=count; r++)
+        for (unsigned int r=1; r<=count; r++)
             bbit.set(selectbit(kmers[0],r),1);
-        for(size_t i=1;i<n;i++) {
+        for (size_t i=1;i<n;i++) {
             // when n is large the number of different bits between kmer i and kmer i-1 is small
             // so use xor, popcount, and selectbit to identify the changed bit positions
-            kword_t x = kmers[i] ^ kmers[i-1];
+            uint32_t x = kmers[i] ^ kmers[i-1];
             unsigned int count = popcount(x);
-            for(unsigned int r = 1; r<=count; r++) {
+            for (unsigned int r = 1; r<=count; r++) {
                 unsigned int b = selectbit(x,r);
                 kmer_slices[b]->appendFill(bbit.test(b),i-boff[b]);
                 bbit.flip(b);
@@ -571,23 +581,23 @@ void kmerizer::bit_slice(kword_t *kmers, const size_t n, bvec **kmer_slices, siz
         }
     }
     // append the last runs
-    for(size_t b=0; b<nbits; b++)
+    for (size_t b=0; b<nbits; b++)
         if(boff[b] < n-1)
             kmer_slices[b]->appendFill(bbit.test(b),n-boff[b]);
 }
 
 void kmerizer::do_writeBatch(const size_t from, const size_t to) {
-    for(size_t bin=from; bin<to; bin++) {
+    for (size_t bin=from; bin<to; bin++) {
         // convert kmer_buf[bin] into a bit-sliced bitmap index
 //      fprintf(stderr,"bin_tally[%zi]: %u\n",bin,bin_tally[bin]);
         const size_t nbits = 8*kmer_size;
-        bvec* kmer_slices [nbits];
+        bvec* kmer_slices[nbits];
         bit_slice(kmer_buf[bin],bin_tally[bin],kmer_slices,nbits);
         
         FILE *fp;
         if (0) {
             // open output file for kmer_buf
-            char kmer_file [100];
+            char kmer_file[100];
             sprintf(kmer_file,"%s/%zi-mers.%zi.%zi",outdir,k,bin,batches);
             fp = fopen(kmer_file, "wb");
             fwrite(kmer_buf[bin],kmer_size,bin_tally[bin],fp);
@@ -595,17 +605,17 @@ void kmerizer::do_writeBatch(const size_t from, const size_t to) {
         }
         if (1) {
             // write the kmer_slices to a file
-            char kmer_file [100];
+            char kmer_file[100];
             sprintf(kmer_file,"%s/%zi-mers.%zi.%zi",outdir,k,bin,batches);
             fp = fopen(kmer_file, "wb");
-            size_t n_slices = 8*sizeof(kword_t);
+            size_t n_slices = 8*sizeof(uint32_t);
             fwrite(&n_slices,sizeof(size_t),1,fp);
-            for(size_t b=0;b<n_slices;b++) {
+            for (size_t b=0;b<n_slices;b++) {
                 uint32_t c = kmer_slices[b]->cnt();
                 fwrite(&c,sizeof(uint32_t),1,fp);
             }
             // fprintf(stderr,"bin_tally[%zi]: %u\n",bin,bin_tally[bin]);
-            for(size_t b=0;b<n_slices;b++) {
+            for (size_t b=0;b<n_slices;b++) {
                 uint32_t *buf;
                 size_t bytes = kmer_slices[b]->dump(&buf);
                 // fprintf(stderr,"%zi: %zi,",b,bytes);
@@ -617,7 +627,7 @@ void kmerizer::do_writeBatch(const size_t from, const size_t to) {
             fclose(fp);
         }
         // open output file for counts
-        char counts_file [100];
+        char counts_file[100];
         sprintf(counts_file,"%s/%zi-mers.%zi.%zi.idx",outdir,k,bin,batches);
         fp = fopen(counts_file, "wb");
         // first write the number of distinct values
@@ -626,7 +636,7 @@ void kmerizer::do_writeBatch(const size_t from, const size_t to) {
         size_t n_distinct = kmer_freq[bin].size();
         fwrite(&n_distinct,sizeof(size_t),1,fp);
         fwrite(kmer_freq[bin].data(),sizeof(uint32_t),n_distinct,fp);
-        for(size_t i=0;i<n_distinct;i++) {
+        for (size_t i=0;i<n_distinct;i++) {
             uint32_t *buf;
             size_t bytes = counts[bin][i]->dump(&buf);
             // how many bytes are we writing
@@ -651,11 +661,11 @@ void kmerizer::read_bitmap(const char* idxfile, vector<uint32_t> &values, vector
     values.resize(n_distinct);
     fread(values.data(),sizeof(uint32_t),n_distinct,fp);
     index.resize(n_distinct);
-    for(size_t i=0;i<n_distinct;i++) {
+    for (size_t i=0;i<n_distinct;i++) {
         size_t bytes;
         fread(&bytes,sizeof(size_t),1,fp);
         size_t words = bytes/sizeof(uint32_t);
-        uint32_t buf [words];
+        uint32_t buf[words];
         fread(buf,1,bytes,fp);
         index[i] = new bvec(buf);
     }
@@ -663,49 +673,51 @@ void kmerizer::read_bitmap(const char* idxfile, vector<uint32_t> &values, vector
 }
 
 void kmerizer::do_loadIndex(const size_t from, const size_t to) {
-    for(size_t bin=from; bin<to;bin++) {
-        char fname [100];
+    for (size_t bin=from; bin<to;bin++) {
+        char fname[100];
         sprintf(fname,"%s/%zi-mers.%zi.idx",outdir,k,bin);
         read_bitmap(fname,kmer_freq[bin],counts[bin]);
     }
 }
 
 void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
-    for(size_t bin=from; bin<to; bin++) {
+    for (size_t bin=from; bin<to; bin++) {
         // read the counts and kmers for each batch
-        vector<bvec*> batch_counts [batches];
-        vector<uint32_t> batch_values [batches];
-        vector<bvec*> batch_slices [batches];
-        vector<uint32_t> batch_slice_cnts [batches];
-        for(size_t i=0;i<batches;i++) {
-            char fname [100];
+        vector<bvec*>    batch_counts[batches];
+        vector<uint32_t> batch_values[batches];
+        vector<bvec*>    batch_slices[batches];
+        vector<uint32_t> batch_slice_cnts[batches];
+        kword_t  kmers[batches*nwords]; // next kmer in each active batch
+        uint32_t btally[batches]; // frequency of next kmer in each batch
+        size_t   offset[batches]; // keep track of position in each batch
+
+        for (size_t i=0;i<batches;i++) {
+            char fname[100];
             sprintf(fname,"%s/%zi-mers.%zi.%zi",outdir,k,bin,i+1);
             read_bitmap(fname,batch_slice_cnts[i],batch_slices[i]);
             sprintf(fname,"%s/%zi-mers.%zi.%zi.idx",outdir,k,bin,i+1);
             read_bitmap(fname,batch_values[i],batch_counts[i]);
         }
 
-        kword_t kmers [batches*nwords]; // next kmer in each active batch
-        uint32_t btally [batches]; // frequency of next kmer in each batch
-        size_t offset [batches]; // keep track of position in each batch
-        memset(offset,0,sizeof(size_t)*batches);
+        memset(offset, 0, sizeof(size_t)*batches);
         uint32_t todo = batches; // number of batches to process
         vector<uint32_t> tally;
 
-        const size_t nbits = 8*kmer_size;
-        bvec* merged_slices [nbits];
+        const size_t nbits = 8 * kmer_size;
+        bvec* merged_slices[nbits];
         bitset<256> bbit;
-        unsigned int boff [nbits];
+        unsigned int boff[nbits];
         unsigned int n=0;
-        memset(boff,0,nbits*sizeof(size_t));
-        const unsigned int bpw = 8*sizeof(kword_t); // bits per word
+        memset(boff, 0, nbits * sizeof(size_t));
+        const unsigned int bpw = 8 * sizeof(uint32_t); // bits per word
 
-        for(size_t b=0;b<nbits;b++)
+        for (size_t b=0;b<nbits;b++)
             merged_slices[b] = new bvec(true);
 
         // read the first kmer and counts from each batch
-        for(size_t i=0;i<batches;i++) {
-            size_t err = pos2kmer(offset[i],kmers + i*nwords, batch_slices[i]);
+        for (size_t i=0;i<batches;i++) {
+            size_t err =
+                pos2kmer(offset[i], kmers + i * nwords, batch_slices[i]);
             if (err != 0) {
                 todo--;
                 btally[i]=0;
@@ -716,13 +728,13 @@ void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
         }
         // choose min
         size_t mindex = find_min(kmers,btally);
-        kword_t distinct [nwords];
+        uint32_t distinct[nwords];
         memcpy(distinct,kmers + mindex*nwords, kmer_size);
         tally.push_back(btally[mindex]);
         // mark the set bits in the first distinct kmer
-        for(size_t w=0;w<nwords;w++) {
+        for (size_t w=0;w<nwords;w++) {
             unsigned int count = popcount(distinct[w]);
-            for(unsigned int r=1; r<=count; r++)
+            for (unsigned int r=1; r<=count; r++)
                 bbit.set(selectbit(distinct[w],r)+w*bpw,1);
         }
         // replace min
@@ -745,10 +757,10 @@ void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
                 tally.push_back(btally[mindex]);
                 n++;
                 kword_t *minkmer = kmers + mindex*nwords;
-                for(size_t w=0;w<nwords;w++) {
+                for (size_t w=0;w<nwords;w++) {
                     kword_t x = distinct[w] ^ minkmer[w];
                     unsigned int count = popcount(x);
-                    for(unsigned int r = 1; r<=count; r++) {
+                    for (unsigned int r = 1; r<=count; r++) {
                         unsigned int b = selectbit(x,r) + w*bpw;
                         merged_slices[b]->appendFill(bbit.test(b),n-boff[b]);
                         bbit.flip(b);
@@ -760,7 +772,7 @@ void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
         }
         // finish the bitvectors
         n++;
-        for(size_t b=0; b<nbits; b++)
+        for (size_t b=0; b<nbits; b++)
             if(boff[b]<n-1)
                 merged_slices[b]->appendFill(bbit.test(b),n-boff[b]);
         
@@ -768,16 +780,16 @@ void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
 
         // open an output file for the merged distinct kmers
         FILE *ofp;
-        char fname [100];
+        char fname[100];
         sprintf(fname,"%s/%zi-mers.%zi",outdir,k,bin);
         ofp = fopen(fname,"wb");
 
         fwrite(&nbits,sizeof(size_t),1,ofp);
-        for(size_t b=0;b<nbits;b++) {
+        for (size_t b=0;b<nbits;b++) {
             uint32_t c = merged_slices[b]->cnt();
             fwrite(&c,sizeof(uint32_t),1,ofp);
         }
-        for(size_t b=0;b<nbits;b++) {
+        for (size_t b=0;b<nbits;b++) {
             uint32_t *buf;
             size_t bytes = merged_slices[b]->dump(&buf);
             // fprintf(stderr,"%zi: %zi,",b,bytes);
@@ -786,10 +798,9 @@ void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
             free(buf);
         }
 
-
         fclose(ofp);
         
-        char counts_file [100];
+        char counts_file[100];
         sprintf(counts_file,"%s/%zi-mers.%zi.idx",outdir,k,bin);
         ofp = fopen(counts_file, "wb");
         // first write the number of distinct values
@@ -798,7 +809,7 @@ void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
         int n_distinct = kmer_freq[bin].size();
         fwrite(&n_distinct,sizeof(int),1,ofp);
         fwrite(kmer_freq[bin].data(),sizeof(uint32_t),n_distinct,ofp);
-        for(size_t i=0;i<n_distinct;i++) {
+        for (size_t i=0;i<n_distinct;i++) {
             uint32_t *buf;
             size_t bytes = counts[bin][i]->dump(&buf);
             fwrite(&bytes,sizeof(size_t),1,ofp);
@@ -806,7 +817,7 @@ void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
         }
         fclose(ofp);
         // delete input files
-        // for(size_t i=0;i<batches;i++) {
+        // for (size_t i=0;i<batches;i++) {
         //  sprintf(fname,"%s/%zi-mers.%zi.%zi",outdir,k,bin,i+1);
         //  if (remove(fname) != 0) perror("error deleting file");
         //  sprintf(fname,"%s/%zi-mers.%zi.%zi.idx",outdir,k,bin,i+1);
@@ -815,10 +826,11 @@ void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
     }
 }
 
-inline size_t kmerizer::find_min(const kword_t* kmers, const uint32_t* kcounts) {
+inline size_t
+kmerizer::find_min(const kword_t * kmers, const uint32_t * kcounts) {
     size_t mindex = 0;
     while (kcounts[mindex] == 0) mindex++;
-    for(size_t i=mindex+1;i<batches;i++)
+    for (size_t i=mindex+1;i<batches;i++)
         if (kcounts[i] != 0)
             if (kmercmp(kmers + i*nwords,kmers + mindex*nwords,nwords) < 0)
                 mindex = i;
@@ -836,14 +848,14 @@ void kmerizer::range_index(vector<uint32_t> &vec, vector<uint32_t> &values, vect
     bitset<256> mybits;
     vector<uint32_t> overflow;
     vector<uint32_t>::iterator it;
-    for(it = vec.begin(); it < vec.end(); ++it) {
+    for (it = vec.begin(); it < vec.end(); ++it) {
         if (*it >= 256) 
             overflow.push_back(*it);
         else
             mybits[*it]=1;
     }
     // populate values vector with set bits in mybits
-    for(uint32_t i=0;i<256;i++)
+    for (uint32_t i=0;i<256;i++)
         if (mybits.test(i))
             values.push_back(i);
     
@@ -854,16 +866,16 @@ void kmerizer::range_index(vector<uint32_t> &vec, vector<uint32_t> &values, vect
     }
 
     // setup a vector for each range
-    vector<uint32_t> vrange [values.size()];
+    vector<uint32_t> vrange[values.size()];
     // iterate over the vec and push the offset onto each range
-    for(size_t i=0;i<vec.size();i++) {
+    for (size_t i=0;i<vec.size();i++) {
         it = lower_bound(values.begin(),values.end(),vec[i]);
-        for(size_t j=0;j<=(it - values.begin());j++)
+        for (size_t j=0;j<=(it - values.begin());j++)
             vrange[j].push_back(i);
     }
     // create a bitvector for each range
     index.resize(values.size());
-    for(size_t i=0;i<values.size();i++)
+    for (size_t i=0;i<values.size();i++)
         index[i] = new bvec(vrange[i]);
 }
 
@@ -876,37 +888,165 @@ void kmerizer::range_index(vector<uint32_t> &vec, vector<uint32_t> &values, vect
 void kmerizer::dump(char *fname) {
     // create a bitvector of all 1's for each bin
     // and call dump(FILE *fp, bvec *mask)
-    bvec *mask [NBINS];
-    for(size_t i=0;i<NBINS;i++) {
+    bvec *mask[NBINS];
+    for (size_t i=0;i<NBINS;i++) {
         mask[i] = new bvec(true); // first create an empty bitvector
         mask[i]->appendFill(true,counts[i][0]->get_size()); // then make it all 1's
     }
-    dump(fname,mask);
+    sdump(fname,mask);
 }
 
-// find kmers with frequencies in the given range [min,max]
-// when max < min, ignore max and find kmers with frequencies in the range [min,infinity]
+// find kmers with frequencies in the given range[min,max]
+// when max < min, ignore max and find kmers with frequencies in the range[min,infinity]
 void kmerizer::filter(uint32_t min, uint32_t max, bvec **mask) {
     // do range queries over each bin to build up an array of bvec masks.
     boost::thread_group tg;
-    for(size_t i = 0; i < NBINS; i += thread_bins) {
+    for (size_t i = 0; i < NBINS; i += thread_bins) {
         size_t j = (i + thread_bins > NBINS) ? NBINS : i + thread_bins;
         tg.create_thread(boost::bind(&kmerizer::do_filter, this, i, j, min, max, mask));
     }
     tg.join_all();
 }
 
-void kmerizer::dump(char *fname, bvec **mask) {
-    // determine the file size and offsets in advance so we can write in parallel
+
+void kmerizer::pdump(char *fname, bvec **mask) {
+    // determine the uncompressed bin sizes in advance so we can do_dump in parallel
+    // binsize[bin] = mask[bin]->cnt() * (k+2) + d*number of d digit counts
+    uint32_t binsize[NBINS];
+    uint32_t total_size=0;
+    for (size_t bin=0;bin<NBINS;bin++) {
+        binsize[bin] = mask[bin]->cnt() * (k+2); // k-mer\t\n
+        // d digit counts
+        uint32_t d=1;
+        vector<uint32_t>::iterator it = lower_bound(kmer_freq[bin].begin(),kmer_freq[bin].end(),10);
+        while(it != kmer_freq[bin].end()) {
+            if (it > kmer_freq[bin].begin()) {
+                it--;
+                bvec *dmask = *counts[bin][*it] & *mask[bin];
+                binsize[bin] += d*dmask->cnt();
+            }
+            d++;
+            it = lower_bound(it,kmer_freq[bin].end(),10^d);
+        }
+        total_size += binsize[bin];
+    }
+    // use memory mapped IO to do this
+    // maybe open the output file, resize it, and then mmap it to some buffer
+    // You can't do this with stdout. is that a problem?
+    char *buff;
+//  mmap(buff, total_size);
     boost::thread_group tg;
-    for(size_t i = 0; i < NBINS; i += thread_bins) {
+    uint32_t offset=0;
+    for (size_t i = 0; i < NBINS; i += thread_bins) {
         size_t j = (i + thread_bins > NBINS) ? NBINS : i + thread_bins;
-        FILE *fp;
-        // advance *fp to the beginning of bin i in the output file
-        tg.create_thread(boost::bind(&kmerizer::do_dump, this, i, j, fp, mask));
+        // pass a pointer to the right place in the mmap'd output file
+        tg.create_thread(boost::bind(&kmerizer::do_pdump, this, i, j, buff + offset, mask));
+        for (size_t bin=i;bin<j;bin++)
+            offset += binsize[bin];
     }
     tg.join_all();
+    // close the output file
 }
 
-void kmerizer::do_dump(const size_t from, const size_t to, FILE *fp, bvec **mask) {}
-void kmerizer::do_filter(const size_t from, const size_t to, uint32_t min, uint32_t max, bvec **mask) {}
+void kmerizer::sdump(char *fname, bvec **mask) {
+    // open output file
+    FILE *fp;
+    fp = fopen(fname, "w");
+    size_t bpw = 8*sizeof(kword_t); // bits per word
+    char kstr[k+1]; // unpack each kmer into this char array.
+    for (size_t bin=0;bin<NBINS;bin++) {
+        // check if bit slices have been loaded
+        if (slices[bin].empty()) {
+            char bfname[100];
+            sprintf(bfname,"%s/%zi-mers.%zi",outdir,k,bin);
+            vector<uint32_t> tmp;
+            read_bitmap(bfname,tmp,slices[bin]);
+        }
+        // iterate over the set bits in mask[bin]
+        uint32_t bv_len = mask[bin]->get_size();
+        uint32_t next1 = mask[bin]->nextOne(0);
+        while (next1 < bv_len) {
+            kword_t kmer[nwords];
+            for (size_t w=0;w<nwords;w++) {
+                kmer[w]=0;
+                for (size_t b=0;b<bpw;b++) {
+                    if(slices[bin][w*bpw + b]->find(next1)) {
+                        kmer[w] |= 1 << bpw-b-1;
+                    }
+                }
+            }
+            // output the kmer and count
+            unpack(kmer, kstr);
+            fprintf(fp,"%s\t%u\n",kstr,frequency(bin,next1));
+            uint32_t next1 = mask[bin]->nextOne(next1+1);
+        }
+    }
+    fclose(fp);
+}
+
+void
+kmerizer::do_pdump(const size_t from,
+                   const size_t to,
+                   char *buff,
+                   bvec **mask)
+{
+    size_t bpw = 8 * sizeof(kword_t); // bits per word
+    char kstr[k+1]; // unpack each kmer into this char array.
+    for (size_t bin = from; bin < to; bin++) {
+        // check if we've loaded the bit slices for this bin
+        if (slices[bin].empty()) {
+            // load the kmer slices for this bin
+            char fname[100];
+            sprintf(fname,"%s/%zi-mers.%zi",outdir,k,bin);
+            vector<uint32_t> junk;
+            read_bitmap(fname,junk,slices[bin]);
+        }
+        // iterate over the set bits in mask[bin]
+        uint32_t bv_len = mask[bin]->get_size();
+        uint32_t next1 = mask[bin]->nextOne(0);
+        while (next1 < bv_len) {
+            kword_t kmer[nwords];
+            for (size_t w=0;w<nwords;w++) {
+                kmer[w]=0;
+                for (size_t b=0;b<bpw;b++) {
+                    if(slices[bin][w*bpw + b]->find(next1)) {
+                        kmer[w] |= 1 << bpw-b-1;
+                    }
+                }
+            }
+            // output the kmer and count
+            unpack(kmer, kstr);
+            // instead of fprintf, use memcpy() to write kstr and frequency to the mmap'd output file
+//          fprintf(fp,"%s\t%u\n",kstr,frequency(bin,next1));
+            uint32_t next1 = mask[bin]->nextOne(next1+1);
+        }
+    }
+}
+
+// range encoding: bitvector x marks kmers that occur <= x times
+// therefore counts[bin].back() marks all rows
+void kmerizer::do_filter(const size_t from, const size_t to, uint32_t min, uint32_t max, bvec **mask) {
+    for (size_t bin = from; bin < to; bin++) {
+        if (max > 0) {
+            vector<uint32_t>::iterator it = lower_bound(kmer_freq[bin].begin(),kmer_freq[bin].end(),max);
+            if (it == kmer_freq[bin].begin()) { // create a null mask and set the length
+                mask[bin] = new bvec(true);
+                mask[bin]->appendFill(false,counts[bin][0]->get_size());
+            }
+            else {
+                if (*it < max) it--;
+                mask[bin]->copy(counts[bin][it - kmer_freq[bin].begin()]);
+            }
+        }
+        else
+            mask[bin]->copy(counts[bin].back()); // this is how we deal with max <= 0 (no max)
+        if (mask[bin]->cnt() > 0 && min>1) { // nand
+            // need to find the first bvec thats < min
+            vector<uint32_t>::iterator it = lower_bound(kmer_freq[bin].begin(),kmer_freq[bin].end(),min);
+            if (it > kmer_freq[bin].begin()) {
+                it--;
+                *mask[bin] &= *(counts[bin][it - kmer_freq[bin].begin()]->copyflip());
+            }
+        }
+    }
+}

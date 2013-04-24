@@ -160,7 +160,7 @@ bvec::decompress() {
 
 // only works with compressed - return the position of the next set bit after position x
 word_t
-bvec::next_one(word_t x) {
+bvec::nextOne(word_t x) {
     if (!rle) { fprintf(stderr,"next_one() only works on compressed bitvectors\n"); exit(1); }
 
     x++;

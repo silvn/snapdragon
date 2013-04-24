@@ -178,11 +178,10 @@ void bvec32::decompress() {
 	rle = false;
 }
 
-// only works with compressed - return the position of the next set bit after position x
+// only works with compressed - return the position of the next set bit at or after position x
 uint32_t bvec32::nextOne(uint32_t x) {
 	if (!rle) { fprintf(stderr,"nextOne() only works on compressed bitvectors\n"); exit(1); }
 
-	x++;
 	if (frontier.bit_pos > x) {
 		frontier.active_word = words.begin();
 		frontier.bit_pos = 0;

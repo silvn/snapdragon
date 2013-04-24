@@ -51,6 +51,7 @@ public:
 	bvec32(bool wah) : rle(false), count(0), size(0) {compress();};
     bvec32(vector<uint32_t>& vals);
 	bvec32(uint32_t* buf); // DIY deserialization
+    inline bvec32& copy(const bvec32& bv);
     void print();
     void compress();
     void decompress();
@@ -87,7 +88,6 @@ private:
 
     bool low_density(vector<uint32_t>& vals);
     void construct_rle(vector<uint32_t>& vals);
-    inline bvec32& copy(const bvec32& bv);
     void matchSize(bvec32& bv);
     void rle_OR_rle(bvec32& rhs);
     void rle_OR_non(bvec32& rhs);

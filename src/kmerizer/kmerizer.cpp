@@ -216,9 +216,13 @@ uint32_t kmerizer::find(char* seq) {
 	// and lookup the associated count
 	res->decompress();
 	vector<uint32_t> hits = res->get_words();
+	return frequency(bin,hits[0]);
+}
+
+uint32_t kmerizer::frequency(size_t bin, uint32_t pos) {
 	size_t key=1;
 	while (key<kmer_freq[bin].size())
-		if (counts[bin][key]->find(hits[0]))
+		if (counts[bin][key]->find(pos))
 			key++;
 		else
 			break;
@@ -877,7 +881,7 @@ void kmerizer::dump(char *fname) {
 		mask[i] = new bvec32(true); // first create an empty bitvector
 		mask[i]->appendFill(true,counts[i][0]->get_size()); // then make it all 1's
 	}
-	dump(fname,mask);
+	sdump(fname,mask);
 }
 
 // find kmers with frequencies in the given range [min,max]
@@ -892,17 +896,140 @@ void kmerizer::filter(uint32_t min, uint32_t max, bvec32 **mask) {
 	tg.join_all();
 }
 
-void kmerizer::dump(char *fname, bvec32 **mask) {
-	// determine the file size and offsets in advance so we can write in parallel
+
+void kmerizer::pdump(char *fname, bvec32 **mask) {
+	// determine the uncompressed bin sizes in advance so we can do_dump in parallel
+	// binsize[bin] = mask[bin]->cnt() * (k+2) + d*number of d digit counts
+	uint32_t binsize[NBINS];
+	uint32_t total_size=0;
+	for(size_t bin=0;bin<NBINS;bin++) {
+		binsize[bin] = mask[bin]->cnt() * (k+2); // k-mer\t\n
+		// d digit counts
+		uint32_t d=1;
+		vector<uint32_t>::iterator it = lower_bound(kmer_freq[bin].begin(),kmer_freq[bin].end(),10);
+		while(it != kmer_freq[bin].end()) {
+			if (it > kmer_freq[bin].begin()) {
+				it--;
+				bvec32 *dmask = *counts[bin][*it] & *mask[bin];
+				binsize[bin] += d*dmask->cnt();
+			}
+			d++;
+			it = lower_bound(it,kmer_freq[bin].end(),10^d);
+		}
+		total_size += binsize[bin];
+	}
+	// use memory mapped IO to do this
+	// maybe open the output file, resize it, and then mmap it to some buffer
+	// You can't do this with stdout. is that a problem?
+	char *buff;
+//	mmap(buff, total_size);
 	boost::thread_group tg;
+	uint32_t offset=0;
 	for(size_t i = 0; i < NBINS; i += thread_bins) {
 		size_t j = (i + thread_bins > NBINS) ? NBINS : i + thread_bins;
-		FILE *fp;
-		// advance *fp to the beginning of bin i in the output file
-		tg.create_thread(boost::bind(&kmerizer::do_dump, this, i, j, fp, mask));
+		// pass a pointer to the right place in the mmap'd output file
+		tg.create_thread(boost::bind(&kmerizer::do_pdump, this, i, j, buff + offset, mask));
+		for(size_t bin=i;bin<j;bin++)
+			offset += binsize[bin];
 	}
 	tg.join_all();
+	// close the output file
 }
 
-void kmerizer::do_dump(const size_t from, const size_t to, FILE *fp, bvec32 **mask) {}
-void kmerizer::do_filter(const size_t from, const size_t to, uint32_t min, uint32_t max, bvec32 **mask) {}
+void kmerizer::sdump(char *fname, bvec32 **mask) {
+	// open output file
+	FILE *fp;
+	fp = fopen(fname, "w");
+	size_t bpw = 8*sizeof(word_t); // bits per word
+	char kstr [k+1]; // unpack each kmer into this char array.
+	for(size_t bin=0;bin<NBINS;bin++) {
+		// check if bit slices have been loaded
+		if (slices[bin].empty()) {
+			char bfname [100];
+			sprintf(bfname,"%s/%zi-mers.%zi",outdir,k,bin);
+			vector<uint32_t> tmp;
+			read_bitmap(bfname,tmp,slices[bin]);
+		}
+		// iterate over the set bits in mask[bin]
+		uint32_t bv_len = mask[bin]->get_size();
+		uint32_t next1 = mask[bin]->nextOne(0);
+		while (next1 < bv_len) {
+			word_t kmer [nwords];
+			for (size_t w=0;w<nwords;w++) {
+				kmer[w]=0;
+				for(size_t b=0;b<bpw;b++) {
+					if(slices[bin][w*bpw + b]->find(next1)) {
+						kmer[w] |= 1 << bpw-b-1;
+					}
+				}
+			}
+			// output the kmer and count
+			unpack(kmer,kstr);
+			fprintf(fp,"%s\t%u\n",kstr,frequency(bin,next1));
+			uint32_t next1 = mask[bin]->nextOne(next1+1);
+		}
+	}
+	fclose(fp);
+}
+
+void kmerizer::do_pdump(const size_t from, const size_t to, char *buff, bvec32 **mask) {
+	size_t bpw = 8*sizeof(word_t); // bits per word
+	char kstr [k+1]; // unpack each kmer into this char array.
+	for(size_t bin = from; bin < to; bin++) {
+		// check if we've loaded the bit slices for this bin
+		if (slices[bin].empty()) {
+			// load the kmer slices for this bin
+			char fname [100];
+			sprintf(fname,"%s/%zi-mers.%zi",outdir,k,bin);
+			vector<uint32_t> junk;
+			read_bitmap(fname,junk,slices[bin]);
+		}
+		// iterate over the set bits in mask[bin]
+		uint32_t bv_len = mask[bin]->get_size();
+		uint32_t next1 = mask[bin]->nextOne(0);
+		while (next1 < bv_len) {
+			word_t kmer [nwords];
+			for (size_t w=0;w<nwords;w++) {
+				kmer[w]=0;
+				for(size_t b=0;b<bpw;b++) {
+					if(slices[bin][w*bpw + b]->find(next1)) {
+						kmer[w] |= 1 << bpw-b-1;
+					}
+				}
+			}
+			// output the kmer and count
+			unpack(kmer,kstr);
+			// instead of fprintf, use memcpy() to write kstr and frequency to the mmap'd output file
+//			fprintf(fp,"%s\t%u\n",kstr,frequency(bin,next1));
+			uint32_t next1 = mask[bin]->nextOne(next1+1);
+		}
+	}
+}
+
+// range encoding: bitvector x marks kmers that occur <= x times
+// therefore counts[bin].back() marks all rows
+void kmerizer::do_filter(const size_t from, const size_t to, uint32_t min, uint32_t max, bvec32 **mask) {
+	for(size_t bin = from; bin < to; bin++) {
+		if (max > 0) {
+			vector<uint32_t>::iterator it = lower_bound(kmer_freq[bin].begin(),kmer_freq[bin].end(),max);
+			if (it == kmer_freq[bin].begin()) { // create a null mask and set the length
+				mask[bin] = new bvec32(true);
+				mask[bin]->appendFill(false,counts[bin][0]->get_size());
+			}
+			else {
+				if (*it < max) it--;
+				mask[bin]->copy(counts[bin][it - kmer_freq[bin].begin()]);
+			}
+		}
+		else
+			mask[bin]->copy(counts[bin].back()); // this is how we deal with max <= 0 (no max)
+		if (mask[bin]->cnt() > 0 && min>1) { // nand
+			// need to find the first bvec thats < min
+			vector<uint32_t>::iterator it = lower_bound(kmer_freq[bin].begin(),kmer_freq[bin].end(),min);
+			if (it > kmer_freq[bin].begin()) {
+				it--;
+				*mask[bin] &= *(counts[bin][it - kmer_freq[bin].begin()]->copyflip());
+			}
+		}
+	}
+}

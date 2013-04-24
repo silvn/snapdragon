@@ -44,7 +44,8 @@ public:
 	void histogram(); // output the kmer count frequency distribution
 	uint32_t find(char* query);
 	void dump(char *fname);
-	void dump(char *fname,bvec32 **mask);
+	void pdump(char *fname,bvec32 **mask);
+	void sdump(char *fname,bvec32 **mask);
 	void filter(uint32_t min, uint32_t max, bvec32 **mask);
 	~kmerizer() {};
 
@@ -69,7 +70,7 @@ private:
 	void mergeBatches();
 	void do_mergeBatches(const size_t from, const size_t to);
 	void do_loadIndex(const size_t from, const size_t to);
-	void do_dump(const size_t from, const size_t to, FILE *fp, bvec32 **mask);
+	void do_pdump(const size_t from, const size_t to, char *buf, bvec32 **mask);
 	void do_filter(const size_t from, const size_t to, uint32_t min, uint32_t max, bvec32 **mask);
 
 	// is this too generic to go here?
@@ -80,7 +81,7 @@ private:
 	// size_t pos2kmer(size_t pos, word_t *kmer, vector<bvec32*> &index);
 	void print_kmer(word_t *kmer);
 	void bit_slice(word_t *kmers, const size_t n, bvec32 **kmer_slices, size_t nbits);
-
+	uint32_t frequency(size_t bin, uint32_t pos);
 };
 
 inline word_t kmerizer::twobit(const word_t val) const {
@@ -268,4 +269,4 @@ inline uint32_t kmerizer::pos2value(size_t pos, vector<uint32_t> &values, vector
 }
 
 
-#endif // #ifndef _KMERIZER_H_
+#endif

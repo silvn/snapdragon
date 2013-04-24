@@ -12,12 +12,11 @@ using namespace std;
 #define TERM_RED   "\e[31m"
 #define TERM_GREEN "\e[32m"
 
-
 void print_binary(vector<uint32_t>& v) {
     for (int i = 0; i < v.size(); i++) {
         for (int b = 31; b >= 0; b--)
             printf("%d", v[i] & (1 << b) ? 1 : 0);
-		printf(" ");
+        printf(" ");
     }
     printf("\n");
 }

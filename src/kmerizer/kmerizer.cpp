@@ -29,11 +29,11 @@ Kmerizer::Kmerizer(const size_t k,
         lshift = 2 * (k % 32);
         rshift = 64 - lshift;
     }
-    this->nwords      = ((k-1)>>5)+1;
-    this->kmer_size   = this->nwords * sizeof(uint32_t);
-    this->thread_bins = NBINS / this->threads;
-    this->state       = READING;
-    this->batches     = 0;
+    this->nwords     = ((k-1)>>5)+1;
+    this->kmerSize   = this->nwords * sizeof(uint32_t);
+    this->threadBins = NBINS / this->threads;
+    this->state      = READING;
+    this->batches    = 0;
 }
 
 int Kmerizer::allocate(const size_t maximem) {

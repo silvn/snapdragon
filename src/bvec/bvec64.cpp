@@ -4,20 +4,20 @@
 bvec64::bvec64(vector<uint64_t>& vals) {
 	count = vals.size();
 	// if the density is too low, run length encoding will take MORE space
-	if (low_density(vals)) {
+	if (lowDensity(vals)) {
 		if (DEBUG) printf("constructed non rle\n");
 		words = vals;
 		rle = false;
 		size = 0; // irrelevant?
 	}
 	else {
-		if (DEBUG) printf("construct_rle\n");
-		construct_rle(vals);
+		if (DEBUG) printf("constructRLE\n");
+		constructRLE(vals);
 	}
 }
 
-bool bvec64::low_density(vector<uint64_t>& vals) {
-	if (DEBUG) printf("low_density() %llu/%llu %c %f\n", (uint64_t)vals.size(),
+bool bvec64::lowDensity(vector<uint64_t>& vals) {
+	if (DEBUG) printf("lowDensity() %llu/%llu %c %f\n", (uint64_t)vals.size(),
 		vals.back() - vals.front() + 1,
 			((double)vals.size()/(double)(vals.back() - vals.front() + 1) < 1.0/(double)LITERAL_SIZE) ? '<' : '>',
 				1.0/(double)LITERAL_SIZE);
@@ -42,7 +42,7 @@ void bvec64::print() {
 	}
 }
 
-void bvec64::construct_rle(vector<uint64_t>& vals) {
+void bvec64::constructRLE(vector<uint64_t>& vals) {
 	rle = true;
 	uint64_t word_end = LITERAL_SIZE - 1;
 	uint64_t word=0;
@@ -101,11 +101,11 @@ void bvec64::compress() {
     if (rle) { /* Throw exception? */ return; }
 	vector<uint64_t> tmp;
 	tmp.swap(words);
-	construct_rle(tmp);
+	constructRLE(tmp);
     rle = true;
 }
 
-vector<uint64_t>& bvec64::get_words() {
+vector<uint64_t>& bvec64::getWords() {
     return words;
 }
 
@@ -142,28 +142,28 @@ void bvec64::operator|=(bvec64& bv) {
 	// decide which version we'll be using
 	if (rle)
 		if (bv.rle)
-			rle_OR_rle(bv);
+			rleORrle(bv);
 		else
-			rle_OR_non(bv);
+			rleORnon(bv);
 	else
 		if (bv.rle)
-			non_OR_rle(bv);
+			nonORrle(bv);
 		else
-			non_OR_non(bv);
+			nonORnon(bv);
 }
 // in place version of the bitwise AND operator.
 void bvec64::operator&=(bvec64& bv) {
 	// decide which version we'll be using
 	if (rle)
 		if (bv.rle)
-			rle_AND_rle(bv);
+			rleANDrle(bv);
 		else
-			rle_AND_non(bv);
+			rleANDnon(bv);
 	else
 		if (bv.rle)
-			non_AND_rle(bv);
+			nonANDrle(bv);
 		else
-			non_AND_non(bv);
+			nonANDnon(bv);
 }
 bvec64* bvec64::operator|(bvec64& rhs) {
 	bvec64 *res = new bvec64();
@@ -188,7 +188,7 @@ bvec64* bvec64::operator&(bvec64& rhs) {
 	return res;
 }
 
-void bvec64::non_OR_non(bvec64& bv) {
+void bvec64::nonORnon(bvec64& bv) {
 	
 	vector<uint64_t> res;
 	vector<uint64_t>::iterator a = words.begin();
@@ -223,7 +223,7 @@ void bvec64::non_OR_non(bvec64& bv) {
 	words.swap(res);
 }
 
-void bvec64::non_AND_non(bvec64& bv) {
+void bvec64::nonANDnon(bvec64& bv) {
 	
 	vector<uint64_t> res;
 	vector<uint64_t>::iterator a = words.begin();
@@ -244,34 +244,34 @@ void bvec64::non_AND_non(bvec64& bv) {
 	words.swap(res);
 }
 
-void bvec64::non_AND_rle(bvec64& bv) {
+void bvec64::nonANDrle(bvec64& bv) {
 	// decompress
-	// run non_AND_non
+	// run nonANDnon
 	bvec64 *tmp = new bvec64();
 	tmp->copy(bv);
 	tmp->decompress();
-	non_AND_non(*tmp);
+	nonANDnon(*tmp);
 	delete tmp;
 }
-void bvec64::rle_AND_non(bvec64& bv) {
+void bvec64::rleANDnon(bvec64& bv) {
 	// decompress
-	// run non_AND_non
+	// run nonANDnon
 	decompress();
-	non_AND_non(bv);
+	nonANDnon(bv);
 }
-void bvec64::non_OR_rle(bvec64& bv) {
+void bvec64::nonORrle(bvec64& bv) {
 	// compress
-	// run rle_OR_rle
+	// run rleORrle
 	compress();
-	rle_OR_rle(bv);
+	rleORrle(bv);
 }
-void bvec64::rle_OR_non(bvec64& bv) {
+void bvec64::rleORnon(bvec64& bv) {
 	// compress
-	// run rle_OR_rle
+	// run rleORrle
 	bvec64 *tmp = new bvec64();
 	tmp->copy(bv);
 	tmp->compress();
-	rle_OR_rle(*tmp);
+	rleORrle(*tmp);
 	delete tmp;
 }
 
@@ -298,7 +298,7 @@ void bvec64::matchSize(bvec64 &bv) {
 	}
 }
 
-void bvec64::rle_OR_rle(bvec64& bv) {
+void bvec64::rleORrle(bvec64& bv) {
 	// ensure that both bvec64s are the same size
 	this->matchSize(bv);
 	if (size == 0)
@@ -415,7 +415,7 @@ void bvec64::rle_OR_rle(bvec64& bv) {
 }
 
 // in place version of the bitwise AND operator.
-void bvec64::rle_AND_rle(bvec64& bv) {
+void bvec64::rleANDrle(bvec64& bv) {
 	// ensure that both bvec64s are the same size
 	this->matchSize(bv);
 	if (size == 0)

@@ -1,8 +1,8 @@
 #include "bvec32.h"
 #include "bvec.h"
 
-// constructor - given a previously dumped bvec
-bvec::bvec(word_t *buf) {
+// constructor - given a previously dumped BitVector
+BitVector::BitVector(word_t *buf) {
     word_t nwords = buf[0];
     size = buf[1];
     count = buf[2];
@@ -19,7 +19,7 @@ bvec::bvec(word_t *buf) {
 
 // DIY serialization
 size_t
-bvec::dump(word_t **buf) {
+BitVector::dump(word_t **buf) {
     // allocate space in buf
     size_t dbytes = sizeof(word_t)*(3 + words.size());
     *buf = (word_t*)malloc(dbytes);
@@ -36,8 +36,8 @@ bvec::dump(word_t **buf) {
 }
 
 bool
-bvec::low_density(vector<word_t>& vals) {
-    if (DEBUG) printf("low_density() %u/%u %c %f\n", (word_t)vals.size(),
+BitVector::lowDensity(vector<word_t>& vals) {
+    if (DEBUG) printf("lowDensity() %u/%u %c %f\n", (word_t)vals.size(),
         vals.back() - vals.front() + 1,
             ((double)vals.size()/(double)(vals.back() - vals.front() + 1) < 1.0/(double)LITERAL_SIZE) ? '<' : '>',
                 1.0/(double)LITERAL_SIZE);
@@ -46,7 +46,7 @@ bvec::low_density(vector<word_t>& vals) {
 }
 
 void
-bvec::print() {
+BitVector::print() {
     printf("rle: %c\n",rle ? 'T' : 'F');
     printf("words:\n");
     for(int i=0;i<words.size();i++) {
@@ -64,7 +64,7 @@ bvec::print() {
 }
 
 void
-bvec::construct_rle(vector<word_t>& vals) {
+BitVector::constructRLE(vector<word_t>& vals) {
     rle = true;
     frontier.bit_pos=0;
     if (vals.size() == 0) {
@@ -130,7 +130,7 @@ bvec::construct_rle(vector<word_t>& vals) {
 }
 
 void
-bvec::decompress() {
+BitVector::decompress() {
     if (!rle) { /* Throw exception? */ return; }
     // retrieve the set bits from the compressed vector
     vector<word_t> res;
@@ -160,7 +160,7 @@ bvec::decompress() {
 
 // only works with compressed - return the position of the next set bit after position x
 word_t
-bvec::nextOne(word_t x) {
+BitVector::nextOne(word_t x) {
     if (!rle) { fprintf(stderr,"next_one() only works on compressed bitvectors\n"); exit(1); }
 
     x++;
@@ -191,7 +191,7 @@ bvec::nextOne(word_t x) {
 }
 
 void
-bvec::flip() {
+BitVector::flip() {
     if (!rle)
         compress();
     for(vector<word_t>::iterator it = words.begin(); it!=words.end(); ++it) {
@@ -213,7 +213,7 @@ bvec::flip() {
 }
 
 void
-bvec::matchSize(bvec &bv) {
+BitVector::matchSize(BitVector &bv) {
     if (size < bv.size) {
         word_t gap_words = (bv.size - size)/LITERAL_SIZE;
         while (gap_words > FILLMASK) {
@@ -237,7 +237,7 @@ bvec::matchSize(bvec &bv) {
 }
 
 void
-bvec::rle_OR_rle(bvec& bv) {
+BitVector::rleORrle(BitVector& bv) {
     // ensure that both bvecs are the same size
     this->matchSize(bv);
     if (size == 0)
@@ -355,7 +355,7 @@ bvec::rle_OR_rle(bvec& bv) {
 
 // in place version of the bitwise AND operator.
 void
-bvec::rle_AND_rle(bvec& bv) {
+BitVector::rleANDrle(BitVector& bv) {
     // ensure that both bvecs are the same size
     this->matchSize(bv);
     if (size == 0)
@@ -463,7 +463,7 @@ bvec::rle_AND_rle(bvec& bv) {
 }
 
 bool
-bvec::find(word_t x) {
+BitVector::find(word_t x) {
     if (!rle) return binary_search(words.begin(), words.end(), x);
     // This function may be called on a sequence of increasing values
     // Use a checkpoint to determine if we can start at the active word
@@ -499,7 +499,7 @@ bvec::find(word_t x) {
 // use the frontier instead of words.back() because we have frontier.bit_pos
 // advance the frontier after appending
 void
-bvec::appendFill(bool bit, word_t n) {
+BitVector::appendFill(bool bit, word_t n) {
     if (bit) count += n;
     if ((*(frontier.active_word) & BIT1) == 0) { // current word is a literal word
         word_t bits_available = LITERAL_SIZE - frontier.bit_pos; // size % LITERAL_SIZE;
@@ -579,7 +579,7 @@ bvec::appendFill(bool bit, word_t n) {
     }
 }
 
-word_t bvec::cnt() {
+word_t BitVector::cnt() {
    if (count == 0)
        for(vector<word_t>::iterator it = words.begin(); it != words.end(); ++it)
            count += (*it & BIT2) ? (*it & BIT1) ? (*it & FILLMASK) * LITERAL_SIZE : 0 : __builtin_popcount(*it);

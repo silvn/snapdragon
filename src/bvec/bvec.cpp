@@ -1,65 +1,65 @@
 #include "bvec.h"
 
 // constructor - given a sorted vector of distinct 32bit integers
-bvec::bvec(vector<word_t>& vals) {
+BitVector::BitVector(vector<word_t>& vals) {
     count = vals.size();
     // if the density is too low, run length encoding will take MORE space
-    if (low_density(vals)) {
+    if (lowDensity(vals)) {
         if (DEBUG) printf("constructed non rle\n");
         words = vals;
         rle = false;
         size = words.back();
     }
     else {
-        if (DEBUG) printf("construct_rle\n");
-        construct_rle(vals);
+        if (DEBUG) printf("constructRLE\n");
+        constructRLE(vals);
     }
 }
 
-vector<word_t>& bvec::get_words() {
+vector<word_t>& BitVector::getWords() {
     return words;
 }
 
-word_t bvec::get_size() { return size; }
-word_t bvec::bytes() { return 4 * words.size(); }
+word_t BitVector::getSize() { return size; }
+word_t BitVector::bytes() { return 4 * words.size(); }
 
-void bvec::compress() {
+void BitVector::compress() {
     if (rle) { /* Throw exception? */ return; }
     vector<word_t> tmp;
     tmp.swap(words);
-    construct_rle(tmp);
+    constructRLE(tmp);
 }
 
 // in place version of the bitwise OR operator.
-void bvec::operator|=(bvec& bv) {
+void BitVector::operator|=(BitVector& bv) {
     // decide which version we'll be using
     if (rle)
         if (bv.rle)
-            rle_OR_rle(bv);
+            rleORrle(bv);
         else
-            rle_OR_non(bv);
+            rleORnon(bv);
     else
         if (bv.rle)
-            non_OR_rle(bv);
+            nonORrle(bv);
         else
-            non_OR_non(bv);
+            nonORnon(bv);
 }
 // in place version of the bitwise AND operator.
-void bvec::operator&=(bvec& bv) {
+void BitVector::operator&=(BitVector& bv) {
     // decide which version we'll be using
     if (rle)
         if (bv.rle)
-            rle_AND_rle(bv);
+            rleANDrle(bv);
         else
-            rle_AND_non(bv);
+            rleANDnon(bv);
     else
         if (bv.rle)
-            non_AND_rle(bv);
+            nonANDrle(bv);
         else
-            non_AND_non(bv);
+            nonANDnon(bv);
 }
-bvec* bvec::operator|(bvec& rhs) {
-    bvec *res = new bvec();
+BitVector* BitVector::operator|(BitVector& rhs) {
+    BitVector *res = new BitVector();
     if (words.size() > rhs.words.size()) {
         res->copy(rhs);
         *res |= *this;
@@ -69,8 +69,8 @@ bvec* bvec::operator|(bvec& rhs) {
     *res |= rhs;
     return res;
 }
-bvec* bvec::operator&(bvec& rhs) {
-    bvec *res = new bvec();
+BitVector* BitVector::operator&(BitVector& rhs) {
+    BitVector *res = new BitVector();
     if (words.size() > rhs.words.size()) {
         res->copy(rhs);
         *res &= *this;
@@ -81,28 +81,28 @@ bvec* bvec::operator&(bvec& rhs) {
     return res;
 }
 
-bool bvec::operator==(bvec& other) const {
+bool BitVector::operator==(BitVector& other) const {
     return (words == other.words) &&
            (count == other.count) &&
            (size  == other.size)  &&
            (rle   == other.rle);
 }
 
-bool bvec::equals(const bvec& other) const {
+bool BitVector::equals(const BitVector& other) const {
     return (words == other.words) &&
            (count == other.count) &&
            (size  == other.size)  &&
            (rle   == other.rle);
 }
 
-bvec* bvec::copyflip() {
-    bvec *res = new bvec();
+BitVector* BitVector::copyflip() {
+    BitVector *res = new BitVector();
     res->copy(*this);
     res->flip();
     return res;
 }
 
-void bvec::non_OR_non(bvec& bv) {
+void BitVector::nonORnon(BitVector& bv) {
     
     vector<word_t> res;
     vector<word_t>::iterator a = words.begin();
@@ -137,7 +137,7 @@ void bvec::non_OR_non(bvec& bv) {
     words.swap(res);
 }
 
-void bvec::non_AND_non(bvec& bv) {
+void BitVector::nonANDnon(BitVector& bv) {
     
     vector<word_t> res;
     vector<word_t>::iterator a = words.begin();
@@ -158,41 +158,41 @@ void bvec::non_AND_non(bvec& bv) {
     words.swap(res);
 }
 
-void bvec::non_AND_rle(bvec& bv) {
+void BitVector::nonANDrle(BitVector& bv) {
     // decompress
-    // run non_AND_non
-    bvec *tmp = new bvec();
+    // run nonANDnon
+    BitVector *tmp = new BitVector();
     tmp->copy(bv);
     tmp->decompress();
-    non_AND_non(*tmp);
+    nonANDnon(*tmp);
     delete tmp;
 }
 
-void bvec::rle_AND_non(bvec& bv) {
+void BitVector::rleANDnon(BitVector& bv) {
     // decompress
-    // run non_AND_non
+    // run nonANDnon
     decompress();
-    non_AND_non(bv);
+    nonANDnon(bv);
 }
 
-void bvec::non_OR_rle(bvec& bv) {
+void BitVector::nonORrle(BitVector& bv) {
     // compress
-    // run rle_OR_rle
+    // run rleORrle
     compress();
-    rle_OR_rle(bv);
+    rleORrle(bv);
 }
 
-void bvec::rle_OR_non(bvec& bv) {
+void BitVector::rleORnon(BitVector& bv) {
     // compress
-    // run rle_OR_rle
-    bvec *tmp = new bvec();
+    // run rleORrle
+    BitVector *tmp = new BitVector();
     tmp->copy(bv);
     tmp->compress();
-    rle_OR_rle(*tmp);
+    rleORrle(*tmp);
     delete tmp;
 }
 
-void bvec::setBit(word_t x) {
+void BitVector::setBit(word_t x) {
     if (rle) { // this should really be done in an rle specific way.
         decompress();
         setBit(x);
@@ -212,8 +212,8 @@ void bvec::setBit(word_t x) {
     }
 }
 
-bvec&
-bvec::copy(const bvec& bv) {
+BitVector&
+BitVector::copy(const BitVector& bv) {
     words = bv.words;
     count = bv.count;
     size = bv.size;
@@ -225,19 +225,19 @@ ostream& operator<<(ostream &os, const vector<word_t> vec) {
     return os << vec;
 }
 
-ostream& operator<<(ostream &os, const bvec &vec) {
+ostream& operator<<(ostream &os, const BitVector &vec) {
     return os << vec;
 }
 
 void
-bvec::save_to_file(const bvec &bv, const char *filename) {
+BitVector::save(const BitVector &bv, const char *filename) {
     std::ofstream ofs(filename);
     boost::archive::text_oarchive oa(ofs);
     oa << bv;
 }
 
 void
-bvec::restore_from_file(bvec &bv, const char *filename) {
+BitVector::restore(BitVector &bv, const char *filename) {
     std::ifstream ifs(filename);
     boost::archive::text_iarchive ia(ifs);
     ia >> bv;

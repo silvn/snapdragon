@@ -37,14 +37,14 @@ void processBins(int from, int to) {
 KSEQ_INIT(gzFile, gzread)
 int main(int argc, char *argv[])
 {
-	vector<uint64_t> twobit;
-	twobit.resize(256,0);
-	twobit[99] = 1;
-	twobit[103] = 2;
-	twobit[116] = 3;
-	twobit[67] = 1;
-	twobit[71] = 2;
-	twobit[84] = 3;
+	vector<uint64_t> twoBit;
+	twoBit.resize(256,0);
+	twoBit[99] = 1;
+	twoBit[103] = 2;
+	twoBit[116] = 3;
+	twoBit[67] = 1;
+	twoBit[71] = 2;
+	twoBit[84] = 3;
 	gzFile fp;
 	kseq_t *seq;
 	int l;
@@ -56,16 +56,16 @@ int main(int argc, char *argv[])
 	seq = kseq_init(fp);
 	while ((l = kseq_read(seq)) >= 0) {
 		if (seq->seq.l>=32) {
-			uint64_t mer = twobit[seq->seq.s[0]];
+			uint64_t mer = twoBit[seq->seq.s[0]];
 			for(int i=1;i<32;i++) { // fill first 64bit word
 				mer <<= 2; // shift 2 bits to the left
-				mer |= twobit[seq->seq.s[i]]; // insert the next two bits
+				mer |= twoBit[seq->seq.s[i]]; // insert the next two bits
 			}
 			size_t bin = mer >> NBITS;
 			kmers[bin].push_back(mer);
 			for(int i=32;i<seq->seq.l;i++) {
 				mer <<= 2;
-				mer |= twobit[seq->seq.s[i]];
+				mer |= twoBit[seq->seq.s[i]];
 				bin = mer >> NBITS;
 				kmers[bin].push_back(mer);
 			}

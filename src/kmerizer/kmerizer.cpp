@@ -9,31 +9,31 @@
 #include <sys/stat.h> // mkdir()
 #include <ctime> // clock_t clock() CLOCKS_PER_SEC
 
-kmerizer::kmerizer(const size_t _k,
-                   const size_t _threads,
-                   const char * _outdir,
-                   const char   _mode)
+kmerizer::kmerizer(const size_t k,
+                   const size_t threads,
+                   const char * outdir,
+                   const char   mode)
 {
-    k = _k;
-    kmask       = 0xFFFFFFFFFFFFFFFFULL;
-    shiftlastby = 62;
-    lshift      = 0;
-    rshift      = 0;
+    this->k       = k;
+    this->outdir  = new char[strlen(outdir)]; strcpy(this->outdir, outdir);
+    this->mode    = mode;
+    this->threads = threads;
+
+    this->kmask       = 0xFFFFFFFFFFFFFFFFULL;
+    this->shiftlastby = 62;
+    this->lshift      = 0;
+    this->rshift      = 0;
     if (k % 32 > 0) {
         kmask = (1ULL << (2 * (k % 32))) - 1;
         shiftlastby = 2 * (k % 32) - 2;
         lshift = 2 * (k % 32);
         rshift = 64 - lshift;
     }
-    nwords = ((k-1)>>5)+1;
-    kmer_size = nwords * sizeof(uint32_t);
-    outdir = new char[strlen(_outdir)];
-    strcpy(outdir, _outdir);
-    mode = _mode;
-    threads = _threads;
-    thread_bins = NBINS/threads;
-    state = READING;
-    batches=0;
+    this->nwords      = ((k-1)>>5)+1;
+    this->kmer_size   = this->nwords * sizeof(uint32_t);
+    this->thread_bins = NBINS / this->threads;
+    this->state       = READING;
+    this->batches     = 0;
 }
 
 int kmerizer::allocate(const size_t maximem) {

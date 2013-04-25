@@ -406,8 +406,8 @@ void BVdecode(v8::Handle<v8::Value> lv, ibis::bitvector* bv)
 	arr.reserve(lva->Length());
 	for(size_t i=0; i < lva->Length(); i++)
 		arr.push_back(lva->Get(i)->Uint32Value());
-	ibis::bitvector bvec(arr);
-	bvec.swap(*bv);
+	ibis::bitvector BitVector(arr);
+	BitVector.swap(*bv);
 }
 
 v8::Handle<v8::Value> cnt(const v8::Arguments& args)

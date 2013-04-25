@@ -37,7 +37,7 @@ public:
 	void print();
 	void compress();
     void decompress();
-    vector<uint64_t>& get_words();
+    vector<uint64_t>& getWords();
 
 	// logical set operations
 	void operator|=(bvec64& rhs);
@@ -58,23 +58,23 @@ private:
 	uint64_t count; // cache the number of set bits
 	uint64_t size; // bits in the uncompressed bitvector
 
-	bool low_density(vector<uint64_t>& vals);
-	void construct_rle(vector<uint64_t>& vals);
+	bool lowDensity(vector<uint64_t>& vals);
+	void constructRLE(vector<uint64_t>& vals);
 	inline bvec64& copy(const bvec64& bv);
 	void matchSize(bvec64& bv);
-	void rle_OR_rle(bvec64& rhs);
-	void rle_OR_non(bvec64& rhs);
-	void non_OR_rle(bvec64& rhs);
-	void non_OR_non(bvec64& rhs);
-	void rle_AND_rle(bvec64& rhs);
-	void rle_AND_non(bvec64& rhs);
-	void non_AND_rle(bvec64& rhs);
-	void non_AND_non(bvec64& rhs);
+	void rleORrle(bvec64& rhs);
+	void rleORnon(bvec64& rhs);
+	void nonORrle(bvec64& rhs);
+	void nonORnon(bvec64& rhs);
+	void rleANDrle(bvec64& rhs);
+	void rleANDnon(bvec64& rhs);
+	void nonANDrle(bvec64& rhs);
+	void nonANDnon(bvec64& rhs);
 
-	inline uint64_t popcount(uint64_t val) const;
+	inline uint64_t popCount(uint64_t val) const;
 };
 
-inline uint64_t bvec64::popcount(uint64_t val) const {
+inline uint64_t bvec64::popCount(uint64_t val) const {
 	// number of 1 bits in a value between 0 and 255
 	static const uint64_t table[256] = {
 	0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,
@@ -104,7 +104,7 @@ inline uint64_t bvec64::cnt() {
 	if (count == 0)
 		if (rle)
 			for(vector<uint64_t>::iterator it = words.begin(); it != words.end(); ++it)
-				count += (*it & BIT1) ? (*it & BIT2) ? (*it & FILLMASK) * LITERAL_SIZE : 0 : popcount(*it & ALL1S);
+				count += (*it & BIT1) ? (*it & BIT2) ? (*it & FILLMASK) * LITERAL_SIZE : 0 : popCount(*it & ALL1S);
 		else
 			count = words.size();
 	return count;

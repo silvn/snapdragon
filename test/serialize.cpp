@@ -2,7 +2,7 @@
 #include "test.h"
 #include <algorithm>
 
-bvec* random_bvec(int n) {
+BitVector* random_bvec(int n) {
     // simulate random bitvectors with up to 1 billion points
     // 16mers - up to 2^32 - 1
     // 32mers - up to 2^64 - 1
@@ -24,7 +24,7 @@ bvec* random_bvec(int n) {
         ++ii32;
     }
     printf("generated %zi distinct random uint32_t\n",uniq.size());
-    return new bvec(uniq);
+    return new BitVector(uniq);
 }
 
 using namespace std;
@@ -32,22 +32,22 @@ int main(int argc, char *argv[]) {
     short n = 1000;
     if (argc > 1) n = atoi(argv[1]);
 
-    bvec * original = random_bvec(n);
-    bvec * deserialized = new bvec();
+    BitVector * original = random_bvec(n);
+    BitVector * deserialized = new BitVector();
 
     char filename[200];
     std::tmpnam(filename);
     cout << "Writing to file " << filename << endl;
 
-    bvec::save_to_file(*original, filename);
-    bvec::restore_from_file(*deserialized, filename);
+    BitVector::save(*original, filename);
+    BitVector::restore(*deserialized, filename);
 
     bool match = original->equals(*deserialized); // original == deserialized
     if (!match) {
         original->print();
         deserialized->print();
-        vector<uint32_t> orig = original->get_words();
-        vector<uint32_t> deser = deserialized->get_words();
+        vector<uint32_t> orig = original->getWords();
+        vector<uint32_t> deser = deserialized->getWords();
         debug_binary("Original", orig);
         debug_binary("Deserialized", deser);
         vector<uint32_t> v;

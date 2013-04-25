@@ -18,14 +18,14 @@ using namespace std;
 
 typedef uint32_t word_t;
 
-class bvec {
+class BitVector {
     vector<word_t> words;
     bool rle;
     word_t count; // cache the number of set bits
     word_t size; // bits in the uncompressed bitvector
 
     friend class boost::serialization::access;
-    friend ostream & operator <<(ostream &, const bvec &);
+    friend ostream & operator <<(ostream &, const BitVector &);
 
     template<class Archive>
     void serialize(Archive & ar, const unsigned int version) {
@@ -40,32 +40,34 @@ class bvec {
 
 public:
     // Destructor
-    ~bvec() {};
+    ~BitVector() {};
 
     // Constructors
-    bvec() : rle(false), count(0), size(0) {};
-    bvec(bool wah) : rle(false), count(0), size(0) {compress();};
-    bvec(vector<word_t>& vals);
-    bvec(word_t* buf); // DIY deserialization
+    BitVector()                     : rle(false), count(0), size(0) {};
+    BitVector(bool wah)             : rle(false), count(0), size(0) {
+        compress();
+    };
+    BitVector(vector<word_t>& vals);
+    BitVector(word_t* buf); // DIY deserialization
     
-    bvec& copy(const bvec& bv);
+    BitVector& copy(const BitVector& bv);
     
-    void print();
-    void compress();
-    void decompress();
+    void   print();
+    void   compress();
+    void   decompress();
     size_t dump(word_t **buf); // DIY serialization
 
     // logical set operations
-    void flip();
-    bvec* copyflip();
-    void operator|=(bvec& rhs);
-    bvec* operator|(bvec&);
-    void operator&=(bvec& rhs);
-    bvec* operator&(bvec&);
-    bool operator==(bvec&) const;
+    void                 flip();
+    BitVector *          copyflip();
+    void        operator |= (BitVector& rhs);
+    BitVector * operator |  (BitVector&);
+    void        operator &= (BitVector& rhs);
+    BitVector * operator &  (BitVector&);
+    bool        operator ==(BitVector&) const;
     
-    bool equals(const bvec&) const;
-    vector<word_t>& get_words();
+    bool                 equals(const BitVector&) const;
+    vector<word_t>&      getWords();
 
     // is x in the set?
     bool find(word_t x);
@@ -73,34 +75,34 @@ public:
     // find the position of the next set bit after x
     word_t nextOne(word_t x);
 
-    // insert x into an existing bvec (at the end is faster)
+    // insert x into an existing BitVector (at the end is faster)
     void setBit(word_t x);
 
-    // for constructing a rle bvec one bit at a time
+    // for constructing a rle BitVector one bit at a time
     void appendFill(bool bit, word_t count);
 
     // basic metrics
     word_t cnt();
-    word_t get_size();
+    word_t getSize();
     word_t bytes();
     
-    static void save_to_file(const bvec &bv, const char *filename);
-    static void restore_from_file(bvec &bv, const char *filename);
+    static void save(const BitVector &bv, const char *filename);
+    static void restore(BitVector &bv, const char *filename);
 
 private:
 
-    bool low_density(vector<word_t>& vals);
-    void construct_rle(vector<word_t>& vals);
-    void matchSize(bvec& bv);
-    void rle_OR_rle(bvec& rhs);
-    void rle_OR_non(bvec& rhs);
-    void non_OR_rle(bvec& rhs);
-    void non_OR_non(bvec& rhs);
-    void rle_AND_rle(bvec& rhs);
-    void rle_AND_non(bvec& rhs);
-    void non_AND_rle(bvec& rhs);
-    void non_AND_non(bvec& rhs);
-    word_t popcount(word_t val) const;
+    bool   lowDensity(vector<word_t>& vals);
+    void   constructRLE(vector<word_t>& vals);
+    void   matchSize(BitVector& bv);
+    void   rleORrle(BitVector& rhs);
+    void   rleORnon(BitVector& rhs);
+    void   nonORrle(BitVector& rhs);
+    void   nonORnon(BitVector& rhs);
+    void   rleANDrle(BitVector& rhs);
+    void   rleANDnon(BitVector& rhs);
+    void   nonANDrle(BitVector& rhs);
+    void   nonANDnon(BitVector& rhs);
+    word_t popCount(word_t val) const;
 
 };
 

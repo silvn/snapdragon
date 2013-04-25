@@ -19,10 +19,10 @@ int run_test_cases() {
         vector<uint32_t> v;
         for (int j = 0; j < TEST_VEC_LENGTH; j++)
             v.push_back(TEST_CASES[i][j]);
-        bvec *bv = new bvec(v);
+        BitVector *bv = new BitVector(v);
         bv->compress();
         bv->decompress();
-        vector<uint32_t> uncomp = bv->get_words();
+        vector<uint32_t> uncomp = bv->getWords();
         bool result = v == uncomp;
         printf(""TERM_BOLD"Test %d"TERM_RESET": %s\n", i, result
             ? ""TERM_GREEN"Pass"TERM_RESET"" : ""TERM_RED"Fail"TERM_RESET"");

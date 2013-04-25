@@ -30,7 +30,7 @@ kmerizer::kmerizer(const size_t k,
         rshift = 64 - lshift;
     }
     this->nwords      = ((k-1)>>5)+1;
-    this->kmer_size   = this->nwords * sizeof(uint32_t);
+    this->kmer_size   = this->nwords * sizeof(kword_t);
     this->thread_bins = NBINS / this->threads;
     this->state       = READING;
     this->batches     = 0;
@@ -537,7 +537,7 @@ kmerizer::bit_slice(
     bitset<256> bbit; // for keeping track of the set bits
     size_t boff[nbits]; // beginning of the current run of 1's or 0's
     memset(boff,0,nbits*sizeof(size_t)); // initialize to 0
-    unsigned int bpw = 8*sizeof(uint32_t); // bits per word
+    unsigned int bpw = 8*sizeof(kword_t); // bits per word
 
     // mark the set bits in the first kmer
     if (nwords>1) {
@@ -608,7 +608,7 @@ void kmerizer::do_writeBatch(const size_t from, const size_t to) {
             char kmer_file[100];
             sprintf(kmer_file,"%s/%zi-mers.%zi.%zi",outdir,k,bin,batches);
             fp = fopen(kmer_file, "wb");
-            size_t n_slices = 8*sizeof(uint32_t);
+            size_t n_slices = 8*sizeof(kword_t);
             fwrite(&n_slices,sizeof(size_t),1,fp);
             for (size_t b=0;b<n_slices;b++) {
                 uint32_t c = kmer_slices[b]->cnt();
@@ -659,7 +659,7 @@ void kmerizer::read_bitmap(const char* idxfile, vector<uint32_t> &values, vector
     size_t n_distinct;
     fread(&n_distinct,sizeof(size_t),1,fp);
     values.resize(n_distinct);
-    fread(values.data(),sizeof(uint32_t),n_distinct,fp);
+    fread(values.data(),sizeof(uint32_t),n_distinct,fp); // assumes 32-bit words in bvec
     index.resize(n_distinct);
     for (size_t i=0;i<n_distinct;i++) {
         size_t bytes;
@@ -709,7 +709,7 @@ void kmerizer::do_mergeBatches(const size_t from, const size_t to) {
         unsigned int boff[nbits];
         unsigned int n=0;
         memset(boff, 0, nbits * sizeof(size_t));
-        const unsigned int bpw = 8 * sizeof(uint32_t); // bits per word
+        const unsigned int bpw = 8 * sizeof(kword_t); // bits per word
 
         for (size_t b=0;b<nbits;b++)
             merged_slices[b] = new bvec(true);

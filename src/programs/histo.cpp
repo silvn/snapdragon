@@ -12,7 +12,7 @@ int main(int argc, char *argv[])
     size_t threads = atoi(argv[2]);
     char* inprefix = argv[3];
 
-    kmerizer *counter = new kmerizer(k, threads, inprefix, CANONICAL);
+    Kmerizer *counter = new Kmerizer(k, threads, inprefix, CANONICAL);
 
     cout << "Load" << endl;
     counter->load();

@@ -2,7 +2,7 @@
 #include "kmerizer/kmerizer.h"
 
 int run_test_cases() {
-    kmerizer * km = new kmerizer(1, 1, "/tmp", CANONICAL);
+    Kmerizer * km = new Kmerizer(1, 1, "/tmp", CANONICAL);
     return 0;
 }
 

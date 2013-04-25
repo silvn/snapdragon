@@ -21,7 +21,7 @@ int main(int argc, char *argv[])
 	// create output directory if it doesn't exist
 	mkdir(outprefix,0755);
 
-	kmerizer *counter = new kmerizer(k, threads, outprefix, mode[0]);
+	Kmerizer *counter = new Kmerizer(k, threads, outprefix, mode[0]);
 	int rc = counter->allocate(1ULL<<cap_bits);
 	if (rc != 0) {
 		fprintf(stderr,"failed to allocate %llu bytes\n",1ULL<<cap_bits);

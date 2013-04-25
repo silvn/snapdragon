@@ -41,14 +41,14 @@ int main(int argc, char *argv[])
 	}
 
 	// setup 2bit vector
-	vector<uint32_t> twobit;
-	twobit.resize(256,0);
-	twobit[99] = 1;  // c
-	twobit[103] = 2; // g
-	twobit[116] = 3; // t
-	twobit[67] = 1;  // C
-	twobit[71] = 2;  // G
-	twobit[84] = 3;  // T
+	vector<uint32_t> twoBit;
+	twoBit.resize(256,0);
+	twoBit[99] = 1;  // c
+	twoBit[103] = 2; // g
+	twoBit[116] = 3; // t
+	twoBit[67] = 1;  // C
+	twoBit[71] = 2;  // G
+	twoBit[84] = 3;  // T
 
 	gzFile fp;
 	kseq_t *seq;
@@ -66,10 +66,10 @@ int main(int argc, char *argv[])
 	vector<uint32_t> allkmers;
 	while ((length = kseq_read(seq)) >= 0) {
 		if (length >= k) {
-			uint32_t mer = twobit[seq->seq.s[0]];
+			uint32_t mer = twoBit[seq->seq.s[0]];
 			for(int i=1; i<k; i++) { // fill first word
 				mer <<= 2; // shift 2 bits to the left
-				mer |= twobit[seq->seq.s[i]]; // insert the next two bits
+				mer |= twoBit[seq->seq.s[i]]; // insert the next two bits
 			}
 			vector<uint32_t> kmers;
 			kmers.reserve(length - k + 1);
@@ -77,7 +77,7 @@ int main(int argc, char *argv[])
 			kmers.push_back(mer < rem ? mer : rem);
 			for(int i=k; i<length; i++) {
 				mer <<= 2;
-				mer |= twobit[seq->seq.s[i]];
+				mer |= twoBit[seq->seq.s[i]];
 				mer &= kmask;
 				rem = revcomp(mer);
 				kmers.push_back(mer < rem ? mer : rem);

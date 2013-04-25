@@ -326,75 +326,75 @@ void kmerizer::mergeBatches() {
 
 
 int compare_kmers1(const void *k1, const void *k2) {
-    if (*(uint32_t*)k1 > *(uint32_t*)k2) return 1;
-    if (*(uint32_t*)k1 < *(uint32_t*)k2) return -1;
+    if (*(kword_t*)k1 > *(kword_t*)k2) return 1;
+    if (*(kword_t*)k1 < *(kword_t*)k2) return -1;
     return 0;
 }
 int compare_kmers2(const void *k1, const void *k2) {
     for (size_t i=0;i<2;i++) {
-        if (*((uint32_t*)k1+i) < *((uint32_t*)k2+i)) return -1;
-        if (*((uint32_t*)k1+i) > *((uint32_t*)k2+i)) return 1;
+        if (*((kword_t*)k1+i) < *((kword_t*)k2+i)) return -1;
+        if (*((kword_t*)k1+i) > *((kword_t*)k2+i)) return 1;
     }
     return 0;
 }
 int compare_kmers3(const void *k1, const void *k2) {
     for (size_t i=0;i<3;i++) {
-        if (*((uint32_t*)k1+i) < *((uint32_t*)k2+i)) return -1;
-        if (*((uint32_t*)k1+i) > *((uint32_t*)k2+i)) return 1;
+        if (*((kword_t*)k1+i) < *((kword_t*)k2+i)) return -1;
+        if (*((kword_t*)k1+i) > *((kword_t*)k2+i)) return 1;
     }
     return 0;
 }
 int compare_kmers4(const void *k1, const void *k2) {
     for (size_t i=0;i<4;i++) {
-        if (*((uint32_t*)k1+i) < *((uint32_t*)k2+i)) return -1;
-        if (*((uint32_t*)k1+i) > *((uint32_t*)k2+i)) return 1;
+        if (*((kword_t*)k1+i) < *((kword_t*)k2+i)) return -1;
+        if (*((kword_t*)k1+i) > *((kword_t*)k2+i)) return 1;
     }
     return 0;
 }
 int compare_kmers5(const void *k1, const void *k2) {
     for (size_t i=0;i<5;i++) {
-        if (*((uint32_t*)k1+i) < *((uint32_t*)k2+i)) return -1;
-        if (*((uint32_t*)k1+i) > *((uint32_t*)k2+i)) return 1;
+        if (*((kword_t*)k1+i) < *((kword_t*)k2+i)) return -1;
+        if (*((kword_t*)k1+i) > *((kword_t*)k2+i)) return 1;
     }
     return 0;
 }
 int compare_kmers6(const void *k1, const void *k2) {
     for (size_t i=0;i<6;i++) {
-        if (*((uint32_t*)k1+i) < *((uint32_t*)k2+i)) return -1;
-        if (*((uint32_t*)k1+i) > *((uint32_t*)k2+i)) return 1;
+        if (*((kword_t*)k1+i) < *((kword_t*)k2+i)) return -1;
+        if (*((kword_t*)k1+i) > *((kword_t*)k2+i)) return 1;
     }
     return 0;
 }
 int compare_kmers7(const void *k1, const void *k2) {
     for (size_t i=0;i<7;i++) {
-        if (*((uint32_t*)k1+i) < *((uint32_t*)k2+i)) return -1;
-        if (*((uint32_t*)k1+i) > *((uint32_t*)k2+i)) return 1;
+        if (*((kword_t*)k1+i) < *((kword_t*)k2+i)) return -1;
+        if (*((kword_t*)k1+i) > *((kword_t*)k2+i)) return 1;
     }
     return 0;
 }
 int compare_kmers8(const void *k1, const void *k2) {
     for (size_t i=0;i<8;i++) {
-        if (*((uint32_t*)k1+i) < *((uint32_t*)k2+i)) return -1;
-        if (*((uint32_t*)k1+i) > *((uint32_t*)k2+i)) return 1;
+        if (*((kword_t*)k1+i) < *((kword_t*)k2+i)) return -1;
+        if (*((kword_t*)k1+i) > *((kword_t*)k2+i)) return 1;
     }
     return 0;
 }
 
 int kmercmp(const void *k1, const void *k2, size_t nwords) {
     for (size_t i=0;i<nwords;i++) {
-        if (*((uint32_t*)k1+i) < *((uint32_t*)k2+i)) return -1;
-        if (*((uint32_t*)k1+i) > *((uint32_t*)k2+i)) return 1;
+        if (*((kword_t*)k1+i) < *((kword_t*)k2+i)) return -1;
+        if (*((kword_t*)k1+i) > *((kword_t*)k2+i)) return 1;
     }
     return 0;
 }
-struct kmer1_t { uint32_t first_word; };
-struct kmer2_t { uint32_t first_word; };
-struct kmer3_t { uint32_t first_word; };
-struct kmer4_t { uint32_t first_word; };
-struct kmer5_t { uint32_t first_word; };
-struct kmer6_t { uint32_t first_word; };
-struct kmer7_t { uint32_t first_word; };
-struct kmer8_t { uint32_t first_word; };
+struct kmer1_t { kword_t first_word; };
+struct kmer2_t { kword_t first_word; };
+struct kmer3_t { kword_t first_word; };
+struct kmer4_t { kword_t first_word; };
+struct kmer5_t { kword_t first_word; };
+struct kmer6_t { kword_t first_word; };
+struct kmer7_t { kword_t first_word; };
+struct kmer8_t { kword_t first_word; };
 bool operator<(const kmer1_t& a, const kmer1_t& b) {
     return a.first_word < b.first_word;
 }
@@ -570,7 +570,7 @@ kmerizer::bit_slice(
         for (size_t i=1;i<n;i++) {
             // when n is large the number of different bits between kmer i and kmer i-1 is small
             // so use xor, popcount, and selectbit to identify the changed bit positions
-            uint32_t x = kmers[i] ^ kmers[i-1];
+            kword_t x = kmers[i] ^ kmers[i-1];
             unsigned int count = popcount(x);
             for (unsigned int r = 1; r<=count; r++) {
                 unsigned int b = selectbit(x,r);

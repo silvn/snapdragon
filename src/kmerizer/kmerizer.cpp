@@ -305,7 +305,7 @@ void Kmerizer::writeBatch() {
     boost::thread_group tg;
     for (size_t i = 0; i < NBINS; i += threadBins) {
         size_t j = (i + threadBins > NBINS) ? NBINS : i + threadBins;
-        tg.create_thread(boost::bind(&Kmerizer::doUnique, this, i, j));
+        tg.create_thread(boost::bind(&Kmerizer::doWriteBatch, this, i, j));
     }
     tg.join_all();
     fprintf(stderr," took %f seconds\n",((float)(clock()-start))/CLOCKS_PER_SEC);
@@ -569,9 +569,9 @@ Kmerizer::bitSlice(
             bbit.set(selectBit(kmers[0],r),1);
         for (size_t i=1;i<n;i++) {
             // when n is large the number of different bits between kmer i and kmer i-1 is small
-            // so use xor, popcount, and selectbit to identify the changed bit positions
+            // so use xor, popCount, and selectBit to identify the changed bit positions
             kword_t x = kmers[i] ^ kmers[i-1];
-            unsigned int count = popcount(x);
+            unsigned int count = popCount(x);
             for (unsigned int r = 1; r<=count; r++) {
                 unsigned int b = selectBit(x,r);
                 kmer_slices[b]->appendFill(bbit.test(b),i-boff[b]);

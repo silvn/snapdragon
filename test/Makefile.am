@@ -12,7 +12,8 @@ endif
 LDADD = -lsnapdragon \
 	-lboost_serialization$(suff) \
 	-lboost_thread$(suff) \
-	-lboost_system$(suff)
+	-lboost_system$(suff) \
+	-lboost_unit_test_framework$(suff)
 TEST_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 	$(top_srcdir)/test/tap-driver.sh
 EXTRA_DIST = $(TESTS)

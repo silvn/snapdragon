@@ -1,7 +1,12 @@
+#define BOOST_TEST_DYN_LINK
+#define BOOST_TEST_MODULE "BitVector Serialization Unit Tests"
+
+#include <boost/test/unit_test.hpp>
 #include "bvec/bvec.h"
 #include "test.h"
 #include <algorithm>
 
+using namespace std;
 BitVector* random_bvec(int n) {
     // simulate random bitvectors with up to 1 billion points
     // 16mers - up to 2^32 - 1
@@ -27,21 +32,24 @@ BitVector* random_bvec(int n) {
     return new BitVector(uniq);
 }
 
-using namespace std;
-int main(int argc, char *argv[]) {
-    short n = 1000;
-    if (argc > 1) n = atoi(argv[1]);
+BOOST_AUTO_TEST_SUITE(BitVectorSerialization);
+    BOOST_AUTO_TEST_CASE(RoundTrip) {
+        short n = 1000;
 
-    BitVector * original = random_bvec(n);
-    BitVector * deserialized = new BitVector();
+        BitVector * original = random_bvec(n);
+        BitVector * deserialized = new BitVector();
 
-    char filename[200];
-    std::tmpnam(filename);
-    cout << "Writing to file " << filename << endl;
+        char filename[200];
+        std::tmpnam(filename);
 
-    BitVector::save(*original, filename);
-    BitVector::restore(*deserialized, filename);
+        BitVector::save(*original, filename);
+        BitVector::restore(*deserialized, filename);
 
+        BOOST_CHECK(original->equals(*deserialized));
+    }
+}
+
+/*
     bool match = original->equals(*deserialized); // original == deserialized
     if (!match) {
         original->print();
@@ -57,3 +65,4 @@ int main(int argc, char *argv[]) {
     }
     return 0;
 }
+*/

@@ -1,3 +1,7 @@
+#define BOOST_TEST_DYN_LINK
+#define BOOST_TEST_MODULE "BitVector Serialization Unit Tests"
+
+#include <boost/test/unit_test.hpp>
 #include "bvec/bvec.h"
 #include "test.h"
 #include <algorithm>
@@ -11,36 +15,20 @@ const uint32_t TEST_CASES[][TEST_VEC_LENGTH] = {
 };
 
 using namespace std;
-
-int run_test_cases() {
-    int num_cases = sizeof(TEST_CASES) / (TEST_VEC_LENGTH * sizeof(uint32_t));
-    int retValue = 0;
-    for (int i = 0; i < num_cases; i++) {
-        vector<uint32_t> v;
-        for (int j = 0; j < TEST_VEC_LENGTH; j++)
-            v.push_back(TEST_CASES[i][j]);
-        BitVector *bv = new BitVector(v);
-        bv->compress();
-        bv->decompress();
-        vector<uint32_t> uncomp = bv->getWords();
-        bool result = v == uncomp;
-        printf(""TERM_BOLD"Test %d"TERM_RESET": %s\n", i, result
-            ? ""TERM_GREEN"Pass"TERM_RESET"" : ""TERM_RED"Fail"TERM_RESET"");
-        if (!result) {
-            vector<uint32_t> va;
-            printf("%-20s ", "Original");
-            for (int j = 0; j < v.size(); j++) printf("%32u ", v[j]);
-            cout << endl;
-            xor_vectors(v, uncomp, va);
-            debug_binary("Original (bin)", v);
-            debug_binary("Uncompressed", uncomp);
-            debug_binary("XOR", va);
-            retValue++;
+BOOST_AUTO_TEST_SUITE(BitVectorDensity);
+    BOOST_AUTO_TEST_CASE(RoundTrip) {
+        int num_cases = sizeof(TEST_CASES) /
+            (TEST_VEC_LENGTH * sizeof(uint32_t));
+        int retValue = 0;
+        for (int i = 0; i < num_cases; i++) {
+            vector<uint32_t> v;
+            for (int j = 0; j < TEST_VEC_LENGTH; j++)
+                v.push_back(TEST_CASES[i][j]);
+            BitVector *bv = new BitVector(v);
+            bv->compress();
+            bv->decompress();
+            vector<uint32_t> uncomp = bv->getWords();
+            BOOST_CHECK(v == uncomp);
         }
     }
-    return retValue;
-}
-
-int main(int argc, char *argv[]) {
-    return run_test_cases();
 }

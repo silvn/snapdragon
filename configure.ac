@@ -98,6 +98,6 @@ AC_CONFIG_FILES([
 	src/programs/Makefile
 	test/Makefile
 ])
-AC_CONFIG_SUBDIRS([vendor/fastbit])
+AC_CONFIG_SUBDIRS([vendor/fastbit vendor/googletest])
 LT_INIT
 AC_OUTPUT

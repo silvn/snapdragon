@@ -49,8 +49,7 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-check_PROGRAMS = bvec_density$(EXEEXT) serialize$(EXEEXT) \
-	kmerize$(EXEEXT)
+check_PROGRAMS = runtests$(EXEEXT)
 subdir = test
 DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am depcomp \
 	test-driver ar-lib config.guess config.sub install-sh missing \
@@ -66,22 +65,14 @@ mkinstalldirs = $(install_sh) -d
 CONFIG_HEADER = $(top_builddir)/config.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
-bvec_density_SOURCES = bvec_density.cpp
-bvec_density_OBJECTS = bvec_density.$(OBJEXT)
-bvec_density_LDADD = $(LDADD)
-bvec_density_DEPENDENCIES =
+am_runtests_OBJECTS = test-kmerizer.$(OBJEXT) test-bvec.$(OBJEXT)
+runtests_OBJECTS = $(am_runtests_OBJECTS)
+runtests_LDADD = $(LDADD)
+runtests_DEPENDENCIES =
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
 am__v_lt_1 = 
-kmerize_SOURCES = kmerize.cpp
-kmerize_OBJECTS = kmerize.$(OBJEXT)
-kmerize_LDADD = $(LDADD)
-kmerize_DEPENDENCIES =
-serialize_SOURCES = serialize.cpp
-serialize_OBJECTS = serialize.$(OBJEXT)
-serialize_LDADD = $(LDADD)
-serialize_DEPENDENCIES =
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -116,7 +107,26 @@ AM_V_CXXLD = $(am__v_CXXLD_@AM_V@)
 am__v_CXXLD_ = $(am__v_CXXLD_@AM_DEFAULT_V@)
 am__v_CXXLD_0 = @echo "  CXXLD   " $@;
 am__v_CXXLD_1 = 
-DIST_SOURCES = bvec_density.cpp kmerize.cpp serialize.cpp
+COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
+	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
+LTCOMPILE = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) \
+	$(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) \
+	$(AM_CFLAGS) $(CFLAGS)
+AM_V_CC = $(am__v_CC_@AM_V@)
+am__v_CC_ = $(am__v_CC_@AM_DEFAULT_V@)
+am__v_CC_0 = @echo "  CC      " $@;
+am__v_CC_1 = 
+CCLD = $(CC)
+LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
+	$(AM_LDFLAGS) $(LDFLAGS) -o $@
+AM_V_CCLD = $(am__v_CCLD_@AM_V@)
+am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
+am__v_CCLD_0 = @echo "  CCLD    " $@;
+am__v_CCLD_1 = 
+SOURCES = $(runtests_SOURCES)
+DIST_SOURCES = $(runtests_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -327,7 +337,6 @@ RECHECK_LOGS = $(TEST_LOGS)
 AM_RECURSIVE_TARGETS = check recheck
 TEST_SUITE_LOG = test-suite.log
 TEST_EXTENSIONS = @EXEEXT@ .test
-LOG_DRIVER = $(SHELL) $(top_srcdir)/test/test-driver
 LOG_COMPILE = $(LOG_COMPILER) $(AM_LOG_FLAGS) $(LOG_FLAGS)
 am__set_b = \
   case '$@' in \
@@ -342,6 +351,7 @@ am__set_b = \
 am__test_logs1 = $(TESTS:=.log)
 am__test_logs2 = $(am__test_logs1:@EXEEXT@.log=.log)
 TEST_LOGS = $(am__test_logs2:.test.log=.log)
+TEST_LOG_DRIVER = $(SHELL) $(top_srcdir)/test/test-driver
 TEST_LOG_COMPILE = $(TEST_LOG_COMPILER) $(AM_TEST_LOG_FLAGS) \
 	$(TEST_LOG_FLAGS)
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
@@ -354,7 +364,7 @@ AUTOHEADER = @AUTOHEADER@
 AUTOMAKE = @AUTOMAKE@
 AWK = @AWK@
 BUILD_FASTBIT = @BUILD_FASTBIT@
-CC = g++
+CC = @CC@
 CCDEPMODE = @CCDEPMODE@
 CFLAGS = @CFLAGS@
 CPP = @CPP@
@@ -466,20 +476,20 @@ target_alias = @target_alias@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-AM_DEFAULT_SOURCE_EXT = .cpp
-SOURCES = bvec_density.cpp serialize.cpp kmerize.cpp test.h
+TESTS = histo.test BitVectorSerialization BitVectorDensity Kmerizer
+runtests_SOURCES = test-kmerizer.cpp test-bvec.cpp test.h
 ACLOCAL_AMFLAGS = -I m4
-AM_CXXFLAGS = -I../src -I$(top_srcdir)/../src -I$(top_srcdir)/../test
-TESTS = $(check_PROGRAMS) histo.test
-AM_LDFLAGS = -L$(top_srcdir)/src
+GTEST_ROOT = $(top_srcdir)/vendor/googletest
+AM_CXXFLAGS = -I$(top_srcdir)/../src -I$(GTEST_ROOT) -I$(GTEST_ROOT)/include
+AM_LDFLAGS = -L$(top_srcdir)/src -L$(GTEST_ROOT)/lib
 @MACOS_TRUE@suff = -mt
 LDADD = -lsnapdragon \
 	-lboost_serialization$(suff) \
 	-lboost_thread$(suff) \
 	-lboost_system$(suff) \
-	-lboost_unit_test_framework$(suff)
+	-lgtest
 
-TEST_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
+LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 	$(top_srcdir)/test/tap-driver.sh
 
 EXTRA_DIST = $(TESTS)
@@ -526,15 +536,9 @@ clean-checkPROGRAMS:
 	list=`for p in $$list; do echo "$$p"; done | sed 's/$(EXEEXT)$$//'`; \
 	echo " rm -f" $$list; \
 	rm -f $$list
-bvec_density$(EXEEXT): $(bvec_density_OBJECTS) $(bvec_density_DEPENDENCIES) $(EXTRA_bvec_density_DEPENDENCIES) 
-	@rm -f bvec_density$(EXEEXT)
-	$(AM_V_CXXLD)$(CXXLINK) $(bvec_density_OBJECTS) $(bvec_density_LDADD) $(LIBS)
-kmerize$(EXEEXT): $(kmerize_OBJECTS) $(kmerize_DEPENDENCIES) $(EXTRA_kmerize_DEPENDENCIES) 
-	@rm -f kmerize$(EXEEXT)
-	$(AM_V_CXXLD)$(CXXLINK) $(kmerize_OBJECTS) $(kmerize_LDADD) $(LIBS)
-serialize$(EXEEXT): $(serialize_OBJECTS) $(serialize_DEPENDENCIES) $(EXTRA_serialize_DEPENDENCIES) 
-	@rm -f serialize$(EXEEXT)
-	$(AM_V_CXXLD)$(CXXLINK) $(serialize_OBJECTS) $(serialize_LDADD) $(LIBS)
+runtests$(EXEEXT): $(runtests_OBJECTS) $(runtests_DEPENDENCIES) $(EXTRA_runtests_DEPENDENCIES) 
+	@rm -f runtests$(EXEEXT)
+	$(AM_V_CXXLD)$(CXXLINK) $(runtests_OBJECTS) $(runtests_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -542,9 +546,8 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/bvec_density.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/kmerize.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/serialize.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-bvec.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-kmerizer.Po@am__quote@
 
 .cpp.o:
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXXCOMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -766,23 +769,23 @@ recheck: all $(check_PROGRAMS)
 	        am__force_recheck=am--force-recheck \
 	        TEST_LOGS="$$log_list"; \
 	exit $$?
-bvec_density.log: bvec_density$(EXEEXT)
-	@p='bvec_density$(EXEEXT)'; \
-	b='bvec_density'; \
+BitVectorSerialization.log: BitVectorSerialization
+	@p='BitVectorSerialization'; \
+	b='BitVectorSerialization'; \
 	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
 	--log-file $$b.log --trs-file $$b.trs \
 	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
 	"$$tst" $(AM_TESTS_FD_REDIRECT)
-serialize.log: serialize$(EXEEXT)
-	@p='serialize$(EXEEXT)'; \
-	b='serialize'; \
+BitVectorDensity.log: BitVectorDensity
+	@p='BitVectorDensity'; \
+	b='BitVectorDensity'; \
 	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
 	--log-file $$b.log --trs-file $$b.trs \
 	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
 	"$$tst" $(AM_TESTS_FD_REDIRECT)
-kmerize.log: kmerize$(EXEEXT)
-	@p='kmerize$(EXEEXT)'; \
-	b='kmerize'; \
+Kmerizer.log: Kmerizer
+	@p='Kmerizer'; \
+	b='Kmerizer'; \
 	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
 	--log-file $$b.log --trs-file $$b.trs \
 	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \

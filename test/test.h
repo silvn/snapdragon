@@ -38,4 +38,4 @@ void print_test(const char * name, const bool passed) {
         ? ""TERM_GREEN"Pass"TERM_RESET"" : ""TERM_RED"Fail"TERM_RESET"");    
 }
 
-#endif // #ifndef TEST_H
+#endif // #ifndef SNAPDRAGON_TEST_H

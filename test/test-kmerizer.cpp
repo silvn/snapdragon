@@ -12,5 +12,7 @@ Kmerizer * initKmerizer() {
 BOOST_AUTO_TEST_SUITE(Kmerizer);
     BOOST_AUTO_TEST_CASE(Instantiation) {
         BOOST_REQUIRE(initKmerizer() != NULL);
+        cout << "1..1" << endl;
+        cout << "ok 1" << endl;
     }
 BOOST_AUTO_TEST_SUITE_END();

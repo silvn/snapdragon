@@ -1,7 +1,3 @@
-#define BOOST_TEST_DYN_LINK
-#define BOOST_TEST_MODULE "Kmerizer Unit Tests"
-
-#include <boost/test/unit_test.hpp>
 #include "test.h"
 #include "kmerizer/kmerizer.h"
 
@@ -9,10 +5,18 @@ Kmerizer * initKmerizer() {
     return new Kmerizer(1, 1, "/tmp", CANONICAL);
 }
 
-BOOST_AUTO_TEST_SUITE(Kmerizer);
-    BOOST_AUTO_TEST_CASE(Instantiation) {
-        BOOST_REQUIRE(initKmerizer() != NULL);
-        cout << "1..1" << endl;
-        cout << "ok 1" << endl;
-    }
-BOOST_AUTO_TEST_SUITE_END();
+namespace {
+    
+class KmerizerTest : public ::testing::Test {
+};
+
+TEST(KmerizerTest, DoesInstantiation) {
+    EXPECT_TRUE(initKmerizer() != NULL);
+}
+
+} /* namespace */
+
+int main(int argc, char *argv[]) {
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
+}

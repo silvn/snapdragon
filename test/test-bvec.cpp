@@ -1,9 +1,5 @@
-#define BOOST_TEST_DYN_LINK
-#define BOOST_TEST_MODULE "BitVector Unit Tests"
-
-#include <boost/test/unit_test.hpp>
-#include "bvec/bvec.h"
 #include "test.h"
+#include "bvec/bvec.h"
 #include <algorithm>
 
 #define TEST_VEC_LENGTH 4
@@ -14,7 +10,7 @@ const uint32_t TEST_CASES[][TEST_VEC_LENGTH] = {
     { 1819233732, 2235579467, 2625766209, 4061912144 }
 };
 
-BitVector* random_bvec(int n) {
+BitVector * random_bvec(int n) {
     // simulate random bitvectors with up to 1 billion points
     // 16mers - up to 2^32 - 1
     // 32mers - up to 2^64 - 1
@@ -39,46 +35,48 @@ BitVector* random_bvec(int n) {
     return new BitVector(uniq);
 }
 
-using namespace std;
+namespace {
+    
+class BitVectorTest : public ::testing::Test {
+};
 
-BOOST_AUTO_TEST_SUITE(BitVectorDensity);
-    BOOST_AUTO_TEST_CASE(RoundTrip) {
-        int num_cases = sizeof(TEST_CASES) /
-            (TEST_VEC_LENGTH * sizeof(uint32_t));
-        int retValue = 0;
-        cout << "1.." << num_cases << endl;
-        for (int i = 0; i < num_cases; i++) {
-            vector<uint32_t> v;
-            for (int j = 0; j < TEST_VEC_LENGTH; j++)
-                v.push_back(TEST_CASES[i][j]);
-            BitVector *bv = new BitVector(v);
-            bv->compress();
-            bv->decompress();
-            vector<uint32_t> uncomp = bv->getWords();
-            BOOST_CHECK(v == uncomp);
-            cout << "ok " << i + 1 << endl;
-        }
+TEST(BitVectorTest, CanDecompressCompressedObject) {
+    int num_cases = sizeof(TEST_CASES) /
+        (TEST_VEC_LENGTH * sizeof(uint32_t));
+    int retValue = 0;
+    for (int i = 0; i < num_cases; i++) {
+        vector<uint32_t> v;
+        for (int j = 0; j < TEST_VEC_LENGTH; j++)
+            v.push_back(TEST_CASES[i][j]);
+        BitVector *bv = new BitVector(v);
+        bv->compress();
+        bv->decompress();
+        vector<uint32_t> uncomp = bv->getWords();
+        EXPECT_EQ(v, uncomp);
     }
-BOOST_AUTO_TEST_SUITE_END();
+}
 
-BOOST_AUTO_TEST_SUITE(BitVectorSerialization);
-    BOOST_AUTO_TEST_CASE(RoundTrip) {
-        cout << "1..1" << endl;
-        short n = 1000;
+TEST(BitVectorTest, CanDeserializeSerializedObject) {
+    short n = 1000;
 
-        BitVector * original = random_bvec(n);
-        BitVector * deserialized = new BitVector();
+    BitVector * original = random_bvec(n);
+    BitVector * deserialized = new BitVector();
 
-        char filename[200];
-        std::tmpnam(filename);
+    char filename[200];
+    std::tmpnam(filename);
 
-        BitVector::save(*original, filename);
-        BitVector::restore(*deserialized, filename);
+    BitVector::save(*original, filename);
+    BitVector::restore(*deserialized, filename);
 
-        BOOST_CHECK(original->equals(*deserialized));
-        cout << "ok 1" << endl;
-    }
-BOOST_AUTO_TEST_SUITE_END();
+    EXPECT_TRUE(original->equals(*deserialized));
+}
+
+} /* namespace */
+
+int main(int argc, char **argv) {
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
+}
 
 /*
     bool match = original->equals(*deserialized); // original == deserialized

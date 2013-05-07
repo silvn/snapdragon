@@ -53,10 +53,10 @@ AC_ARG_ENABLE(xopt,
 	[if test "$enableval" = "yes" ; then xopt="yes" ; else xopt="no" ; fi],[xopt="no"])
 AC_MSG_RESULT($xopt)
 if test "x$xopt" = "xyes" ; then
-   # add -O5 if the compiler accepts it, otherwise -O3
-   OLDCXXFLAGS=$CXXFLAGS;
-   CXXFLAGS="$CXXFLAGS -O5";
-   AC_COMPILE_IFELSE([
+	# add -O5 if the compiler accepts it, otherwise -O3
+	OLDCXXFLAGS=$CXXFLAGS;
+	CXXFLAGS="$CXXFLAGS -O5";
+	AC_COMPILE_IFELSE([
 	AC_LANG_PROGRAM([[
 	#include <cmath>
 	]], [[
@@ -79,14 +79,21 @@ AC_CHECK_HEADERS([stdlib.h string.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_INLINE
+AC_TYPE_INT16_T
+AC_TYPE_INT32_T
+AC_TYPE_INT64_T
+AC_TYPE_OFF_T
 AC_TYPE_SIZE_T
+AC_TYPE_UINT16_T
 AC_TYPE_UINT32_T
 AC_TYPE_UINT64_T
+AC_TYPE_UINT8_T
 
 # Checks for library functions.
 AC_FUNC_MALLOC
+AC_FUNC_MMAP
 AC_FUNC_REALLOC
-AC_CHECK_FUNCS([mkdir strerror])
+AC_CHECK_FUNCS([memset mkdir select sqrt strerror])
 
 AC_CONFIG_FILES([
 	Makefile
@@ -98,6 +105,9 @@ AC_CONFIG_FILES([
 	src/programs/Makefile
 	test/Makefile
 ])
-AC_CONFIG_SUBDIRS([vendor/fastbit])
+AC_CONFIG_SUBDIRS([
+	vendor/fastbit
+	vendor/googletest
+])
 LT_INIT
 AC_OUTPUT

@@ -3,4 +3,4 @@
 	url = https://github.com/gingi/fastbit
 [submodule "vendor/googletest"]
 	path = vendor/googletest
-	url = https://chromium.googlesource.com/external/googletest
+	url = https://github.com/liquid-mirror/googletest.git

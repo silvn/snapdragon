@@ -78,7 +78,6 @@ AC_SUBST(BUILD_FASTBIT)
 AC_CHECK_HEADERS([stdlib.h string.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
-AC_CHECK_HEADER_STDBOOL
 AC_C_INLINE
 AC_TYPE_INT16_T
 AC_TYPE_INT32_T
@@ -106,6 +105,9 @@ AC_CONFIG_FILES([
 	src/programs/Makefile
 	test/Makefile
 ])
-AC_CONFIG_SUBDIRS([vendor/fastbit vendor/googletest])
+AC_CONFIG_SUBDIRS([
+	vendor/fastbit
+	vendor/googletest
+])
 LT_INIT
 AC_OUTPUT

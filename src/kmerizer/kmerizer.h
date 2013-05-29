@@ -97,10 +97,10 @@ private:
     // returns the position of the rth set bit in v
     inline unsigned int selectBit(kword_t v, unsigned int r);
 
-    inline size_t pos2kmer(size_t pos, kword_t *kmer, vector<BitVector*> &index);
+    size_t pos2kmer(size_t pos, kword_t *kmer, vector<BitVector*> &index);
 
-    inline uint32_t pos2value(size_t pos, vector<uint32_t> &values,
-                              vector<BitVector*> &index);
+    uint32_t pos2value(size_t pos, vector<uint32_t> &values,
+                       vector<BitVector*> &index);
 
     kword_t* canonicalize(kword_t *packed, kword_t *rcpack) const;
     uint32_t find(kword_t *kmer, size_t bin);
@@ -311,32 +311,6 @@ Kmerizer::hashkmer(const kword_t *kmer, const uint8_t seed) const {
         h = Rand8[h ^ (uint8_t)kmer[i] & 255];
     }
     return h;
-}
-
-inline size_t
-Kmerizer::pos2kmer(size_t pos, kword_t *kmer, vector<BitVector*> &index) {
-    if (pos >= index[0]->getSize()) return 1;
-    size_t bpw = 8*sizeof(kword_t);
-    // need to zero the kmer first
-    memset(kmer,0,kmerSize);
-    for(size_t b=0;b<8*kmerSize;b++)
-        if (index[b]->find(pos))
-            kmer[b/bpw] |= 1ULL << (bpw - b%bpw - 1);
-    return 0;
-}
-
-inline uint32_t
-Kmerizer::pos2value(
-    size_t pos,
-    vector<uint32_t> &values,
-    vector<BitVector*> &index)
-{
-    // lookup the value in the pos bit
-    // find the first BitVector where this bit is set
-    for(size_t i=0;i<values.size();i++)
-        if (index[i]->find(pos))
-            return values[i];
-    return 0;
 }
 
 

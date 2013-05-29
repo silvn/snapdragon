@@ -77,7 +77,8 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-check_PROGRAMS = test-kmerizer$(EXEEXT) test-bvec$(EXEEXT)
+check_PROGRAMS = test-kmerizer$(EXEEXT) test-bvec$(EXEEXT) \
+	test-freqmap$(EXEEXT)
 subdir = test
 DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am depcomp \
 	test-driver ar-lib config.guess config.sub install-sh missing \
@@ -101,6 +102,10 @@ AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
 am__v_lt_1 = 
+test_freqmap_SOURCES = test-freqmap.cpp
+test_freqmap_OBJECTS = test-freqmap.$(OBJEXT)
+test_freqmap_LDADD = $(LDADD)
+test_freqmap_DEPENDENCIES =
 test_kmerizer_SOURCES = test-kmerizer.cpp
 test_kmerizer_OBJECTS = test-kmerizer.$(OBJEXT)
 test_kmerizer_LDADD = $(LDADD)
@@ -139,7 +144,7 @@ AM_V_CXXLD = $(am__v_CXXLD_@AM_V@)
 am__v_CXXLD_ = $(am__v_CXXLD_@AM_DEFAULT_V@)
 am__v_CXXLD_0 = @echo "  CXXLD   " $@;
 am__v_CXXLD_1 = 
-DIST_SOURCES = test-bvec.cpp test-kmerizer.cpp
+DIST_SOURCES = test-bvec.cpp test-freqmap.cpp test-kmerizer.cpp
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -492,7 +497,7 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 TESTS = histo.test $(check_PROGRAMS)
 AM_DEFAULT_SOURCE_EXT = .cpp
-SOURCES = test-kmerizer.cpp test-bvec.cpp test.h
+SOURCES = test-kmerizer.cpp test-bvec.cpp test-freqmap.cpp test.h
 ACLOCAL_AMFLAGS = -I m4
 GTEST_ROOT = $(top_srcdir)/vendor/googletest
 AM_CXXFLAGS = -I$(top_srcdir)/src -I$(GTEST_ROOT)/include
@@ -553,6 +558,10 @@ test-bvec$(EXEEXT): $(test_bvec_OBJECTS) $(test_bvec_DEPENDENCIES) $(EXTRA_test_
 	@rm -f test-bvec$(EXEEXT)
 	$(AM_V_CXXLD)$(CXXLINK) $(test_bvec_OBJECTS) $(test_bvec_LDADD) $(LIBS)
 
+test-freqmap$(EXEEXT): $(test_freqmap_OBJECTS) $(test_freqmap_DEPENDENCIES) $(EXTRA_test_freqmap_DEPENDENCIES) 
+	@rm -f test-freqmap$(EXEEXT)
+	$(AM_V_CXXLD)$(CXXLINK) $(test_freqmap_OBJECTS) $(test_freqmap_LDADD) $(LIBS)
+
 test-kmerizer$(EXEEXT): $(test_kmerizer_OBJECTS) $(test_kmerizer_DEPENDENCIES) $(EXTRA_test_kmerizer_DEPENDENCIES) 
 	@rm -f test-kmerizer$(EXEEXT)
 	$(AM_V_CXXLD)$(CXXLINK) $(test_kmerizer_OBJECTS) $(test_kmerizer_LDADD) $(LIBS)
@@ -564,6 +573,7 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-bvec.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-freqmap.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test-kmerizer.Po@am__quote@
 
 .cpp.o:
@@ -796,6 +806,13 @@ test-kmerizer.log: test-kmerizer$(EXEEXT)
 test-bvec.log: test-bvec$(EXEEXT)
 	@p='test-bvec$(EXEEXT)'; \
 	b='test-bvec'; \
+	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
+	--log-file $$b.log --trs-file $$b.trs \
+	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \
+	"$$tst" $(AM_TESTS_FD_REDIRECT)
+test-freqmap.log: test-freqmap$(EXEEXT)
+	@p='test-freqmap$(EXEEXT)'; \
+	b='test-freqmap'; \
 	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
 	--log-file $$b.log --trs-file $$b.trs \
 	$(am__common_driver_flags) $(AM_LOG_DRIVER_FLAGS) $(LOG_DRIVER_FLAGS) -- $(LOG_COMPILE) \

@@ -5,7 +5,7 @@ AC_INIT([snapdragon],[0.0.1],[olson@warelab.org])
 AC_CONFIG_AUX_DIR([test])
 AC_REQUIRE_AUX_FILE([tap-driver.sh])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
-AC_REVISION([m4_esyscmd_s([git describe --always])])
+AC_REVISION([m4_esyscmd_s([git describe --tags --always])])
 
 AC_CONFIG_SRCDIR([config.h.in])
 AC_CONFIG_HEADERS([config.h])
@@ -102,6 +102,7 @@ AC_CONFIG_FILES([
 	src/bvec/Makefile
 	src/preprocessing/Makefile
 	src/kmerizer/Makefile
+	src/util/Makefile
 	src/programs/Makefile
 	test/Makefile
 ])

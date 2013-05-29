@@ -1,8 +1,8 @@
-check_PROGRAMS = test-kmerizer test-bvec
+check_PROGRAMS = test-kmerizer test-bvec test-freqmap
 TESTS = histo.test $(check_PROGRAMS)
 AM_DEFAULT_SOURCE_EXT = .cpp
 CC = g++
-SOURCES = test-kmerizer.cpp test-bvec.cpp test.h
+SOURCES = test-kmerizer.cpp test-bvec.cpp test-freqmap.cpp test.h
 ACLOCAL_AMFLAGS = -I m4
 GTEST_ROOT = $(top_srcdir)/vendor/googletest
 AM_CXXFLAGS = -I$(top_srcdir)/src -I$(GTEST_ROOT)/include

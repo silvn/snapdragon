@@ -13,5 +13,6 @@ lib_LTLIBRARIES = libsnapdragon.la
 libsnapdragon_la_SOURCES =
 nodist_EXTRA_libsnapdragon_la_SOURCES = dummy.cxx
 libsnapdragon_la_LIBADD = \
+	util/libutil.la \
 	bvec/libbvec.la \
 	kmerizer/libkmerizer.la

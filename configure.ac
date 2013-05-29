@@ -1,7 +1,7 @@
 AC_COPYRIGHT((c) 2013 Cold Spring Harbor Laboratory)
 
 AC_PREREQ([2.68])
-AC_INIT([snapdragon],[0.2],[olson@warelab.org])
+AC_INIT([snapdragon],[0.0.1],[olson@warelab.org])
 AC_CONFIG_AUX_DIR([test])
 AC_REQUIRE_AUX_FILE([tap-driver.sh])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])

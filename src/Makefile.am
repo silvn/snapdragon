@@ -8,7 +8,7 @@ endif
 AM_DEFAULT_SOURCE_EXT = .cpp
 CC = g++
 
-SUBDIRS = bvec preprocessing kmerizer util programs $(EXTRA_BUILD)
+SUBDIRS = bitmap bvec preprocessing kmerizer util programs $(EXTRA_BUILD)
 lib_LTLIBRARIES = libsnapdragon.la
 libsnapdragon_la_SOURCES =
 nodist_EXTRA_libsnapdragon_la_SOURCES = dummy.cxx

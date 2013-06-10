@@ -1,17 +1,17 @@
 #ifndef SNAPDRAGON_BITMAP_H
 #define SNAPDRAGON_BITMAP_H
 #include <vector>
-#include "../bvec/bvec.h" // Bitvector class
+#include "../bvec/bvec.h" // BitVector class
 
 class BitmapIndex {
 public:
     void loadIndex(const char* fname);
     void saveIndex(const char* fname);
 protected:
-    // every type of bitmap index has some Bitvectors
-    std::vector<Bitvector*> bvec;
-    // each Bitvector represents a non-negative integer relative to some origin
-    Bitvector*              bvecValues;
+    // every type of bitmap index has some BitVectors
+    std::vector<BitVector*> bvec;
+    // each BitVector represents a non-negative integer relative to some origin
+    BitVector*              bvecValues;
     int                     bvecOrigin;
     // total number of values indexed
     uint64_t                size;

@@ -7,7 +7,8 @@ void BitmapIndex::saveIndex(const char* fname) {
     
 }
 
-BitSlicedIndex::BitSlicedIndex(unsigned int nwords, const char* fname) {
+template <class T>
+BitSlicedIndex<T>::BitSlicedIndex(unsigned int nwords, const char* fname) {
     
 }
 

@@ -103,6 +103,7 @@ AC_CONFIG_FILES([
 	src/preprocessing/Makefile
 	src/kmerizer/Makefile
 	src/util/Makefile
+	src/bitmap/Makefile
 	src/programs/Makefile
 	test/Makefile
 ])

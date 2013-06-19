@@ -216,7 +216,7 @@ uint32_t Kmerizer::find(const char* seq) {
     res->appendFill(true,slices[bin][0]->getSize()); // then make it all 1's
     for (size_t w=0;w<nwords;w++) {
         for (size_t b=0;b<64;b++) {
-            if (kmer[w] & (1ULL << 63-b))
+            if (kmer[w] & (1ULL << (63-b)))
                 *res &= *(slices[bin][w*nwords + b]);
             else
                 *res &= *(slices[bin][w*nwords + b]->copyflip());
@@ -711,10 +711,10 @@ void Kmerizer::doLoadIndex(const size_t from, const size_t to) {
 void Kmerizer::doMergeBatches(const size_t from, const size_t to) {
     for (size_t bin=from; bin<to; bin++) {
         // read the counts and kmers for each batch
-        vector<BitVector*>    batch_counts[batches];
-        vector<uint32_t> batch_values[batches];
-        vector<BitVector*>    batch_slices[batches];
-        vector<uint32_t> batch_slice_cnts[batches];
+        vector<BitVector*> * batch_counts = new vector<BitVector*>[batches];
+        vector<uint32_t>   * batch_values = new vector<uint32_t>[batches];
+        vector<BitVector*> * batch_slices = new vector<BitVector*>[batches];
+        vector<uint32_t>   * batch_slice_cnts = new vector<uint32_t>[batches];
         kword_t  kmers[batches*nwords]; // next kmer in each active batch
         uint32_t btally[batches]; // frequency of next kmer in each batch
         size_t   offset[batches]; // keep track of position in each batch
@@ -928,7 +928,7 @@ void Kmerizer::rangeIndex(vector<uint32_t> &vec, vector<uint32_t> &values, vecto
     }
 //    fprintf(stderr,"rangeIndex() %zi distinct values\n",values.size());
     // setup a vector for each range
-    vector<uint32_t> vrange[values.size()];
+    vector<uint32_t> * vrange = new vector<uint32_t>[values.size()];
     // iterate over the vec and push the offset onto each range
     for (size_t i=0;i<vec.size();i++) {
         it = lower_bound(values.begin(),values.end(),vec[i]);
@@ -1033,7 +1033,7 @@ void Kmerizer::sdump(char *fname, BitVector **mask) {
                 kmer[w]=0;
                 for (size_t b=0;b<bpw;b++) {
                     if(slices[bin][w*bpw + b]->find(next1)) {
-                        kmer[w] |= 1 << bpw-b-1;
+                        kmer[w] |= 1 << (bpw-b-1);
                     }
                 }
             }
@@ -1072,7 +1072,7 @@ Kmerizer::doPdump(const size_t from,
                 kmer[w]=0;
                 for (size_t b=0;b<bpw;b++) {
                     if(slices[bin][w*bpw + b]->find(next1)) {
-                        kmer[w] |= 1 << bpw-b-1;
+                        kmer[w] |= 1 << (bpw-b-1);
                     }
                 }
             }

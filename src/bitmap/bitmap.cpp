@@ -21,11 +21,7 @@ void BitSlicedIndex<T>::append(T* value) {
     
 }
 template <class T>
-T BitSlicedIndex<T>::decode(size_t idx) {
-    
-}
-template <class T>
-T* BitSlicedIndex<T>::decode(size_t idx) {
+T * BitSlicedIndex<T>::decode(size_t idx) {
     
 }
 

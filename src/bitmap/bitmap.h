@@ -33,7 +33,6 @@ public:
     void append(T value); // only works when nwords==1
     void append(T *value);
     // reconstruct the value stored at position idx
-    T decode(size_t idx);
     T* decode(size_t idx);
     
 private:

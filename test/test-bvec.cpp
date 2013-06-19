@@ -1,6 +1,7 @@
 #include "test.h"
 #include "bvec/bvec.h"
 #include <algorithm>
+#include <stdlib.h>
 
 #define TEST_VEC_LENGTH 4
 const uint32_t TEST_CASES[][TEST_VEC_LENGTH] = {
@@ -62,8 +63,8 @@ TEST(BitVectorTest, CanDeserializeSerializedObject) {
     BitVector * original = random_bvec(n);
     BitVector * deserialized = new BitVector();
 
-    char filename[200];
-    std::tmpnam(filename);
+    char filename[200] = "/tmp/tmp.XXXXX";
+    mkstemp(filename);
 
     BitVector::save(*original, filename);
     BitVector::restore(*deserialized, filename);

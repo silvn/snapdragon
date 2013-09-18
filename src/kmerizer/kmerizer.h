@@ -12,8 +12,6 @@
 
 //#include <folly/ProducerConsumerQueue.h>
 #include "../boost/threadpool.hpp"
-#include <boost/lockfree/spsc_queue.hpp>
-#include <boost/atomic.hpp>
 
 typedef uint64_t kword_t;
 using namespace std;
@@ -35,7 +33,7 @@ class Kmerizer {
     size_t  kmerSize; // in bytes
     size_t  nthreads;
     char    mode;
-    boost::atomic<char> state; // see #define (COUNT, SAVE, QUERY, etc.)
+    char state; // see #define (COUNT, SAVE, QUERY, etc.)
     char *  outdir;
 
     // lookup tables for common kmers
@@ -47,10 +45,9 @@ class Kmerizer {
     kword_t  * kmerBuf[NBINS];
     uint32_t   kmerBufTally[NBINS]; // number of kmers stored
     uint32_t   kmerBufSize[NBINS];  // capacity of buffer
+    uint32_t   kmerBufChecked[NBINS]; // kmers before this in kmerBuf are not in kmerLut
 
     uint32_t   batches[NBINS]; // keep track of the number of serialized batches
-
-    void     * PCQ[NBINS]; // ProducerConsumerQueue pointers
 
     boost::threadpool::pool tp;
 
@@ -82,28 +79,17 @@ public:
 private:
 
     // function to extract (canonical) kmers from a sequence of [ACGT]
-    template<class T> void addSeq(const char* seq, const int length);
+    void addSeq(const char* seq, const int length);
     void addSeq1(const char* seq, const int length);
 
     // update kmer given the next nucl by shifting by two bits, returns nextKmer's bin
-    template<class T> size_t nextKmer (kword_t* kmer, size_t bin, const char nucl);
+    size_t nextKmer (kword_t* kmer, size_t bin, const char nucl);
     size_t nextKmer1(kword_t* kmer, size_t bin, const char nucl);
 
-    // pack nucleotides into 2 bits
-//    inline kword_t twoBit(const unsigned char nuc) const;
-
     // choose the lesser between a kmer and its reverse complement
-    template<class T> kword_t* canonicalize (kword_t *packed, kword_t *rcpack, size_t *bin) const;
+    kword_t* canonicalize (kword_t *packed, kword_t *rcpack, size_t *bin) const;
     kword_t* canonicalize1(kword_t *packed, kword_t *rcpack, size_t *bin) const;
     
-    // reverse complement one kword_t
-//    inline kword_t revcomp(const kword_t val) const;
-    // only do the reverse complement of the 8 least significant digits
-//    inline kword_t revcomp_8(const kword_t val) const;
-
-    // worker function to consume kmers from the ProducerConsumerQueues
-    template<class T> void consumeKmers(size_t threadId);
-
     // search lookup table (kmerLutK[bin]) and increment count (kmerLutV[bin])
     // or save kmer for later (kmerBuf[bin])
     void insertKmer(size_t bin, kword_t *kmer);
@@ -207,6 +193,21 @@ private:
         };
     
         return rctable[val&0xFFUL];
+    }
+    inline int ilsearchLut1(kword_t *A, int imax, kword_t *kmer) {
+//        kword_t* A = kmerLutK[bin];
+        int imin = 0;
+ //       int imax = kmerLutS[bin];
+        while (imin < imax) {
+            int imid = (imin+imax)>>1;
+            if (A[imid] < *kmer)
+                imin = imid + 1;
+            else if(A[imid] == *kmer)
+                return imid;
+            else
+                imax = imid;
+        }
+        return -1;
     }
 };
 

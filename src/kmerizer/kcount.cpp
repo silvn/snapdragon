@@ -30,8 +30,19 @@ int main(int argc, char *argv[])
 	// process each seq from input
 	kseq_t *seq = kseq_init(fp);
 	int length;
-	while ((length = kseq_read(seq)) >= 0)
-        counter->addSequence(seq->seq.s,length);
+	while ((length = kseq_read(seq)) >= 0) {
+        int offset=0;
+        while (offset < length) {
+            while (offset < length && seq->seq.s[offset] == 'N') offset++;
+            // offset is next non-N
+            int offset2=offset+1;
+            while (offset2 < length && seq->seq.s[offset2] != 'N') offset2++;
+            // offset2 is end of seq or next N
+            if (offset2 - offset > k)
+                counter->addSequence(seq->seq.s + offset, offset2 - offset);
+            offset = offset2;
+        }
+    }
 	kseq_destroy(seq);
 	gzclose(fp);
 	counter->save();

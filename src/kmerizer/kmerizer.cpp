@@ -46,17 +46,9 @@ int Kmerizer::allocate(const size_t maximem) {
 
     uint32_t capacity = maximem / kmerSize / NBINS;
     for (size_t i = 0; i < NBINS; i++) {
-
         kmerBufSize[i] = capacity;
         kmerBuf[i] = (kword_t *) calloc(capacity, kmerSize);
         if (kmerBuf[i] == NULL) return 1;
-
-        // heuristic: expect the A* kmer to be common
-        kmerLutS[i] = 1;
-        kmerLutK[i] = (kword_t *) calloc(1, kmerSize);
-        if (kmerLutK[i] == NULL) return 1;
-        kmerLutV[i] = (uint32_t *) calloc(1, sizeof(uint32_t));
-        if (kmerLutV[i] == NULL) return 1;
     }
     state = COUNT;
 
@@ -131,7 +123,7 @@ bool operator<(const kmer8_t& a, const kmer8_t& b) {
     // return false;
 }
 
-kword_t * Kmerizer::canonicalize(kword_t *packed, kword_t *rcpack, size_t *bin) const {
+kword_t * Kmerizer::canonicalize(kword_t *packed, kword_t *rcpack, size_t *bin) {
 
     // copy the words (reverse their order)
     for (size_t i=0;i<nwords;i++)
@@ -168,7 +160,7 @@ kword_t * Kmerizer::canonicalize(kword_t *packed, kword_t *rcpack, size_t *bin) 
     if (rcbin > *bin)
         cmp = 1;
     for (size_t i=0;i<nwords;i++) {
-        rcpack[i] = revcomp(rcpack[i]);
+        rcpack[i] = reverse_complement(rcpack[i]);
         if (i==nwords-1) rcpack[i] >>=rshift;
         if (cmp == 0) {
             if (packed[i] < rcpack[i])
@@ -181,14 +173,12 @@ kword_t * Kmerizer::canonicalize(kword_t *packed, kword_t *rcpack, size_t *bin) 
         *bin = rcbin;
         return rcpack;
     }
-    else
-        return packed;
+    return packed;
 }
 
 
 // version for nwords==1
-
-kword_t * Kmerizer::canonicalize1(kword_t *packed, kword_t *rcpack, size_t *bin) const {
+kword_t * Kmerizer::canonicalize1(kword_t *packed, kword_t *rcpack, size_t *bin) {
 
     *rcpack = *packed;
 
@@ -211,17 +201,16 @@ kword_t * Kmerizer::canonicalize1(kword_t *packed, kword_t *rcpack, size_t *bin)
         else
             *rcpack |= *bin << (lshift - 8);
     }
-    *rcpack = revcomp(*rcpack);
-    *rcpack >>=rshift;
+    *rcpack = reverse_complement(*rcpack);
+    *rcpack >>= rshift;
 
     if (rcbin > *bin) {
         *bin = rcbin;
         return rcpack;
     }
-    if (*packed < *rcpack)
-        return packed;
-    else if (*packed > *rcpack)
+    if (*rcpack < *packed)
         return rcpack;
+    return packed;
 }
 
 
@@ -241,23 +230,36 @@ size_t Kmerizer::nextKmer(kword_t* kmer, size_t bin, const char nucl) {
     // last word (if not the first)
     kmer[nwords-2] |= (kmer[nwords-1] >> shiftlastby);
     kmer[nwords-1] <<= 2;
-    kmer[nwords-1] |= twoBit(nucl);
-    kmer[nwords-1] &= kmask;
+    
+    // kmer[nwords-1] |= twoBit(nucl);
+    // kmer[nwords-1] &= kmask;
+    static const kword_t lut[4] = {0UL,1UL,3UL,2UL};
+    kmer[nwords-1] = (kmer[nwords-1] | lut[(nucl >> 1) & 3]) & kmask;
     return bin;
 }
 
 // nwords == 1
-
 size_t Kmerizer::nextKmer1(kword_t* kmer, size_t bin, const char nucl) {
     // update the bin
     bin <<= 2;
+
     bin |= (*kmer >> shiftlastby);
     bin &= 255; // mask out the higher order bits
-    
+
     // shift first kmer by 2 bits
     *kmer <<= 2;
-    *kmer |= twoBit(nucl);
-    *kmer &= kmask;
+    /*
+A   65  41h (0x01000001 >> 1) & 0x00000011 = 00 0
+C   67  43h (0x01000011 >> 1) & 0x00000011 = 01 1
+G   71  47h (0x01000111 >> 1) & 0x00000011 = 11 2
+T   84  54h (0x01010100 >> 1) & 0x00000011 = 10 3
+a   97  61h (0x01100001 >> 1) & 0x00000011 = 00 0
+c   99  63h (0x01100011 >> 1) & 0x00000011 = 01 1
+g   103 67h (0x01100111 >> 1) & 0x00000011 = 11 2
+t   116 74h (0x01110100 >> 1) & 0x00000011 = 10 3
+    */
+    static const kword_t lut[4] = {0UL,1UL,3UL,2UL};
+    *kmer = (*kmer | lut[(nucl >> 1) & 3]) & kmask;
     return bin;
 }
 
@@ -315,77 +317,27 @@ void Kmerizer::addSeq1(const char* seq, const int length) {
 
 
 void Kmerizer::insertKmer(size_t bin, kword_t *kmer) {
-
-    int rc = searchLut(kmer,bin);
-    if (rc >= 0) // found!
-        kmerLutV[bin][rc]++;
-    
-    else { // kmer is not in the lookup table
-        uint32_t offset = kmerBufTally[bin];
-        if (offset < kmerBufSize[bin]) {
-            // memcpy the kmer to this location
-            memcpy(kmerBuf[bin] + offset*nwords, kmer, kmerSize); // is specialization worth it for kmer1_t?
-            kmerBufTally[bin]++;
-            if (offset + 1 == kmerBufSize[bin]) { // buffer is full
-                uniqify(bin);
-            }
-        }
-        else {
-            fprintf(stderr,"the impossible happened\n");
-            exit(3);
-        }
+    uint32_t offset = kmerBufTally[bin];
+    // memcpy the kmer to this location
+    memcpy(kmerBuf[bin] + offset*nwords, kmer, kmerSize);
+    kmerBufTally[bin]++;
+    if (kmerBufTally[bin] == kmerBufSize[bin]) { // buffer is full
+        for(size_t i=0;i<NBINS;i++)
+            tp.schedule( boost::bind( &Kmerizer::uniqify, this, i ) );
+        tp.wait();
     }
 }
 
 void Kmerizer::insertKmer1(size_t bin, kword_t *kmer) {
-
-    if (*kmer == 0ULL)
-        kmerLutV[bin][0]++;
-    else { // kmer is not in the lookup table
-        uint32_t offset = kmerBufTally[bin];
-        if (offset < kmerBufSize[bin]) {
-            kmerBuf[bin][offset] = *kmer;
-            kmerBufTally[bin]++;
-            if (offset + 1 == kmerBufSize[bin]) {
-                for(size_t i=0;i<NBINS;i++)
-                    tp.schedule( boost::bind( &Kmerizer::uniqify1, this, i ) );
-                tp.wait();
-            }
-        }
-        else {
-            fprintf(stderr,"the impossible happened\n");
-            exit(3);
-        }
+    uint32_t offset = kmerBufTally[bin];
+    kmerBuf[bin][offset] = *kmer;
+    kmerBufTally[bin]++;
+    if (kmerBufTally[bin] == kmerBufSize[bin]) {
+        for(size_t i=0;i<NBINS;i++)
+            tp.schedule( boost::bind( &Kmerizer::uniqify1, this, i ) );
+        tp.wait();
     }
 }
-// void Kmerizer::insertKmer1(size_t bin, kword_t *kmer) {
-// 
-//     int rc = searchLut1(kmer,bin);
-//     // int rc = ilsearchLut1(kmerLutK[bin],kmerLutS[bin],kmer);
-//     if (rc >= 0) // found!
-//         kmerLutV[bin][rc]++;
-//     
-//     else { // kmer is not in the lookup table
-//         uint32_t offset = kmerBufTally[bin];
-//         if (offset < kmerBufSize[bin]) {
-//             kmerBuf[bin][offset] = *kmer;
-//             kmerBufTally[bin]++;
-//             if (offset + 1 == kmerBufSize[bin]) { // buffer is full
-//                 // uniqify1(bin);
-//                 // uniqify all bins that are full enough
-//                 for(size_t i=0;i<NBINS;i++)
-//                     if ((batches[i] == 0 && kmerBufTally[i] > 0.95*(float)kmerBufSize[i]) ||
-//                         (batches[i] > 0  && kmerBufTally[i] > 0.5*(float)kmerBufSize[i]))
-//                         tp.schedule( boost::bind( &Kmerizer::uniqify1, this, i ) );
-//                 tp.wait();
-//             }
-//         }
-//         else {
-//             fprintf(stderr,"the impossible happened\n");
-//             exit(3);
-//         }
-//     }
-// }
 
 int kmercmp(const void *k1, const void *k2, size_t nwords) {
     for (size_t i=0;i<nwords;i++) {
@@ -431,89 +383,173 @@ int Kmerizer::searchLut1(kword_t *kmer, size_t bin) {
 
 
 void Kmerizer::uniqify(size_t bin) {
-//    fprintf(stderr,"uniqify(%zi) kmerLutS: %u, kmerBufTally: %u kmerBufSize: %u\n",bin,kmerLutS[bin],kmerBufTally[bin], kmerBufSize[bin]);
-    if (kmerBufTally[bin] == 0) return;
-    // sort the kmers in the buffer
-    if      (nwords == 1) sort((kmer1_t*)kmerBuf[bin], (kmer1_t*)(kmerBuf[bin] + kmerBufTally[bin]));
-    else if (nwords == 2) sort((kmer2_t*)kmerBuf[bin], (kmer2_t*)(kmerBuf[bin] + kmerBufTally[bin]));
-    else if (nwords == 3) sort((kmer3_t*)kmerBuf[bin], (kmer3_t*)(kmerBuf[bin] + kmerBufTally[bin]));
-    else if (nwords == 4) sort((kmer4_t*)kmerBuf[bin], (kmer4_t*)(kmerBuf[bin] + kmerBufTally[bin]));
-    else if (nwords == 5) sort((kmer5_t*)kmerBuf[bin], (kmer5_t*)(kmerBuf[bin] + kmerBufTally[bin]));
-    else if (nwords == 6) sort((kmer6_t*)kmerBuf[bin], (kmer6_t*)(kmerBuf[bin] + kmerBufTally[bin]));
-    else if (nwords == 7) sort((kmer7_t*)kmerBuf[bin], (kmer7_t*)(kmerBuf[bin] + kmerBufTally[bin]));
-    else if (nwords == 8) sort((kmer8_t*)kmerBuf[bin], (kmer8_t*)(kmerBuf[bin] + kmerBufTally[bin]));
-    
+    // if (kmerLutS[bin] > 0) {
+    //     // check new kmers against the lookup table
+    //     for(size_t i = kmerBufChecked[bin]; i < kmerBufTally[bin]; i++) {
+    //         int rc = searchLut(kmerBuf[bin]+i*nwords,bin);
+    //         if (rc >= 0) // found it
+    //             kmerLutV[bin][rc]++;
+    //         else { // save it for later
+    //             memcpy(kmerBuf[bin] + kmerBufChecked[bin]*nwords, kmerBuf[bin] + i*nwords, kmerSize);
+    //             kmerBufChecked[bin]++;
+    //         }
+    //     }
+    //     kmerBufTally[bin] = kmerBufChecked[bin];
+    // }
+    // if the buffer is nearly full, sort and count the kmers
+    if (state == SAVE || kmerBufTally[bin] > 0.9*(float)kmerBufSize[bin]) {
+        vector<uint32_t> tally;
+        kmerBufTally[bin] = sortCount(kmerBuf[bin],kmerBufTally[bin],tally);
+
+        // update lookup table - this realloc's the kmer lut and buffer
+        // if (kmerLutS[bin] == 0)
+        //     if (state == COUNT)
+        //         updateLut(bin,tally);
+        //     else
+        //         updateLutCopy(bin,tally);
+        // output distinct kmers
+        if (kmerBufTally[bin] > 0) {
+            batches[bin]++;
+            writeBatch(bin, tally);
+            // declare the buffer empty
+            kmerBufTally[bin]=0;
+        }
+        // kmerBufChecked[bin]=0;
+    }
+}
+
+void Kmerizer::uniqify1(size_t bin) {
+/*
+    if (kmerLutS[bin] > 0) { // we have a non-trivial lookup table
+        // check new kmers against the lookup table
+        uint32_t i=kmerBufChecked[bin];
+        uint32_t kbt = kmerBufTally[bin];
+        while(i < kbt) {
+            int rc = searchLut1(kmerBuf[bin]+i,bin);
+            if (rc >= 0) // found it
+                kmerLutV[bin][rc]++;
+            else {// save it for later
+                kmerBuf[bin][kmerBufChecked[bin]] = kmerBuf[bin][i];
+                kmerBufChecked[bin]++;
+            }
+            i++;
+        }
+        kmerBufTally[bin] = kmerBufChecked[bin];
+    }
+*/
+    // if the buffer is nearly full, sort and count the kmers
+    if (state == SAVE || kmerBufTally[bin] > 0.9*(float)kmerBufSize[bin]) {
+        vector<uint32_t> tally;
+        kmerBufTally[bin] = binSortCount1(kmerBuf[bin],kmerBufTally[bin],tally);
+
+        // update lookup table - this realloc's the kmer lut and buffer
+/*
+        if (kmerLutS[bin] == 0)
+            if (state == COUNT)
+                updateLut(bin,tally);
+            else
+                updateLutCopy(bin,tally);
+*/
+        // output distinct kmers
+        if (kmerBufTally[bin] > 0) {
+            batches[bin]++;
+            writeBatch(bin, tally);
+            // declare the buffer empty
+            kmerBufTally[bin]=0;
+        }
+//        kmerBufChecked[bin]=0;
+    }
+}
+
+uint32_t Kmerizer::sortCount(kword_t *kb, uint32_t kbt, vector<uint32_t> &tally) {
+    if      (nwords == 1) sort((kmer1_t*)kb, (kmer1_t*)(kb + kbt));
+    else if (nwords == 2) sort((kmer2_t*)kb, (kmer2_t*)(kb + kbt));
+    else if (nwords == 3) sort((kmer3_t*)kb, (kmer3_t*)(kb + kbt));
+    else if (nwords == 4) sort((kmer4_t*)kb, (kmer4_t*)(kb + kbt));
+    else if (nwords == 5) sort((kmer5_t*)kb, (kmer5_t*)(kb + kbt));
+    else if (nwords == 6) sort((kmer6_t*)kb, (kmer6_t*)(kb + kbt));
+    else if (nwords == 7) sort((kmer7_t*)kb, (kmer7_t*)(kb + kbt));
+    else if (nwords == 8) sort((kmer8_t*)kb, (kmer8_t*)(kb + kbt));
     // uniq -c
     uint32_t distinct = 0;
-    vector<uint32_t> tally;
     tally.push_back(1); // first kmer
-    for (size_t i=1;i<kmerBufTally[bin];i++) {
-        kword_t *ith = kmerBuf[bin] + i*nwords;
-        if(kmercmp(kmerBuf[bin] + distinct*nwords, ith, nwords) == 0)
+    for (size_t i=1;i<kbt;i++) {
+        kword_t *ith = kb + i*nwords;
+        if(kmercmp(kb + distinct*nwords, ith, nwords) == 0)
         // if (memcmp(kmerBuf[bin] + distinct*nwords, ith, kmerSize) == 0)
             tally.back()++;
         else {
             distinct++;
             tally.push_back(1);
-            memcpy(kmerBuf[bin] + distinct*nwords, ith, kmerSize);
+            memcpy(kb + distinct*nwords, ith, kmerSize);
         }
     }
-    kmerBufTally[bin] = distinct+1;
-    // update lookup table - this realloc's the kmer lut and buffer
-    if (kmerLutS[bin] == 1)
-        updateLut(bin,tally);
-    // output distinct kmers
-    if (kmerBufTally[bin] > 0) {
-        batches[bin]++;
-        // writeBatch(bin);
-        // declare the buffer empty
-        kmerBufTally[bin]=0;
-    }
+    return distinct+1;
 }
 
-void Kmerizer::uniqify1(size_t bin) {
-    if (kmerLutS[bin] > 1) { // we have a non-trivial lookup table
-        // check new kmers against the lookup table
-        for(size_t i = kmerBufChecked[bin]; i < kmerBufTally[bin]; i++) {
-            int rc = searchLut1(kmerBuf[bin]+i,bin);
-            if (rc >= 0) // found it
-                kmerLutK[bin][rc] = kmerBuf[bin][i];
-            else {// save it for later
-                kmerBuf[bin][kmerBufChecked[bin]] = kmerBuf[bin][i];
-                kmerBufChecked[bin]++;
-            }
+uint32_t Kmerizer::sortCount1(kword_t *kb, uint32_t kbt, vector<uint32_t> &tally) {
+    sort(kb, kb + kbt);
+    // uniq -c
+    uint32_t distinct = 0;
+    kword_t prevKmer = kb[distinct]; // to be cache friendly
+    tally.push_back(1); // first kmer
+    for (size_t i=1;i<kbt;i++) {
+        if(kb[i] == prevKmer)
+            tally.back()++;
+        else {
+            distinct++;
+            tally.push_back(1);
+            kb[distinct] = kb[i];
+            prevKmer = kb[i];
         }
-        kmerBufTally[bin] = kmerBufChecked[bin];
     }
-    // if the buffer is nearly full, sort and count the kmers
-    if (state == SAVE || kmerBufTally[bin] > 0.9*(float)kmerBufSize[bin]) {
-        sort(kmerBuf[bin], (kmerBuf[bin] + kmerBufTally[bin]));
-        // uniq -c
-        uint32_t distinct = 0;
-        vector<uint32_t> tally;
-        tally.push_back(1); // first kmer
-        for (size_t i=1;i<kmerBufTally[bin];i++) {
-            if(kmerBuf[bin][distinct] == kmerBuf[bin][i])
-                tally.back()++;
-            else {
+    return distinct+1;
+}
+
+uint32_t Kmerizer::binSortCount1(kword_t *kb, uint32_t kbt, vector<uint32_t> &tally) {
+    int hbits = 12;
+    int hbins = 1 << hbits; // 4096
+    uint32_t *histogram = (uint32_t *) calloc(hbins, sizeof(uint32_t));
+    uint32_t distinct = 0;
+
+    // count the number of kmers in each bin
+    int shiftby = 2*k - hbits;
+    if (shiftby <= 0) {
+        for(size_t i=0;i<kbt;i++)
+            histogram[kb[i]]++;
+
+        for(uint32_t b = 0; b < hbins; b++)
+            if (histogram[b] > 0) {
+                kb[distinct] = (kword_t) b;
                 distinct++;
-                tally.push_back(1);
-                kmerBuf[bin][distinct] = kmerBuf[bin][i];
+                tally.push_back(histogram[b]);
+            }
+    }
+    else {
+        for(size_t i=0;i<kbt;i++)
+            histogram[kb[i] >> shiftby]++;
+
+        // allocate space for each bin
+        vector<kword_t> keys [hbins];
+        for(int i=0; i<hbins; i++)
+            if (histogram[i] > 0)
+                keys[i].reserve(histogram[i]);
+
+        // loop over the kmers again and copy them into their bins
+        for(uint32_t i=0;i<kbt;i++)
+            keys[kb[i] >> shiftby].push_back(kb[i]);
+
+        for(uint32_t b = 0; b < hbins; b++) {
+            if (histogram[b] > 0) {
+                kword_t *K = keys[b].data();
+                vector<uint32_t> V;
+                uint32_t bin_distinct = sortCount1(K,histogram[b],tally);
+                memcpy(kb + distinct, K, sizeof(kword_t) * bin_distinct);
+                distinct += bin_distinct;
             }
         }
-        kmerBufTally[bin] = distinct+1;
-        // update lookup table - this realloc's the kmer lut and buffer
-        if (state == COUNT && kmerLutS[bin] == 1)
-            updateLut(bin,tally);
-        // output distinct kmers
-        if (kmerBufTally[bin] > 0) {
-            batches[bin]++;
-            //writeBatch(bin, tally);
-            // declare the buffer empty
-            kmerBufTally[bin]=0;
-        }
-        kmerBufChecked[bin]=0;
     }
+    return distinct;
 }
 
 void Kmerizer::writeBatch(size_t bin, vector<uint32_t> &tally) {
@@ -528,33 +564,34 @@ void Kmerizer::writeBatch(size_t bin, vector<uint32_t> &tally) {
     // the IO speed over the network could be a limiting factor.
     // Therefore, we should offer the choice to the user of whether to compress
     // each batch or write the raw data and compress while merging.
-    FILE *fp;
-    char kmer_file[100];
-    sprintf(kmer_file,"%s/%zi-mers.%zi.%u.raw",outdir,k,bin,batches[bin]);
-    fp = fopen(kmer_file, "wb");
-    fwrite(kmerBuf[bin], kmerSize, kmerBufTally[bin], fp);
-    fclose(fp);
-    // convert tally to a range encoded bitmap self-index?
-    // write to disk
-    char kmerCount_file[100];
-    sprintf(kmerCount_file,"%s/%zi-mers.%zi.%u.count",outdir,k,bin,batches[bin]);
-    fp = fopen(kmerCount_file, "wb");
-    fwrite(tally.data(), sizeof(uint32_t), kmerBufTally[bin], fp);
-    fclose(fp); 
+    if (1) {
+        FILE *fp;
+        char kmer_file[100];
+        sprintf(kmer_file,"%s/%zi-mers.%zi.%u.raw",outdir,k,bin,batches[bin]);
+        fp = fopen(kmer_file, "wb");
+        fwrite(kmerBuf[bin], kmerSize, kmerBufTally[bin], fp);
+        fclose(fp);
+        // convert tally to a range encoded bitmap self-index?
+        // write to disk
+        char kmerCount_file[100];
+        sprintf(kmerCount_file,"%s/%zi-mers.%zi.%u.count",outdir,k,bin,batches[bin]);
+        fp = fopen(kmerCount_file, "wb");
+        fwrite(tally.data(), sizeof(uint32_t), kmerBufTally[bin], fp);
+        fclose(fp);
+    }
 }
 
-// void Kmerizer::updateLut(size_t bin, vector<uint32_t> &tally) {
-//     // copy everything into the lookup table
-//     kmerLutK[bin] = (kword_t*) realloc(kmerLutK[bin], (kmerLutS[bin] + tally.size())*kmerSize);
-//     kmerLutV[bin] = (uint32_t*) realloc(kmerLutV[bin], (kmerLutS[bin] + tally.size())*sizeof(uint32_t));
-//     memcpy(kmerLutK[bin] + kmerLutS[bin]*nwords, kmerBuf[bin], tally.size()*kmerSize);
-//     memcpy(kmerLutV[bin] + kmerLutS[bin], tally.data(), tally.size()*sizeof(uint32_t));
-//     kmerLutS[bin] += tally.size();
-//     kmerBufSize[bin] -= tally.size();
-//     kmerBuf[bin] = (kword_t*) realloc(kmerBuf[bin], kmerBufSize[bin]*kmerSize);
-//     kmerBufTally[bin] = 0;
-// }
-
+void Kmerizer::updateLutCopy(size_t bin, vector<uint32_t> &tally) {
+    // copy everything into the lookup table
+    kmerLutK[bin] = (kword_t*) malloc(tally.size()*kmerSize);
+    kmerLutV[bin] = (uint32_t*) malloc(tally.size()*sizeof(uint32_t));
+    memcpy(kmerLutK[bin], kmerBuf[bin], tally.size()*kmerSize);
+    memcpy(kmerLutV[bin], tally.data(), tally.size()*sizeof(uint32_t));
+    kmerLutS[bin] = tally.size();
+    kmerBufSize[bin] -= tally.size();
+    kmerBuf[bin] = (kword_t*) realloc(kmerBuf[bin], kmerBufSize[bin]*kmerSize);
+    kmerBufTally[bin] = 0;
+}
 
 
 void Kmerizer::updateLut(size_t bin, vector<uint32_t> &tally) {
@@ -591,12 +628,12 @@ void Kmerizer::updateLut(size_t bin, vector<uint32_t> &tally) {
         }
     assert(common_count>0);
     // reallocate space in the lookup table
-    kmerLutK[bin] = (kword_t*) realloc(kmerLutK[bin], (common_count + kmerLutS[bin])*kmerSize);
+    kmerLutK[bin] = (kword_t*) malloc(common_count*kmerSize);
     if (kmerLutK[bin] == NULL) {
         fprintf(stderr,"error in kmerLutK realloc");
         exit(3);
     }
-    kmerLutV[bin] = (uint32_t*) realloc(kmerLutV[bin], (common_count + kmerLutS[bin])*sizeof(uint32_t));
+    kmerLutV[bin] = (uint32_t*) malloc(common_count*sizeof(uint32_t));
     if (kmerLutV[bin] == NULL) {
         fprintf(stderr,"error in kmerLutV realloc");
         exit(3);
@@ -606,8 +643,8 @@ void Kmerizer::updateLut(size_t bin, vector<uint32_t> &tally) {
     uint32_t *tarray = tally.data();
     // copy the first run of common kmers into the lookup table
     uint32_t runlen = common[1] - common[0] + 1;
-    memcpy(kmerLutK[bin] + kmerLutS[bin]*nwords, kmerBuf[bin] + common[0]*nwords, runlen*kmerSize);
-    memcpy(kmerLutV[bin] + kmerLutS[bin], tarray + common[0], runlen*sizeof(uint32_t));
+    memcpy(kmerLutK[bin], kmerBuf[bin] + common[0]*nwords, runlen*kmerSize);
+    memcpy(kmerLutV[bin], tarray + common[0], runlen*sizeof(uint32_t));
     kmerLutS[bin] += runlen;
     uint32_t n_rare = common[0];
     for(uint32_t i=2;i<common.size();i+=2) {
@@ -658,7 +695,7 @@ void Kmerizer::save() {
 void Kmerizer::saveBin(size_t bin) {
     if (nwords == 1) uniqify1(bin);
     else uniqify(bin);
-//    return;
+    return;
     // write the common kmers lut to disk
     if (0) { // kmerLutS[bin] > 1 || kmerLutV[bin][0]>0) 
         FILE *fp;

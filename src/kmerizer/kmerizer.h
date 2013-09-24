@@ -87,8 +87,8 @@ private:
     size_t nextKmer1(kword_t* kmer, size_t bin, const char nucl);
 
     // choose the lesser between a kmer and its reverse complement
-    kword_t* canonicalize (kword_t *packed, kword_t *rcpack, size_t *bin) const;
-    kword_t* canonicalize1(kword_t *packed, kword_t *rcpack, size_t *bin) const;
+    kword_t* canonicalize (kword_t *packed, kword_t *rcpack, size_t *bin);
+    kword_t* canonicalize1(kword_t *packed, kword_t *rcpack, size_t *bin);
     
     // search lookup table (kmerLutK[bin]) and increment count (kmerLutV[bin])
     // or save kmer for later (kmerBuf[bin])
@@ -103,9 +103,17 @@ private:
     void uniqify(size_t bin);
     void uniqify1(size_t bin);
 
+    // sort and count the kbt kmers in kb and put counts in tally
+    uint32_t sortCount(kword_t *kb, uint32_t kbt, vector<uint32_t> &tally);
+    // specialization for nwords==1
+    uint32_t sortCount1(kword_t *kb, uint32_t kbt, vector<uint32_t> &tally);
+    // partition kmers into bins before calling sortCount1()
+    uint32_t binSortCount1(kword_t *kb, uint32_t kbt, vector<uint32_t> &tally);
+
     // given the frequency data from uniqify(), select a cutoff(?), and update the lookup table
     // This only happens the first time the kmerBuf[bin] is filled
     void updateLut (size_t bin, vector<uint32_t> &tally);
+    void updateLutCopy (size_t bin, vector<uint32_t> &tally);
 
     void writeBatch(size_t bin, vector<uint32_t> &tally);
     
@@ -115,64 +123,29 @@ private:
     // merge raw kmers and counts into bitmap self-indexes
     void mergeBin(size_t bin);
 
-    inline kword_t twoBit(const unsigned char nuc) const {
-        static const kword_t table[256] = {
-            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-            0,0,0,1,0,0,0,2,0,0,0,0,0,0,0,0,
-            0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,
-            0,0,0,1,0,0,0,2,0,0,0,0,0,0,0,0,
-            0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,
-            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
-        };
-        return table[nuc];
+/*
+    static uint64_t reverse_complement(uint64_t v, uint_t length) {
+      v = ((v >> 2)  & 0x3333333333333333UL) | ((v & 0x3333333333333333UL) << 2);
+      v = ((v >> 4)  & 0x0F0F0F0F0F0F0F0FUL) | ((v & 0x0F0F0F0F0F0F0F0FUL) << 4);
+      v = ((v >> 8)  & 0x00FF00FF00FF00FFUL) | ((v & 0x00FF00FF00FF00FFUL) << 8);
+      v = ((v >> 16) & 0x0000FFFF0000FFFFUL) | ((v & 0x0000FFFF0000FFFFUL) << 16);
+      v = ( v >> 32                        ) | ( v                         << 32);
+      return (((uint64_t)-1) - v) >> (bsizeof(v) - (length << 1));
     }
-    inline kword_t revcomp(const kword_t val) const {
-        // reverse complement lookup table (8 bits at a time)
-        static const kword_t rctable[256] =
-        {
-            255,191,127,63,239,175,111,47,223,159,95,31,207,143,79,15,
-            251,187,123,59,235,171,107,43,219,155,91,27,203,139,75,11,
-            247,183,119,55,231,167,103,39,215,151,87,23,199,135,71,7,
-            243,179,115,51,227,163,99,35,211,147,83,19,195,131,67,3,
-            254,190,126,62,238,174,110,46,222,158,94,30,206,142,78,14,
-            250,186,122,58,234,170,106,42,218,154,90,26,202,138,74,10,
-            246,182,118,54,230,166,102,38,214,150,86,22,198,134,70,6,
-            242,178,114,50,226,162,98,34,210,146,82,18,194,130,66,2,
-            253,189,125,61,237,173,109,45,221,157,93,29,205,141,77,13,
-            249,185,121,57,233,169,105,41,217,153,89,25,201,137,73,9,
-            245,181,117,53,229,165,101,37,213,149,85,21,197,133,69,5,
-            241,177,113,49,225,161,97,33,209,145,81,17,193,129,65,1,
-            252,188,124,60,236,172,108,44,220,156,92,28,204,140,76,12,
-            248,184,120,56,232,168,104,40,216,152,88,24,200,136,72,8,
-            244,180,116,52,228,164,100,36,212,148,84,20,196,132,68,4,
-            240,176,112,48,224,160,96,32,208,144,80,16,192,128,64,0,
-        };
-    
-        return
-            (rctable[val&0xFFUL]<<56) |
-            (rctable[(val>>8)&0xFFUL]<<48) |
-            (rctable[(val>>16)&0xFFUL]<<40) |
-            (rctable[(val>>24)&0xFFUL]<<32) |
-            (rctable[(val>>32)&0xFFUL]<<24) |
-            (rctable[(val>>40)&0xFFUL]<<16) |
-            (rctable[(val>>48)&0xFFUL]<<8) |
-            (rctable[(val>>56)&0xFFUL]);
+*/
+    static uint64_t reverse_complement(uint64_t v) {
+      v = ((v >> 2)  & 0x3333333333333333UL) | ((v & 0x3333333333333333UL) << 2);
+      v = ((v >> 4)  & 0x0F0F0F0F0F0F0F0FUL) | ((v & 0x0F0F0F0F0F0F0F0FUL) << 4);
+      v = ((v >> 8)  & 0x00FF00FF00FF00FFUL) | ((v & 0x00FF00FF00FF00FFUL) << 8);
+      v = ((v >> 16) & 0x0000FFFF0000FFFFUL) | ((v & 0x0000FFFF0000FFFFUL) << 16);
+      v = ( v >> 32                        ) | ( v                         << 32);
+      return v ^ 0xFFFFFFFFFFFFFFFFUL;
     }
 
     // just return the reverse complement of the low 8 bits
     inline kword_t revcomp_8(const kword_t val) const {
         // reverse complement lookup table (8 bits at a time)
-        static const kword_t rctable[256] =
+        static const uint8_t rctable[256] =
         {
             255,191,127,63,239,175,111,47,223,159,95,31,207,143,79,15,
             251,187,123,59,235,171,107,43,219,155,91,27,203,139,75,11,
@@ -192,22 +165,7 @@ private:
             240,176,112,48,224,160,96,32,208,144,80,16,192,128,64,0,
         };
     
-        return rctable[val&0xFFUL];
-    }
-    inline int ilsearchLut1(kword_t *A, int imax, kword_t *kmer) {
-//        kword_t* A = kmerLutK[bin];
-        int imin = 0;
- //       int imax = kmerLutS[bin];
-        while (imin < imax) {
-            int imid = (imin+imax)>>1;
-            if (A[imid] < *kmer)
-                imin = imid + 1;
-            else if(A[imid] == *kmer)
-                return imid;
-            else
-                imax = imid;
-        }
-        return -1;
+        return (uint64_t)rctable[val & 255];
     }
 };
 

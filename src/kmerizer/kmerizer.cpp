@@ -187,6 +187,7 @@ kword_t * Kmerizer::canonicalize1(kword_t *packed, kword_t *rcpack, size_t *bin)
         // so prepend the bin's 8 bits now
         *rcpack |= *bin << lshift;
     
+    // size_t rcbin = reverse_complement(*rcpack) >> 56;
     size_t rcbin = revcomp_8(*rcpack);
     if (rcbin > *bin)
         return packed;
@@ -295,23 +296,30 @@ void Kmerizer::addSeq(const char* seq, const int length) {
 }
 
 void Kmerizer::addSeq1(const char* seq, const int length) {
+    // do the first kmer
     kword_t packed=0;
-    kword_t rcpack=0;
     size_t bin=0;
     for (size_t i = 0; i < k+4; i++)
         bin = nextKmer1(&packed,bin,seq[i]);
 
-    kword_t *kmer = &packed;
-    if (mode == CANONICAL)
-        kmer = canonicalize1(&packed,&rcpack,&bin);
-    insertKmer1(bin, kmer);
-
     // pack the rest of the sequence
-    for (int i=k+4; i<length;i++) {
-        bin = nextKmer1(&packed, bin, seq[i]);
-        if (mode == CANONICAL)
-            kmer = canonicalize1(&packed, &rcpack, &bin);
+    if (mode == CANONICAL) {
+        kword_t rcpack=0;
+        kword_t *kmer = canonicalize1(&packed,&rcpack,&bin);
         insertKmer1(bin, kmer);
+
+        for (int i=k+4; i<length;i++) {
+            bin = nextKmer1(&packed, bin, seq[i]);
+            kmer = canonicalize1(&packed,&rcpack,&bin);
+            insertKmer1(bin, kmer);
+        }
+    }
+    else {
+        insertKmer1(bin, &packed);
+        for (int i=k+4; i<length;i++) {
+            bin = nextKmer1(&packed, bin, seq[i]);
+            insertKmer1(bin, &packed);
+        }
     }
 }
 
@@ -512,9 +520,9 @@ uint32_t Kmerizer::binSortCount1(kword_t *kb, uint32_t kbt, vector<uint32_t> &ta
     uint32_t *histogram = (uint32_t *) calloc(hbins, sizeof(uint32_t));
     uint32_t distinct = 0;
 
-    // count the number of kmers in each bin
     int shiftby = 2*k - hbits;
     if (shiftby <= 0) {
+        // direct hashing
         for(size_t i=0;i<kbt;i++)
             histogram[kb[i]]++;
 
@@ -526,24 +534,26 @@ uint32_t Kmerizer::binSortCount1(kword_t *kb, uint32_t kbt, vector<uint32_t> &ta
             }
     }
     else {
+        vector<kword_t> keys [hbins];
+        
+        // count the number of kmers in each bin
         for(size_t i=0;i<kbt;i++)
             histogram[kb[i] >> shiftby]++;
-
+        
         // allocate space for each bin
-        vector<kword_t> keys [hbins];
         for(int i=0; i<hbins; i++)
             if (histogram[i] > 0)
                 keys[i].reserve(histogram[i]);
+        free(histogram);
 
         // loop over the kmers again and copy them into their bins
         for(uint32_t i=0;i<kbt;i++)
             keys[kb[i] >> shiftby].push_back(kb[i]);
-
+        
         for(uint32_t b = 0; b < hbins; b++) {
-            if (histogram[b] > 0) {
+            if (keys[b].size() > 0) {
                 kword_t *K = keys[b].data();
-                vector<uint32_t> V;
-                uint32_t bin_distinct = sortCount1(K,histogram[b],tally);
+                uint32_t bin_distinct = sortCount1(K,keys[b].size(),tally);
                 memcpy(kb + distinct, K, sizeof(kword_t) * bin_distinct);
                 distinct += bin_distinct;
             }
@@ -564,7 +574,7 @@ void Kmerizer::writeBatch(size_t bin, vector<uint32_t> &tally) {
     // the IO speed over the network could be a limiting factor.
     // Therefore, we should offer the choice to the user of whether to compress
     // each batch or write the raw data and compress while merging.
-    if (1) {
+    if (0) {
         FILE *fp;
         char kmer_file[100];
         sprintf(kmer_file,"%s/%zi-mers.%zi.%u.raw",outdir,k,bin,batches[bin]);

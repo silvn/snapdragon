@@ -143,9 +143,9 @@ private:
     }
 
     // just return the reverse complement of the low 8 bits
-    inline kword_t revcomp_8(const kword_t val) const {
+    static uint64_t revcomp_8(uint64_t val) {
         // reverse complement lookup table (8 bits at a time)
-        static const uint8_t rctable[256] =
+        static const uint64_t rctable[256] =
         {
             255,191,127,63,239,175,111,47,223,159,95,31,207,143,79,15,
             251,187,123,59,235,171,107,43,219,155,91,27,203,139,75,11,
@@ -165,7 +165,7 @@ private:
             240,176,112,48,224,160,96,32,208,144,80,16,192,128,64,0,
         };
     
-        return (uint64_t)rctable[val & 255];
+        return rctable[val & 255UL];
     }
 };
 

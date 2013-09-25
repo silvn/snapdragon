@@ -10,7 +10,6 @@
 #define MERGE 'M'
 #define QUERY 'Q'
 
-//#include <folly/ProducerConsumerQueue.h>
 #include "../boost/threadpool.hpp"
 
 typedef uint64_t kword_t;
@@ -36,7 +35,7 @@ class Kmerizer {
     char state; // see #define (COUNT, SAVE, QUERY, etc.)
     char *  outdir;
 
-    // buffers for rare kmers
+    // buffers for kmers
     kword_t * kmerBuf [NBINS];
     vector<kword_t> kmerBuf1[NBINS];
     uint32_t   kmerBufTally[NBINS]; // number of kmers stored

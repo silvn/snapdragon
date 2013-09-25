@@ -36,16 +36,11 @@ class Kmerizer {
     char state; // see #define (COUNT, SAVE, QUERY, etc.)
     char *  outdir;
 
-    // lookup tables for common kmers
-    kword_t  * kmerLutK[NBINS]; // key = kmer
-    uint32_t * kmerLutV[NBINS]; // value = frequency
-    uint32_t   kmerLutS[NBINS]; // size of lookup table
-
     // buffers for rare kmers
-    kword_t  * kmerBuf[NBINS];
+    kword_t * kmerBuf [NBINS];
+    vector<kword_t> kmerBuf1[NBINS];
     uint32_t   kmerBufTally[NBINS]; // number of kmers stored
     uint32_t   kmerBufSize[NBINS];  // capacity of buffer
-    uint32_t   kmerBufChecked[NBINS]; // kmers before this in kmerBuf are not in kmerLut
 
     uint32_t   batches[NBINS]; // keep track of the number of serialized batches
 
@@ -94,11 +89,7 @@ private:
     // or save kmer for later (kmerBuf[bin])
     void insertKmer(size_t bin, kword_t *kmer);
     void insertKmer1(size_t bin, kword_t *kmer);
-    
-    // binary search
-    int searchLut (kword_t *kmer, size_t bin);
-    int searchLut1(kword_t *kmer, size_t bin);
-    
+        
     // sort and count the kmers in kmerBuf[bin], updateLut (optional), write distinct kmers and counts to disk
     void uniqify(size_t bin);
     void uniqify1(size_t bin);
@@ -107,13 +98,10 @@ private:
     uint32_t sortCount(kword_t *kb, uint32_t kbt, vector<uint32_t> &tally);
     // specialization for nwords==1
     uint32_t sortCount1(kword_t *kb, uint32_t kbt, vector<uint32_t> &tally);
+    void sortCount1(vector<kword_t> &kb, vector<uint32_t> &tally);
     // partition kmers into bins before calling sortCount1()
     uint32_t binSortCount1(kword_t *kb, uint32_t kbt, vector<uint32_t> &tally);
-
-    // given the frequency data from uniqify(), select a cutoff(?), and update the lookup table
-    // This only happens the first time the kmerBuf[bin] is filled
-    void updateLut (size_t bin, vector<uint32_t> &tally);
-    void updateLutCopy (size_t bin, vector<uint32_t> &tally);
+    void binSortCount1(vector<kword_t> &kb, vector<uint32_t> &tally);
 
     void writeBatch(size_t bin, vector<uint32_t> &tally);
     
@@ -123,16 +111,6 @@ private:
     // merge raw kmers and counts into bitmap self-indexes
     void mergeBin(size_t bin);
 
-/*
-    static uint64_t reverse_complement(uint64_t v, uint_t length) {
-      v = ((v >> 2)  & 0x3333333333333333UL) | ((v & 0x3333333333333333UL) << 2);
-      v = ((v >> 4)  & 0x0F0F0F0F0F0F0F0FUL) | ((v & 0x0F0F0F0F0F0F0F0FUL) << 4);
-      v = ((v >> 8)  & 0x00FF00FF00FF00FFUL) | ((v & 0x00FF00FF00FF00FFUL) << 8);
-      v = ((v >> 16) & 0x0000FFFF0000FFFFUL) | ((v & 0x0000FFFF0000FFFFUL) << 16);
-      v = ( v >> 32                        ) | ( v                         << 32);
-      return (((uint64_t)-1) - v) >> (bsizeof(v) - (length << 1));
-    }
-*/
     static uint64_t reverse_complement(uint64_t v) {
       v = ((v >> 2)  & 0x3333333333333333UL) | ((v & 0x3333333333333333UL) << 2);
       v = ((v >> 4)  & 0x0F0F0F0F0F0F0F0FUL) | ((v & 0x0F0F0F0F0F0F0F0FUL) << 4);

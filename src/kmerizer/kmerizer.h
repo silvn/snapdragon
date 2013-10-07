@@ -11,6 +11,7 @@
 #define QUERY 'Q'
 
 #include "../boost/threadpool.hpp"
+#include "../bitmap/bitmap.h"
 
 typedef uint64_t kword_t;
 using namespace std;
@@ -145,5 +146,5 @@ private:
         return rctable[val & 255UL];
     }
 };
-
+#include "kmerizer.tpp"
 #endif // #ifndef SNAPDRAGON_KMERIZER_H

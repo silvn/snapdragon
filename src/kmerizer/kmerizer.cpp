@@ -1,7 +1,7 @@
 #include "kmerizer.h"
-#include <bitset>
+// #include <bitset>
 #include <algorithm> // stl sort
-#include <cstdlib> // qsort()
+// #include <cstdlib> // qsort()
 #include <cstdio>  // sprintf()
 #include <cstring> // memcpy()
 #include <sys/stat.h> // mkdir()
@@ -583,24 +583,44 @@ void Kmerizer::writeBatch(size_t bin, vector<uint32_t> &tally) {
     // the IO speed over the network could be a limiting factor.
     // Therefore, we should offer the choice to the user of whether to compress
     // each batch or write the raw data and compress while merging.
-    if (0) {
-        FILE *fp;
-        char kmer_file[100];
-        sprintf(kmer_file,"%s/%zi-mers.%zi.%u.raw",outdir,k,bin,batches[bin]);
-        fp = fopen(kmer_file, "wb");
-        if (nwords == 1)
-            fwrite(kmerBuf1[bin].data(), kmerSize, kmerBuf1[bin].size(), fp);
-        else
-            fwrite(kmerBuf[bin], kmerSize, kmerBufTally[bin], fp);
-        fclose(fp);
-        // convert tally to a range encoded bitmap self-index?
-        // write to disk
-        char kmerCount_file[100];
-        sprintf(kmerCount_file,"%s/%zi-mers.%zi.%u.count",outdir,k,bin,batches[bin]);
-        fp = fopen(kmerCount_file, "wb");
-        fwrite(tally.data(), sizeof(uint32_t), kmerBufTally[bin], fp);
-        fclose(fp);
+    char kmer_file[100];
+    sprintf(kmer_file,"%s/%zi-mers.%zi.%u.bsi",outdir,k,bin,batches[bin]);
+    BitSlicedIndex<kword_t> *bsi = new BitSlicedIndex<kword_t>(nwords, kmer_file);
+    if (nwords == 1) {
+        kword_t *buf = kmerBuf1[bin].data();
+        for(int i = 0; i < kmerBuf1[bin].size(); i++)
+            bsi->append(buf + i);
     }
+    else
+        for(size_t i=0;i<kmerBufTally[bin];i++)
+            bsi->append(kmerBuf[bin] + i*nwords);
+    bsi->save();
+    delete bsi;
+    
+    char kmerCount_file[100];
+    sprintf(kmerCount_file,"%s/%zi-mers.%zi.%u.rei",outdir,k,bin,batches[bin]);
+    RangeEncodedIndex *rei = new RangeEncodedIndex(tally, kmerCount_file);
+    rei->save();
+    delete rei;
+    
+    // if (0) {
+//         FILE *fp;
+//         char kmer_file[100];
+//         sprintf(kmer_file,"%s/%zi-mers.%zi.%u.raw",outdir,k,bin,batches[bin]);
+//         fp = fopen(kmer_file, "wb");
+//         if (nwords == 1)
+//             fwrite(kmerBuf1[bin].data(), kmerSize, kmerBuf1[bin].size(), fp);
+//         else
+//             fwrite(kmerBuf[bin], kmerSize, kmerBufTally[bin], fp);
+//         fclose(fp);
+//         // convert tally to a range encoded bitmap self-index?
+//         // write to disk
+//         char kmerCount_file[100];
+//         sprintf(kmerCount_file,"%s/%zi-mers.%zi.%u.count",outdir,k,bin,batches[bin]);
+//         fp = fopen(kmerCount_file, "wb");
+//         fwrite(tally.data(), sizeof(uint32_t), kmerBufTally[bin], fp);
+//         fclose(fp);
+//     }
 }
 
 void Kmerizer::save() {

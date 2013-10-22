@@ -238,7 +238,7 @@ inline void Kmerizer::unpack(kword_t* kmer, char* seq) {
         // which word, which nucl
         size_t w = i>>5;
         if (w == nwords-1) // not a full length word
-            seq[i] = table[(kmer[w] >> 2*(k-i)-2) & 3];
+            seq[i] = table[(kmer[w] >> (2*(k-i)-2)) & 3];
         else
             seq[i] = table[(kmer[w] >> (62 - 2*(i%32))) & 3];
     }

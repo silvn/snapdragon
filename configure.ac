@@ -12,6 +12,10 @@ AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 AM_CONDITIONAL([MACOS], [test "$(uname -s)" = "Darwin"])
 
+# Can't find Boost dirs (in /usr/local) on my system; is this bad practice?
+AC_SUBST(CPPFLAGS, -I/usr/local/include)
+AC_SUBST(LDFLAGS, -L/usr/local/lib)
+
 # Options to configure.
 # Boost
 AC_ARG_WITH(boost, AS_HELP_STRING([--with-boost=PATH],

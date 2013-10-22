@@ -16,13 +16,14 @@
 typedef uint64_t kword_t;
 using namespace std;
 struct kmer1_t { kword_t a; };
-struct kmer2_t { kword_t a,b; };
-struct kmer3_t { kword_t a,b,c; };
-struct kmer4_t { kword_t a,b,c,d; };
-struct kmer5_t { kword_t a,b,c,d,e; };
-struct kmer6_t { kword_t a,b,c,d,e,f; };
-struct kmer7_t { kword_t a,b,c,d,e,f,g; };
-struct kmer8_t { kword_t a,b,c,d,e,f,g,h; };
+struct kmer2_t { kword_t a[2]; };
+struct kmer3_t { kword_t a[3]; };
+struct kmer4_t { kword_t a[4]; };
+struct kmer5_t { kword_t a[5]; };
+struct kmer6_t { kword_t a[6]; };
+struct kmer7_t { kword_t a[7]; };
+struct kmer8_t { kword_t a[8]; };
+struct kmer9_t { kword_t a[9]; };
 
 class Kmerizer {
     size_t  k;
@@ -35,6 +36,7 @@ class Kmerizer {
     char    mode;
     char state; // see #define (COUNT, SAVE, QUERY, etc.)
     char *  outdir;
+    bool    uniformBins;
 
     // buffers for kmers
     kword_t * kmerBuf [NBINS];
@@ -76,6 +78,10 @@ private:
     // function to extract (canonical) kmers from a sequence of [ACGT]
     void addSeq(const char* seq, const int length);
     void addSeq1(const char* seq, const int length);
+
+    // k-mers are not distributed evenly among the bins
+    // redistributes free space among the bins
+    void resizeBins1();
 
     // update kmer given the next nucl by shifting by two bits, returns nextKmer's bin
     size_t nextKmer (kword_t* kmer, size_t bin, const char nucl);

@@ -1,25 +1,20 @@
 // #include "bitmap.h"
-// void BitmapIndex::loadIndex(const char* fname) {
-//     
-// }
-// void BitmapIndex::saveIndex(const char* fname) {
-//     
-// }
-#include <bitset>
+
 
 template <class T>
-BitSlicedIndex<T>::BitSlicedIndex(int nwords, char* fname) {
+BitSlicedIndex<T>::BitSlicedIndex(int nwords) {
     
     this->nwords = nwords;
-    this->fname = fname;
     this->nbits = 8*sizeof(T);
     int nVectors = nwords*nbits;
     bvec = (BitVector<T>**) malloc(nVectors*sizeof(BitVector<T>*));
     for(int i=0;i<nVectors;i++)
         bvec[i] = new BitVector<T>();
+    nValues=0;
     
     this->bufferCapacity = nbits;
     this->bufferOffset=0;
+    this->bufferStart=0;
 
     this->buffer = (T**) malloc(nwords*sizeof(T*));
     for(int i=0;i<nwords;i++)
@@ -27,10 +22,43 @@ BitSlicedIndex<T>::BitSlicedIndex(int nwords, char* fname) {
 }
 
 template <class T>
+BitSlicedIndex<T>::BitSlicedIndex(char* fname) {
+    this->nbits = 8*sizeof(T);
+    // fread() the number of words
+    FILE *fp;
+    fp = fopen(fname, "rb");
+    size_t result = fread(&nwords,sizeof(int),1,fp);
+    if (result != 1) {fputs ("Reading error",stderr); exit (3);}
+    result = fread(&nValues, sizeof(size_t),1,fp);
+    if (result != 1) {fputs ("Reading error",stderr); exit (3);}
+    int nVectors = nwords*nbits;
+    bvec = (BitVector<T>**) malloc(nVectors*sizeof(BitVector<T>*));
+    for(int i=0;i<nVectors;i++) {
+        T nT,*bvbuffer;
+        result = fread(&nT,sizeof(size_t),1,fp);
+        if (result != 1) {fputs ("Reading error",stderr); exit (3);}
+        bvbuffer = (T*) malloc(nT*sizeof(T));
+        result = fread(bvbuffer,sizeof(T), nT, fp);
+        bvec[i] = new BitVector<T>(bvbuffer);
+        free(bvbuffer);
+    }
+    fclose(fp);
+    fprintf(stderr,"BitSlicedIndex(%s) nwords: %i, nValues: %zi\n",fname,nwords,nValues);
+
+    this->bufferCapacity = nbits;
+    this->bufferOffset=0;
+    this->bufferStart=0;
+
+    this->buffer = (T**) malloc(nwords*sizeof(T*));
+    for(int i=0;i<nwords;i++)
+        buffer[i] = (T*) malloc(bufferCapacity*sizeof(T));
+    fillBuffer(0);
+}
+
+template <class T>
 void BitSlicedIndex<T>::transpose(uint64_t A[64]) {
     int j, k;
-    unsigned long m, t;
-    
+    uint64_t m, t;
     m = 0x00000000FFFFFFFF;
     for (j = 32; j != 0; j = j >> 1, m = m ^ (m << j)) {
         for (k = 0; k < 64; k = (k + j + 1) & ~j) {
@@ -43,7 +71,7 @@ void BitSlicedIndex<T>::transpose(uint64_t A[64]) {
 template <class T>
 void BitSlicedIndex<T>::transpose(uint32_t A[32]) {
     int j, k;
-    unsigned int m, t;
+    uint32_t m, t;
     
     m = 0x0000FFFF;
     for (j = 16; j != 0; j = j >> 1, m = m ^ (m << j)) {
@@ -57,7 +85,7 @@ void BitSlicedIndex<T>::transpose(uint32_t A[32]) {
 template <class T>
 void BitSlicedIndex<T>::transpose(uint16_t A[16]) {
     int j, k;
-    unsigned short m, t;
+    uint16_t m, t;
     
     m = 0x00FF;
     for (j = 8; j != 0; j = j >> 1, m = m ^ (m << j)) {
@@ -77,22 +105,73 @@ void BitSlicedIndex<T>::append(T* value) {
     bufferOffset++;
     if (bufferOffset == nbits) {
         for(int i=0;i<nwords;i++) {
-            transpose(buffer[i]);
+            this->transpose(buffer[i]);
             for(int j=0;j<nbits;j++)
                 bvec[i*nbits + j]->appendWord(buffer[i][j]);
         }
         bufferOffset = 0;
     }
+    nValues++;
+}
+
+template <class T>
+void BitSlicedIndex<T>::fillBuffer(size_t idx) {
+    // in each bitvector, fetch an uncompressed bitvector word that contains idx
+    // populate the buffers by transposing the uncompressed words
+    bufferStart = idx & ~(nbits - 1);
+    for(int i=0;i<nwords;i++) {
+        for(int j=0;j<nbits;j++) {
+            bvec[i*nbits+j]->inflateWord(buffer[i]+j,bufferStart);
+        }
+        this->transpose(buffer[i]);
+    }
 }
 
 template <class T>
 bool BitSlicedIndex<T>::decode(size_t idx, T *value) {
+    if (idx >= nValues) return false;
+    if (idx >= (bufferStart + nbits) || idx < bufferStart)
+        fillBuffer(idx);
     
+    int offset= idx - bufferStart;
+    for(int i=0;i<nwords;i++)
+        value[i] = buffer[i][offset];
+    return true;
 }
 
-RangeEncodedIndex::RangeEncodedIndex(vector<uint32_t> &values, char *fname) {
-    this->fname = fname;
-    // fprintf(stderr,"RangeEncodedIndex(%zi values, %s)\n",values.size(),fname);
+template <class T>
+void BitSlicedIndex<T>::saveIndex(char *fname) {
+    // flush the buffer
+    if (bufferOffset > 0) {
+        for(int i=0;i<nwords;i++) {
+            for(int j=bufferOffset;j<nbits;j++)
+                buffer[i][j] = (T)0;
+            this->transpose(buffer[i]);
+            for(int j=0;j<nbits;j++)
+                bvec[i*nbits + j]->appendWord(buffer[i][j]);
+        }
+    }
+    // open an output file
+    FILE *fp;
+    fp = fopen(fname, "wb");
+    // write the number of words (width)
+    fwrite(&nwords, sizeof(int),1,fp);
+    // write the number of values (length)
+    fwrite(&nValues, sizeof(size_t),1,fp);
+    // write each bitvector
+    for(int i=0; i<nwords*nbits; i++) {
+        T *buf;
+        size_t nT = bvec[i]->dump(&buf);
+        fwrite(&nT,sizeof(size_t),1,fp);
+        // fprintf(stderr,"fwrite(buf,%i,%i,fp)\n",sizeof(T),nT);
+        fwrite(buf,sizeof(T),nT,fp);
+        free(buf);
+    }
+    fclose(fp);
+}
+
+RangeEncodedIndex::RangeEncodedIndex(vector<uint32_t> &values) {
+    nValues = values.size();
     vector<uint32_t>::iterator it;
     // find the distinct values and store in ranges vector
     if(0) {
@@ -123,7 +202,7 @@ RangeEncodedIndex::RangeEncodedIndex(vector<uint32_t> &values, char *fname) {
         for(int i=0;i<256;i++) {
             uint64_t bits = bv[i];
             while (bits) {
-                ranges.push_back(i*64 + __builtin_ffsll(bits) - 1);
+                ranges.push_back(i*64 + ffs(bits) - 1); // ffs() defined in bitmap.h. overloads __builtin_ffs(bits)
                 bits &= bits-1;
             }
         }
@@ -181,4 +260,80 @@ RangeEncodedIndex::RangeEncodedIndex(vector<uint32_t> &values, char *fname) {
     for(int i=prevIdx+1;i<ranges.size();i++)
         bvec[i]->appendFill0(currentPos - runStart[i]);
     delete runStart;
+
+    // bufferStart=0;
+    // bufferSize = 1 << 6; // tweak me
+    // buffer = (uint32_t*) malloc(bufferSize * sizeof(uint32_t));
+    // fillBuffer(0);
+}
+
+RangeEncodedIndex::RangeEncodedIndex(char *fname) {
+    FILE *fp;
+    fp = fopen(fname, "rb");
+
+    size_t nVectors;
+    size_t result = fread(&nVectors,sizeof(size_t),1,fp);
+    if (result != 1) {fputs ("Reading error",stderr); exit (3);}
+
+    result = fread(&nValues,sizeof(size_t),1,fp);
+    if (result != 1) {fputs ("Reading error",stderr); exit (3);}
+
+    ranges.resize(nVectors);
+    result = fread(ranges.data(), sizeof(uint32_t),nVectors,fp);
+    if (result != nVectors) {fputs ("Reading error",stderr); exit (3);}
+
+    bvec = (BitVector<uint64_t>**) malloc(nVectors*sizeof(BitVector<uint64_t>*));
+    for(int i=0;i<nVectors;i++) {
+        uint64_t *bvbuffer;
+        size_t nWords;
+        result = fread(&nWords,sizeof(size_t),1,fp);
+        if (result != 1) {fputs ("Reading error",stderr); exit (3);}
+        bvbuffer = (uint64_t*) malloc(nWords*sizeof(uint64_t));
+        result = fread(bvbuffer,sizeof(uint64_t), nWords, fp);
+        bvec[i] = new BitVector<uint64_t>(bvbuffer);
+        free(bvbuffer);
+    }
+    fclose(fp);
+    bufferStart=0;
+    bufferSize = 1 << 6; // tweak me
+    buffer = (uint32_t*) malloc(bufferSize * sizeof(uint32_t));
+    fillBuffer(0);
+}
+
+void RangeEncodedIndex::saveIndex(char *fname) {
+    // open an output file
+    FILE *fp;
+    fp = fopen(fname, "wb");
+    // write the number of bitvectors
+    size_t nVectors = ranges.size();
+    fwrite(&nVectors, sizeof(size_t),1,fp);
+    // write the number of values
+    fwrite(&nValues,sizeof(size_t),1,fp);
+    // write the distinct values
+    fwrite(ranges.data(),sizeof(uint32_t),nVectors,fp);
+    // write each bitvector
+    for(int i=0;i<nVectors;i++) {
+        uint64_t *buf;
+        size_t nWords = bvec[i]->dump(&buf);
+        fwrite(&nWords,sizeof(size_t),1,fp);
+        fwrite(buf,sizeof(uint64_t),nWords,fp);
+        free(buf);
+    }
+    fclose(fp);
+}
+
+void RangeEncodedIndex::fillBuffer(size_t idx) {
+    bufferStart = idx & ~(bufferSize - 1);
+    for(int i=0;i<ranges.size();i++)
+        bvec[i]->fillSetBits(bufferStart,buffer,ranges[i]);
+}
+
+bool RangeEncodedIndex::decode(size_t idx, uint32_t *value) {
+    if (idx >= nValues) return false;
+    if (idx >= (bufferStart + bufferSize) || idx < bufferStart)
+        fillBuffer(idx);
+    
+    int offset= idx - bufferStart;
+    *value = buffer[offset];
+    return true;
 }

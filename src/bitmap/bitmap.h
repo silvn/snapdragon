@@ -4,75 +4,71 @@
 #include "bitvector.h"
 using namespace std;
 
-/*
-class BitmapIndex {
-public:
-    BitmapIndex();
-    void loadIndex(const char* fname);
-    void saveIndex(const char* fname);
-protected:
-    // every type of bitmap index has some BitVectors
-    // total number of values indexed
-    size_t                size;
-    // the maximum number of values to hold in memory at once
-    static const size_t   chunkSize=1000000;
-    size_t                currentRow; // uncompressed position
-    const char*           fname;
-};
-*/
-
 // The BitSlicedIndex has one bitvector for each bit position
 // The values may span more than one word but are expected
 // to all be the same size.
 // Compression is best when the values have been sorted.
 template <class T>
-class BitSlicedIndex {// : protected BitmapIndex {
+class BitSlicedIndex {
 public:
-    // start a new bit sliced index
-    BitSlicedIndex(int nwords, char* fname);
+    // start a new index
+    BitSlicedIndex(int nwords);
+    // load an index from a file
+    BitSlicedIndex(char* fname);
+    // clean up
     ~BitSlicedIndex() {
         for(int i=0;i<nwords*nbits;i++)
             delete bvec[i];
     }
-    void save() {}
+    // save an index to the file
+    void saveIndex(char* fname);
     // append the referenced value
     void append(T *value);
     // reconstruct the value stored at position idx, return false if idx is invalid
     bool decode(size_t idx, T *value);
+    size_t size() {return nValues;}
     
+
 private:
     BitVector<T> **bvec;
     int nwords;
-    char*           fname;
-    T nbits;
+    T nbits; // 8*sizeof(T)
+    size_t nValues; // total number of values represented - same as size of each bvec
     T **buffer; // square matrix of row oriented values (interface with user) or column oriented values (interface with bvec)
-    size_t bufferCapacity; //= sizeof(T)*8; // might have to initialize in constructor
-    size_t bufferOffset; // position of the beginning of the Buffer
+    size_t bufferCapacity; //= sizeof(T)*8; had to initialize in constructor
+    size_t bufferOffset; // offset within the buffer - used in append()
+    size_t bufferStart; // position of the beginning of the Buffer
+    void fillBuffer(size_t idx); // fill the buffer with words to cover idx, returns false if idx too large
+
     void transpose(uint64_t A[64]);
     void transpose(uint32_t A[32]);
     void transpose(uint16_t A[16]);
-    // in constructor: allocate space for nwords vectors then for(i=0;i<nwords;i++) buffer[i].reserve(bufferCapacity);
-    // when appending values just do rowBuffer[i].push_back(value[i]);
-    // if the rowBuffer is full, transpose into uncompressed bitvectors into colBuffer and
-    // invoke a bvec function to appendBits(T bits) on each value in the colBuffer
-    // N.B. I dont care how bvec.appendBits() works, it might have it's own buffer of uncompressed words...
-    // clear the vectors
-    // The first time decode() is called, populate the colBuffer with sizeof(T)*8 uncompressed bits from each bvec
-    // 
 };
 class RangeEncodedIndex {
 public:
-    RangeEncodedIndex(vector<uint32_t> &values, char *fname);
+    RangeEncodedIndex(vector<uint32_t> &values);
+    RangeEncodedIndex(char *fname);
     ~RangeEncodedIndex() {
         for(int i=0;i<ranges.size();i++)
             delete bvec[i];
     }
-    void save() {}
+    void saveIndex(char *fname);
+    // reconstruct the value stored at position idx, return false if idx is invalid
+    bool decode(size_t idx, uint32_t *value);
+    size_t size() {return nValues;}
 private:
     vector<uint32_t> ranges;
-    BitVector<uint64_t> **bvec; // use 32bit words in the range encoded bitvector
-    char *fname;
+    BitVector<uint64_t> **bvec;
+    size_t nValues;
+    size_t bufferStart;
+    size_t bufferSize;
+    uint32_t *buffer;
+    void fillBuffer(size_t idx);
 };
+
+inline int ffs(unsigned long long bits) { return __builtin_ffsll(bits); }
+inline int ffs(unsigned long bits)      { return __builtin_ffsl (bits); }
+inline int ffs(unsigned int bits)       { return __builtin_ffs  (bits); }
 
 #include "bitmap.tpp"
 /*

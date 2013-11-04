@@ -24,6 +24,7 @@ public:
     void saveIndex(char* fname);
     // append the referenced value
     void append(T *value);
+    void append(T *value, int x);
     // reconstruct the value stored at position idx, return false if idx is invalid
     bool decode(size_t idx, T *value);
     size_t size() {return nValues;}
@@ -62,13 +63,10 @@ private:
     size_t nValues;
     size_t bufferStart;
     size_t bufferSize;
-    uint32_t *buffer;
+    uint32_t *buffer, *buffer0;
     void fillBuffer(size_t idx);
 };
 
-inline int ffs(unsigned long long bits) { return __builtin_ffsll(bits); }
-inline int ffs(unsigned long bits)      { return __builtin_ffsl (bits); }
-inline int ffs(unsigned int bits)       { return __builtin_ffs  (bits); }
 
 #include "bitmap.tpp"
 /*

@@ -39,5 +39,8 @@ private:
     T activeWordEnd;   // uncompressed bit position of last bit in a word
     void seek(T wordStart);
 };
+inline int ffs(unsigned long long bits) { return __builtin_ffsll(bits); }
+inline int ffs(unsigned long bits)      { return __builtin_ffsl (bits); }
+inline int ffs(unsigned int bits)       { return __builtin_ffs  (bits); }
 #include "bitvector.tpp"
 #endif

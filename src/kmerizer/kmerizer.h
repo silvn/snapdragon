@@ -82,6 +82,7 @@ private:
     // k-mers are not distributed evenly among the bins
     // redistributes free space among the bins
     void resizeBins1();
+    uint32_t reservedSpace;
 
     // update kmer given the next nucl by shifting by two bits, returns nextKmer's bin
     size_t nextKmer (kword_t* kmer, size_t bin, const char nucl);

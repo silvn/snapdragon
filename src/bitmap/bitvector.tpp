@@ -39,11 +39,10 @@ BitVector<T>::BitVector(T *buf) {
     else if (nbits == 32) shiftby = 5;
     else if (nbits == 16) shiftby = 4;
     else shiftby = 3;
-    T nwords = buf[0];
-    T nfills = buf[1];
+    size_t nwords = buf[0];
+    size_t nfills = buf[1];
     size = buf[2];
     count = buf[3];
-    // fprintf(stderr,"BitVector constructor nwords: %u nfills: %u size: %u count: %u\n",nwords,nfills, size, count);
     words.resize(nwords);
     memcpy(words.data(),buf+4,nwords*sizeof(T));
     if (words.size() != nwords) {
@@ -79,21 +78,21 @@ size_t BitVector<T>::dump(T **buf) {
         fprintf(stderr,"failed to allocate %zi bytes\n",dbytes);
         return 0;
     }
-    (*buf)[0] = (T)0 + words.size();
-    (*buf)[1] = (T)0 + isFill.size();
-    (*buf)[2] = size;
-    (*buf)[3] = count;
+    (*buf)[0] = (T) words.size();
+    (*buf)[1] = (T) isFill.size();
+    (*buf)[2] = (T) size;
+    (*buf)[3] = (T) count;
     memcpy(*buf + 4, words.data(), words.size()*sizeof(T));
     memcpy(*buf + 4 + words.size(), isFill.data(), isFill.size()*sizeof(T));
     return 4 + words.size() + isFill.size();
 }
 
 template <class T>
-T popcount(T v) {
+int popcount(T v) {
     v = v - ((v >> 1) & (T)~(T)0/3);                           // temp
     v = (v & (T)~(T)0/15*3) + ((v >> 2) & (T)~(T)0/15*3);      // temp
     v = (v + (v >> 4)) & (T)~(T)0/255*15;                      // temp
-    return (T)(v * ((T)~(T)0/255)) >> (sizeof(T) - 1) * CHAR_BIT; // count
+    return (v * ((T)~(T)0/255)) >> (sizeof(T) - 1) * CHAR_BIT; // count
 }
 
 // appends a word shaped uncompressed bitvector
@@ -106,7 +105,7 @@ void BitVector<T>::appendWord(T word) {
             words[activeWordIdx]++;
         else {
             /* set calculated bit */;
-            T mod = words.size() & (nbits-1);
+            int mod = words.size() & (nbits-1);
             if (mod)
                 isFill[isFill.size()-1] = isFill.back() | ((T)1 << mod);
             else
@@ -122,11 +121,11 @@ void BitVector<T>::appendWord(T word) {
             words[activeWordIdx]++;
         else {
             /* set calculated bit */
-            T mod = words.size() & (nbits-1);
+            int mod = words.size() & (nbits-1);
             if (mod)
                 isFill[isFill.size()-1] = isFill.back() | ((T)1 << mod);
             else
-                isFill.push_back(1);
+                isFill.push_back((T)1);
             words.push_back(((T)1 << (nbits-1)) | (T)1);
             activeWordIdx = words.size()-1;
             activeWordType = ONEFILL;
@@ -147,49 +146,38 @@ void BitVector<T>::appendWord(T word) {
 }
 
 template <class T>
-void BitVector<T>::seek(T wordStart) {
-   // fprintf(stderr,"BitVector::seek(%u) activeWordStart %u activeWordEnd %u activeWordType %i activeWordIndex %i\n",wordStart,activeWordStart,activeWordEnd,activeWordType,activeWordIdx);
+void BitVector<T>::seek(size_t wordStart) {
+    if (activeWordStart == wordStart) return;
     while (activeWordEnd < wordStart) { // seek forward
         activeWordIdx++;
         activeWordStart = activeWordEnd+1;
         // check if this word is a fill
-        if (isFill[activeWordIdx >> shiftby] & ((T)1 << (activeWordIdx & (nbits-1)))) {
-            if (words[activeWordIdx] >> (nbits-1))
-                activeWordType = ONEFILL;
-            else
-                activeWordType = ZEROFILL;
+        if (isFill[activeWordIdx >> shiftby] & ((T)1 << (activeWordIdx & (nbits-1))))
             activeWordEnd += words[activeWordIdx] << shiftby;
-        }
-        else {
+        else
             activeWordEnd += nbits;
-            activeWordType = LITERAL;
-        }
-        // fprintf(stderr,"seeking foreward BitVector::seek(%u) activeWordStart %u activeWordEnd %u activeWordType %i activeWordIndex %i\n",wordStart,activeWordStart,activeWordEnd,activeWordType,activeWordIdx);
     }
     while (activeWordStart > wordStart) { // seek backward
         activeWordIdx--;
         activeWordEnd = activeWordStart-1;
         // check if this word is a fill
-        // fprintf(stderr,"activeWordIdx %i\n",activeWordIdx);
-        if (isFill[activeWordIdx >> shiftby] & ((T)1 << (activeWordIdx & (nbits-1)))) {
-            if (words[activeWordIdx] >> (nbits-1))
-                activeWordType = ONEFILL;
-            else
-                activeWordType = ZEROFILL;
+        if (isFill[activeWordIdx >> shiftby] & ((T)1 << (activeWordIdx & (nbits-1))))
             activeWordStart -= words[activeWordIdx] << shiftby;
-        }
-        else {
+        else
             activeWordStart -= nbits;
-            activeWordType = LITERAL;
-        }
-        // fprintf(stderr,"seeking backward BitVector::seek(%u) activeWordStart %u activeWordEnd %u activeWordType %i activeWordIndex %i\n",wordStart,activeWordStart,activeWordEnd,activeWordType,activeWordIdx);
     }
-    // fprintf(stderr,"found BitVector::seek(%u) activeWordStart %u activeWordEnd %u activeWordType %i activeWordIndex %i\n",wordStart,activeWordStart,activeWordEnd,activeWordType,activeWordIdx);
+    activeWordType = LITERAL;
+    if (isFill[activeWordIdx >> shiftby] & ((T)1 << (activeWordIdx & (nbits-1)))) {
+        if (words[activeWordIdx] >> (nbits-1))
+            activeWordType = ONEFILL;
+        else
+            activeWordType = ZEROFILL;
+    }
 }
 
 // fills a word shaped uncompressed bitvector starting at wordStart
 template <class T>
-void BitVector<T>::inflateWord(T *word, T wordStart) {
+void BitVector<T>::inflateWord(T *word, size_t wordStart) {
     seek(wordStart);
     if (activeWordType == LITERAL)
         *word = words[activeWordIdx];
@@ -200,28 +188,25 @@ void BitVector<T>::inflateWord(T *word, T wordStart) {
 }
 
 // decompress nbits of the bitvector starting at wordStart
-// for each set bit, copy v into a[bitpos]
+// for each set bit, copy v into A[bitpos]
 template <class T>
-void BitVector<T>::fillSetBits(T wordStart, uint32_t *A, uint32_t v) {
+void BitVector<T>::fillSetBits(size_t wordStart, uint32_t *A, uint32_t v) {
     seek(wordStart);
     if (activeWordType == LITERAL) {
         T bits = words[activeWordIdx];
-        // fprintf(stderr,"\nLITERAL: ");
         while (bits) {
-            // printBits(sizeof(T),&bits);
-            // fprintf(stderr," %i\n",ffs(bits)-1);
-            A[ffs(bits)-1]=v;
+            A[ffs(bits)-1] = v;
             bits &= bits-1;
         }
     }
     else if (activeWordType == ONEFILL)
-        for(int i=0;i<nbits;i++) // replace with memcpy? - no memcpy does a byte level copy
+        for(int i=0;i<nbits;i++)
             A[i]=v;
 }
 
 // extends the bitvector by length 0 bits (assumes previous bit was a 1)
 template <class T>
-void BitVector<T>::appendFill0(T length) {
+void BitVector<T>::appendFill0(size_t length) {
     if (activeWordType == LITERAL) { // extend current LITERAL word
         T remainingBits = nbits - (size - activeWordStart);
         size += length;
@@ -234,6 +219,10 @@ void BitVector<T>::appendFill0(T length) {
     else if (activeWordType == ONEFILL) {
         activeWordStart += words[activeWordIdx] << shiftby;
         size += length;
+    }
+    else if (activeWordType == ZEROFILL) {
+        fprintf(stderr,"appendFill0 called when activeWordType == ZEROFILL!\n");
+        exit(5);
     }
     else // for the first word
         size += length;
@@ -261,7 +250,7 @@ void BitVector<T>::appendFill0(T length) {
 }
 // extends the bitvector by length 1 bits (assumes previous bit was a 0)
 template <class T>
-void BitVector<T>::appendFill1(T length) {
+void BitVector<T>::appendFill1(size_t length) {
     if (activeWordType == LITERAL) { // extend current LITERAL word
         T usedBits = size - activeWordStart;
         size += length;
@@ -277,6 +266,10 @@ void BitVector<T>::appendFill1(T length) {
     else if (activeWordType == ZEROFILL) {
         activeWordStart += words[activeWordIdx] << shiftby;  
         size += length;
+    }
+    else if (activeWordType == ONEFILL) {
+        fprintf(stderr,"appendFill1 called with activeWordType == ONEFILL\n");
+        exit(4);
     }
     else // for the first word
         size += length;
@@ -303,4 +296,3 @@ void BitVector<T>::appendFill1(T length) {
         activeWordIdx = words.size()-1;
     }
 }
-

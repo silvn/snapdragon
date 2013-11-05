@@ -658,6 +658,7 @@ uint32_t Kmerizer::binSortCount1(kword_t *kb, uint32_t kbt, vector<uint32_t> &ta
 }
 
 void Kmerizer::writeBatch(size_t bin, vector<uint32_t> &tally) {
+    if (bin != 0) return;
     if (0) {
         FILE *fp;
         char kmer_file[100];
@@ -692,6 +693,12 @@ void Kmerizer::writeBatch(size_t bin, vector<uint32_t> &tally) {
         delete bsi;
 
         char kmerCount_file[100];
+        sprintf(kmerCount_file,"%s/%zi-mers.%zi.%u.txt",outdir,k,bin,batches[bin]);
+        FILE *fp;
+        fp = fopen(kmerCount_file, "w");
+        for(vector<uint32_t>::iterator it=tally.begin(); it< tally.end(); it++)
+            fprintf(fp,"%u\n",*it);
+        fclose(fp);
         sprintf(kmerCount_file,"%s/%zi-mers.%zi.%u.rei",outdir,k,bin,batches[bin]);
         RangeEncodedIndex *rei = new RangeEncodedIndex(tally);
         rei->saveIndex(kmerCount_file);
@@ -710,8 +717,9 @@ void Kmerizer::save() {
     fprintf(stderr,"all bins saved to disk\n");
     state = MERGE;
     // merge the batches
-    for(size_t bin=0; bin < NBINS; bin++)
-        mergeBin(bin);
+    mergeBin(0);
+    // for(size_t bin=0; bin < NBINS; bin++)
+    //     mergeBin(bin);
     //    tp.schedule( boost::bind( &Kmerizer::mergeBin, this, bin ) );
     // tp.wait();
     fprintf(stderr,"all bins merged\n");
@@ -747,13 +755,18 @@ void Kmerizer::mergeBin(size_t bin) {
 
         // check the api - file should be the same
         RangeEncodedIndex *reidx = new RangeEncodedIndex(new_fname);
+        sprintf(new_fname,"%s/%zi-mers.%zi.txt",outdir,k,bin);
+        FILE *fp;
+        fp = fopen(new_fname, "w");
         size_t row=0;
         uint32_t t;
         vector<uint32_t> vec;
         while (reidx->decode(row,&t)) {
             vec.push_back(t);
             row++;
+            fprintf(fp,"%u\n",t);
         }
+        fclose(fp);
         
         RangeEncodedIndex *reidx2 = new RangeEncodedIndex(vec);
         reidx2->saveIndex(old_fname);

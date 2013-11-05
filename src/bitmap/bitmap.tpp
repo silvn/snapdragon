@@ -43,7 +43,6 @@ BitSlicedIndex<T>::BitSlicedIndex(char* fname) {
         free(bvbuffer);
     }
     fclose(fp);
-    // fprintf(stderr,"BitSlicedIndex(%s) nwords: %i, nValues: %zi\n",fname,nwords,nValues);
 
     this->bufferCapacity = nbits;
     this->bufferOffset=0;
@@ -121,17 +120,7 @@ void BitSlicedIndex<T>::append(T* value, int x) {
     bufferOffset++;
     if (bufferOffset == nbits) {
         for(int i=0;i<nwords;i++) {
-            // for(int j=0;j<nbits;j++) {
-            //     fprintf(stderr,"%zi %i %i ",bufferOffset,i,j);
-            //     printBits(sizeof(T),buffer[i]+j);
-            //     fprintf(stderr,"\n");
-            // }
             this->transpose(buffer[i]);
-            // for(int j=0;j<nbits;j++) {
-            //     fprintf(stderr,"%zi %i %i ",bufferOffset,i,j);
-            //     printBits(sizeof(T),buffer[i]+j);
-            //     fprintf(stderr,"\n");
-            // }
             for(int j=0;j<nbits;j++)
                 bvec[i*nbits + j]->appendWord(buffer[i][j]);
         }
@@ -146,21 +135,9 @@ void BitSlicedIndex<T>::fillBuffer(size_t idx) {
     // populate the buffers by transposing the uncompressed words
     bufferStart = idx & ~(nbits - 1);
     for(int i=0;i<nwords;i++) {
-        for(int j=0;j<nbits;j++) {
+        for(int j=0;j<nbits;j++)
             bvec[i*nbits+j]->inflateWord(buffer[i]+j,bufferStart);
-        }
-        
-        // for(int j=0;j<nbits;j++) {
-        //     printBits(sizeof(T),buffer[i]+j);
-        //     fprintf(stderr," %i\n",j);
-        // }
-        
         this->transpose(buffer[i]);
-
-        // for(int j=0;j<nbits;j++) {
-        //     printBits(sizeof(T),buffer[i]+j);
-        //     fprintf(stderr," %i\n",j);
-        // }
     }
 }
 
@@ -201,24 +178,7 @@ void BitSlicedIndex<T>::saveIndex(char *fname) {
         T *buf;
         size_t nT = bvec[i]->dump(&buf);
         fwrite(&nT,sizeof(size_t),1,fp);
-        // fprintf(stderr,"fwrite(buf,%i,%i,fp)\n",sizeof(T),nT);
         fwrite(buf,sizeof(T),nT,fp);
-        // BitVector<T>* bv_test = new BitVector<T>(buf);
-        ////////////////////////////////////////////////////////////////////////////////////compare bv_test with bvec[i]
-        // fprintf(stderr,"bvec[%i] nValues %zi\n",i,nValues);
-        // T A,B;
-        // for(int o=0;o<nValues;o+=nbits) {
-        //     // fprintf(stderr,"calling bv_test->inflateWord(&A,%i)\n",o);
-        //     bv_test->inflateWord(&A,o);
-        //     // fprintf(stderr,"calling bvec[%i]->inflateWord(&B,%i)\n",i,o);
-        //     bvec[i]->inflateWord(&B,o);
-        //     if (A != B) {
-        //         fprintf(stderr,"ERROR %llu != %llu\n",A,B);
-        //         exit(4);
-        //     }
-        //     // else
-        //         // fprintf(stderr,"word[%i] %llu == %llu\n",o,A,B);
-        // }
         free(buf);
     }
     fclose(fp);
@@ -262,13 +222,12 @@ RangeEncodedIndex::RangeEncodedIndex(vector<uint32_t> &values) {
         }
         ranges.insert(ranges.end(), overflow.begin(), overflow.end());
     }
-    fprintf(stderr,"ranges.size() = %zi nValues: %zi\n",ranges.size(),nValues);
+    
     // populate a bvec for each distinct value
     bvec = (BitVector<uint64_t>**) malloc(ranges.size()*sizeof(BitVector<uint64_t>*));
     for(int i=0;i<ranges.size();i++)
         bvec[i] = new BitVector<uint64_t>();
 
-    // fprintf(stderr,"finished allocating bvec array\n");
     // iterate over the values again and append to each of the relevant bitvectors
     // compare the bitvector index of the current value to the previous value and 
     // for each index between them (where a run of 1's or 0's ends), appendFill[01](runLength)
@@ -276,6 +235,7 @@ RangeEncodedIndex::RangeEncodedIndex(vector<uint32_t> &values) {
     // we need an array to hold the start positions of each run
     uint32_t *runStart;
     runStart = (uint32_t*) calloc(ranges.size(),sizeof(uint32_t)); // init to 0
+
     uint32_t currentPos = 0;
     it = values.begin();
     vector<uint32_t>::iterator lb = lower_bound(ranges.begin(), ranges.end(), *it);
@@ -283,7 +243,6 @@ RangeEncodedIndex::RangeEncodedIndex(vector<uint32_t> &values) {
     it++;
     currentPos++;
     while(it < values.end()) {
-        // fprintf(stderr,"ranges[%i]:%u values[%u]:%u values.size(): %zi\n",prevIdx,ranges[prevIdx],currentPos,*it, values.size());
         int idx;
         if (*it < ranges[prevIdx]) {
             lb = lower_bound(ranges.begin(), lb, *it);
@@ -297,7 +256,6 @@ RangeEncodedIndex::RangeEncodedIndex(vector<uint32_t> &values) {
             lb = lower_bound(lb, ranges.end(), *it);
             idx = lb - ranges.begin();
             for(int i=prevIdx+1; i<=idx; i++) {
-                // fprintf(stderr,"bvec[%i]->appendFill0(%u)\n",i,currentPos-runStart[i]);
                 bvec[i]->appendFill0(currentPos - runStart[i]);
                 runStart[i] = currentPos;
             }
@@ -308,16 +266,10 @@ RangeEncodedIndex::RangeEncodedIndex(vector<uint32_t> &values) {
     }
     // finish each bitvector
     for(int i=0;i<=prevIdx;i++)
-        bvec[i]->appendFill1(currentPos - runStart[i]);
-    
+        bvec[i]->appendFill1(currentPos - runStart[i]);    
     for(int i=prevIdx+1;i<ranges.size();i++)
         bvec[i]->appendFill0(currentPos - runStart[i]);
     delete runStart;
-
-    // bufferStart=0;
-    // bufferSize = 1 << 6; // tweak me
-    // buffer = (uint32_t*) malloc(bufferSize * sizeof(uint32_t));
-    // fillBuffer(0);
 }
 
 RangeEncodedIndex::RangeEncodedIndex(char *fname) {
@@ -336,7 +288,6 @@ RangeEncodedIndex::RangeEncodedIndex(char *fname) {
     if (result != nVectors) {fputs ("Reading error",stderr); exit (3);}
 
     bvec = (BitVector<uint64_t>**) malloc(nVectors*sizeof(BitVector<uint64_t>*));
-    fprintf(stderr,"RangeEncodedIndex(%s) nVectors: %zi nValues: %zi\n",fname,nVectors,nValues);
     for(int i=0;i<nVectors;i++) {
         uint64_t *bvbuffer;
         size_t nWords;
@@ -363,6 +314,7 @@ void RangeEncodedIndex::saveIndex(char *fname) {
     // write the number of bitvectors
     size_t nVectors = ranges.size();
     fwrite(&nVectors, sizeof(size_t),1,fp);
+
     // write the number of values
     fwrite(&nValues,sizeof(size_t),1,fp);
     // write the distinct values
@@ -380,16 +332,9 @@ void RangeEncodedIndex::saveIndex(char *fname) {
 
 void RangeEncodedIndex::fillBuffer(size_t idx) {
     bufferStart = idx & ~(bufferSize - 1);
-    // everything is >= ranges[0], so initialize the buffer to that value
     memcpy(buffer, buffer0, bufferSize*sizeof(uint32_t));
-    // fprintf(stderr,"ranges[0]:%u",ranges[0]);
-    // for(int j=0;j<bufferSize;j++) fprintf(stderr," %u",buffer[j]);
-    for(int i=1;i<ranges.size();i++) {
+    for(int i=1;i<ranges.size();i++)
         bvec[i]->fillSetBits(bufferStart,buffer,ranges[i]);
-        // fprintf(stderr,"\nranges[%i]:%u",i,ranges[i]);
-        // for(int j=0;j<bufferSize;j++) fprintf(stderr," %u",buffer[j]);
-    }
-    // exit(1);
 }
 
 bool RangeEncodedIndex::decode(size_t idx, uint32_t *value) {
@@ -399,13 +344,5 @@ bool RangeEncodedIndex::decode(size_t idx, uint32_t *value) {
     
     int offset= idx - bufferStart;
     *value = buffer[offset];
-    // if (idx == 0) {
-    //     fprintf(stderr,"rei->decode(%zi)\n",idx);
-    //     for(size_t i=0;i<bufferSize;i++) fprintf(stderr," %u",buffer[i]);
-    //     fprintf(stderr," buffer[%i] %u\n", offset, buffer[offset]);
-    //     fprintf(stderr,"ranges.size(): %zi",ranges.size());
-    //     for(size_t i=0;i<ranges.size();i++) fprintf(stderr, " %u",ranges[i]);
-    //     fprintf(stderr,"\n");
-    // }
     return true;
 }

@@ -480,12 +480,11 @@ void Kmerizer::uniqify1(size_t bin) {
     // if (state == SAVE || kmerBufTally[bin] > 0.9*(float)kmerBufSize[bin]) {
     if (state == SAVE || kmerBuf1[bin].size() > 0.9*(float)kmerBufSize[bin]) {
         vector<uint32_t> tally;
-        // kmerBufTally[bin] = binSortCount1(kmerBuf[bin],kmerBufTally[bin],tally);
-        binSortCount1(kmerBuf1[bin],tally);
-
         // output distinct kmers
         // if (kmerBufTally[bin] > 0) {
         if (kmerBuf1[bin].size() > 0) {
+            binSortCount1(kmerBuf1[bin],tally);
+            // sortCount1(kmerBuf1[bin],tally);
             batches[bin]++;
             writeBatch(bin, tally);
             // declare the buffer empty
@@ -564,7 +563,6 @@ void Kmerizer::binSortCount1(vector<kword_t> &kb, vector<uint32_t> &tally) {
     int hbits = 12;
     int hbins = 1 << hbits; // 4096
     uint32_t *histogram = (uint32_t *) calloc(hbins, sizeof(uint32_t));
-    uint32_t distinct = 0;
 
     int shiftby = 2*k - hbits;
     if (shiftby <= 0) {
@@ -572,10 +570,10 @@ void Kmerizer::binSortCount1(vector<kword_t> &kb, vector<uint32_t> &tally) {
         for(size_t i=0;i<kb.size();i++)
             histogram[kb[i]]++;
 
+        kb.clear();
         for(uint32_t b = 0; b < hbins; b++)
             if (histogram[b] > 0) {
-                kb[distinct] = (kword_t) b;
-                distinct++;
+                kb.push_back((kword_t) b);
                 tally.push_back(histogram[b]);
             }
     }
@@ -584,18 +582,17 @@ void Kmerizer::binSortCount1(vector<kword_t> &kb, vector<uint32_t> &tally) {
         keys.resize(hbins);
         // count the number of kmers in each bin
         // for(size_t i=0;i<kb.size();i++)
-        for(vector<kword_t>::iterator it = kb.begin()+1; it < kb.end(); it++)
+        for(vector<kword_t>::iterator it = kb.begin(); it < kb.end(); it++)
             histogram[*it >> shiftby]++;
         
         // allocate space for each bin
         for(int i=0; i<hbins; i++)
             if (histogram[i] > 0)
                 keys[i].reserve(histogram[i]);
-        free(histogram);
 
         // loop over the kmers again and copy them into their bins
         // for(uint32_t i=0;i<kb.size();i++)
-        for(vector<kword_t>::iterator it = kb.begin()+1; it < kb.end(); it++)
+        for(vector<kword_t>::iterator it = kb.begin(); it < kb.end(); it++)
             keys[*it >> shiftby].push_back(*it);
         
         kb.clear();
@@ -606,6 +603,7 @@ void Kmerizer::binSortCount1(vector<kword_t> &kb, vector<uint32_t> &tally) {
             }
         }
     }
+    free(histogram);
 }
 
 uint32_t Kmerizer::binSortCount1(kword_t *kb, uint32_t kbt, vector<uint32_t> &tally) {
@@ -658,7 +656,6 @@ uint32_t Kmerizer::binSortCount1(kword_t *kb, uint32_t kbt, vector<uint32_t> &ta
 }
 
 void Kmerizer::writeBatch(size_t bin, vector<uint32_t> &tally) {
-    if (bin != 0) return;
     if (0) {
         FILE *fp;
         char kmer_file[100];
@@ -696,7 +693,7 @@ void Kmerizer::writeBatch(size_t bin, vector<uint32_t> &tally) {
         sprintf(kmerCount_file,"%s/%zi-mers.%zi.%u.txt",outdir,k,bin,batches[bin]);
         FILE *fp;
         fp = fopen(kmerCount_file, "w");
-        for(vector<uint32_t>::iterator it=tally.begin(); it< tally.end(); it++)
+        for(vector<uint32_t>::iterator it=tally.begin(); it!=tally.end(); it++)
             fprintf(fp,"%u\n",*it);
         fclose(fp);
         sprintf(kmerCount_file,"%s/%zi-mers.%zi.%u.rei",outdir,k,bin,batches[bin]);
@@ -709,8 +706,9 @@ void Kmerizer::writeBatch(size_t bin, vector<uint32_t> &tally) {
 void Kmerizer::save() {
     state = SAVE;
     fprintf(stderr,"counting finished, scheduling saveBin()\n");
-    for(size_t bin=0; bin < NBINS; bin++)
-        tp.schedule( boost::bind( &Kmerizer::saveBin, this, bin ) );
+    saveBin(0);
+    // for(size_t bin=0; bin < NBINS; bin++)
+    //     tp.schedule( boost::bind( &Kmerizer::saveBin, this, bin ) );
 
     // flush the task queue
     tp.wait();
@@ -733,9 +731,9 @@ void Kmerizer::saveBin(size_t bin) {
 
 
 void Kmerizer::mergeBin(size_t bin) {
+    if (batches[bin] == 0) return;
     // create new bitmap indexes for the kmers (binary encoded) and their frequencies (range encoded)
     // review notes on hybrid merge
-    fprintf(stderr,"mergeBin(%zi) %zi batches\n",bin,batches[bin]);
     if (batches[bin]==1) {
         // nothing to merge - only one batch for this bin
         // move the .bsi and .rei files from .1.rei to .rei

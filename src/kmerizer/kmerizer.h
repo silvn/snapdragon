@@ -11,7 +11,8 @@
 #define QUERY 'Q'
 
 #include "../boost/threadpool.hpp"
-#include "../bitmap/bitmap.h"
+#include "../bitmap/bitSlicedIndex.hpp"
+#include "../bitmap/rangeEncodedIndex.hpp"
 
 typedef uint64_t kword_t;
 using namespace std;

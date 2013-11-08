@@ -42,11 +42,6 @@ private:
     void seek(size_t wordStart); // locate the activeWord that contains wordStart
 };
 
-// overload the find first set bit gcc builtin functions
-inline int ffs(unsigned long long bits) { return __builtin_ffsll(bits); }
-inline int ffs(unsigned long bits)      { return __builtin_ffsl (bits); }
-inline int ffs(unsigned int bits)       { return __builtin_ffs  (bits); }
-
 // for debugging
 void printBits(size_t const size, void const * const ptr) {
     unsigned char *b = (unsigned char*) ptr;
@@ -102,11 +97,6 @@ BitVector<T>::BitVector(T *buf) {
         exit(1);
     }
     
-    // printBits(sizeof(T),isFill.data());
-    // fprintf(stderr," isFill.size()=%zi\n",isFill.size());
-    // printBits(sizeof(T),words.data());
-    // fprintf(stderr," words.size()=%zi\n",words.size());
-
     activeWordIdx   = 0;
     activeWordStart = 0;
     activeWordEnd   = nbits;
@@ -135,11 +125,6 @@ size_t BitVector<T>::dump(T **buf) {
     (*buf)[3] = (T) count;
     memcpy(*buf + 4,                 words.data(),  words.size()*sizeof(T));
     memcpy(*buf + 4 + words.size(), isFill.data(), isFill.size()*sizeof(T));
-
-    // printBits(sizeof(T),isFill.data());
-    // fprintf(stderr," isFill.size()=%zi\n",isFill.size());
-    // printBits(sizeof(T),words.data());
-    // fprintf(stderr," words.size()=%zi\n",words.size());
     return nwords;
 }
 
@@ -197,13 +182,13 @@ void BitVector<T>::appendWord(T word) {
 
 template <class T>
 void BitVector<T>::seek(size_t wordStart) {
-    // if (activeWordStart == wordStart) return; // already here
+    if ((activeWordStart <= wordStart) && (wordStart < activeWordEnd)) return; // already here
     while (activeWordEnd <= wordStart) { // seek forward
         activeWordIdx++;
         activeWordStart = activeWordEnd;
         // check if this word is a fill
         if (isFill[activeWordIdx >> shiftby] & ((T)1 << (activeWordIdx & (nbits-1))))
-            activeWordEnd += words[activeWordIdx] << shiftby;
+            activeWordEnd += (words[activeWordIdx] << shiftby);
         else
             activeWordEnd += nbits;
     }
@@ -212,7 +197,7 @@ void BitVector<T>::seek(size_t wordStart) {
         activeWordEnd = activeWordStart;
         // check if this word is a fill
         if (isFill[activeWordIdx >> shiftby] & ((T)1 << (activeWordIdx & (nbits-1))))
-            activeWordStart -= words[activeWordIdx] << shiftby;
+            activeWordStart -= (words[activeWordIdx] << shiftby);
         else
             activeWordStart -= nbits;
     }
@@ -223,7 +208,6 @@ void BitVector<T>::seek(size_t wordStart) {
         else
             activeWordType = ZEROFILL;
     }
-    // fprintf(stderr,"seek(%zi) aws %zi awe %zi awi %lu awt %i\n",wordStart,activeWordStart,activeWordEnd,activeWordIdx,activeWordType);
 }
 
 // fills a word shaped uncompressed bitvector starting at wordStart
@@ -248,12 +232,10 @@ void BitVector<T>::appendFill0(size_t length) {
             return;
         // still more to do
         length -= remainingBits;
-        activeWordStart += nbits;
+        if (length) activeWordStart += nbits;
     }
-    else if (activeWordType == ONEFILL) {
-//        activeWordStart += words[activeWordIdx] << shiftby;
+    else if (activeWordType == ONEFILL)
         size += length;
-    }
     else if (activeWordType == ZEROFILL) {
         fprintf(stderr,"appendFill0 called when activeWordType == ZEROFILL!\n");
         exit(5);
@@ -261,7 +243,7 @@ void BitVector<T>::appendFill0(size_t length) {
     else // for the first word
         size += length;
 
-    T nfills = length >> shiftby;
+    T nfills = (T)length >> shiftby;
     if (nfills) { // append a 0-fill
         // set a bit in isFill
         int mod = words.size() & (nbits-1);
@@ -269,16 +251,15 @@ void BitVector<T>::appendFill0(size_t length) {
             isFill[isFill.size()-1] |= ((T)1 << mod);
         else
             isFill.push_back((T)1);
-       // fprintf(stderr,"appendFill0(%zi) nfills: %llu mod: %i\n",length,nfills,mod);
         words.push_back(nfills);
         activeWordIdx    = words.size()-1;
         activeWordType   = ZEROFILL;
-        activeWordStart += nfills << shiftby;
+        activeWordStart += (nfills << shiftby);
         length &= nbits-1;
     }
     if (length > 0) {
+        if ((words.size() & (nbits-1)) == 0) isFill.push_back((T)0);
         words.push_back((T)0);
-        if ((words.size() >> shiftby) == isFill.size()) isFill.push_back((T)0);
         activeWordType   = LITERAL;
         activeWordIdx    = words.size()-1;
     }
@@ -288,29 +269,20 @@ template <class T>
 void BitVector<T>::appendFill1(size_t length) {
     count += length;
     if (activeWordType == LITERAL) { // extend current LITERAL word
-        T usedBits = size - activeWordStart;
-        T remainingBits = nbits - usedBits;
+        int usedBits = size - activeWordStart;
+        int remainingBits = nbits - usedBits;
         size += length;
         if (remainingBits) {
-            // fprintf(stderr,"appendFill1(%zi) usedBits %llu\n",length, usedBits);
-            // printBits(sizeof(T),words.data() + activeWordIdx);
-            words[activeWordIdx] |= ((T)~(T)0) << usedBits; // fill the word with 1's
-
-            // fprintf(stderr,"\nremainingbits %llu\n",remainingBits);
-            // printBits(sizeof(T),words.data() + activeWordIdx);
+            words[activeWordIdx] |= (((T)~(T)0) << usedBits); // fill the word with 1's
             if (remainingBits > length) { // flip some bits back to 0
-                words[activeWordIdx] &= ((T)~(T)0) >> (remainingBits - length);
-                // fprintf(stderr,"\n");
-                // printBits(sizeof(T),words.data() + activeWordIdx);
-                // fprintf(stderr,"\n");
+                words[activeWordIdx] &= (((T)~(T)0) >> (remainingBits - length));
                 return;
             }
             length -= remainingBits;
         }
-        activeWordStart += nbits;
+        if (length) activeWordStart += nbits;
     }
     else if (activeWordType == ZEROFILL) {
-        // activeWordStart += words[activeWordIdx] << shiftby;  
         size += length;
     }
     else if (activeWordType == ONEFILL) {
@@ -320,25 +292,24 @@ void BitVector<T>::appendFill1(size_t length) {
     else // for the first word
         size += length;
 
-    T nfills = length >> shiftby;
+    T nfills = ((T)length >> shiftby);
     if (nfills) { // append a 1-fill
         // set a bit in isFill
         int mod = words.size() & (nbits-1);
         if (mod)
-            isFill[isFill.size()-1] |= (T)1 << mod;
+            isFill[isFill.size()-1] |= ((T)1 << mod);
         else
             isFill.push_back((T)1);
-        // fprintf(stderr,"appendFill1(%zi) nfills: %llu mod: %i\n",length,nfills,mod);
         words.push_back(nfills | ((T)1 << (nbits-1)));
         activeWordIdx    = words.size()-1;
         activeWordType   = ONEFILL;
-        activeWordStart += nfills << shiftby;
+        activeWordStart += (nfills << shiftby);
         length &= nbits-1;
     }
     if (length > 0) {
         // set length bits to 1 in literal word
-        words.push_back((T)~(T)0 >> (nbits - length));
-        if ((words.size() >> shiftby) == isFill.size()) isFill.push_back((T)0);
+        if ((words.size() & (nbits-1)) == 0) isFill.push_back((T)0);
+        words.push_back((T)~(T)0 >> (nbits - (int)length));
         activeWordType = LITERAL;
         activeWordIdx = words.size()-1;
     }

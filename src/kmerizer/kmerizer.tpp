@@ -690,12 +690,6 @@ void Kmerizer::writeBatch(size_t bin, vector<uint32_t> &tally) {
         delete bsi;
 
         char kmerCount_file[100];
-        sprintf(kmerCount_file,"%s/%zi-mers.%zi.%u.txt",outdir,k,bin,batches[bin]);
-        FILE *fp;
-        fp = fopen(kmerCount_file, "w");
-        for(vector<uint32_t>::iterator it=tally.begin(); it!=tally.end(); it++)
-            fprintf(fp,"%u\n",*it);
-        fclose(fp);
         sprintf(kmerCount_file,"%s/%zi-mers.%zi.%u.rei",outdir,k,bin,batches[bin]);
         RangeEncodedIndex *rei = new RangeEncodedIndex(tally);
         rei->saveIndex(kmerCount_file);
@@ -706,20 +700,18 @@ void Kmerizer::writeBatch(size_t bin, vector<uint32_t> &tally) {
 void Kmerizer::save() {
     state = SAVE;
     fprintf(stderr,"counting finished, scheduling saveBin()\n");
-    saveBin(0);
-    // for(size_t bin=0; bin < NBINS; bin++)
-    //     tp.schedule( boost::bind( &Kmerizer::saveBin, this, bin ) );
+    for(size_t bin=0; bin < NBINS; bin++)
+        tp.schedule( boost::bind( &Kmerizer::saveBin, this, bin ) );
 
     // flush the task queue
     tp.wait();
     fprintf(stderr,"all bins saved to disk\n");
     state = MERGE;
     // merge the batches
-    mergeBin(0);
-    // for(size_t bin=0; bin < NBINS; bin++)
-    //     mergeBin(bin);
-    //    tp.schedule( boost::bind( &Kmerizer::mergeBin, this, bin ) );
-    // tp.wait();
+    for(size_t bin=0; bin < NBINS; bin++)
+        // mergeBin(bin);
+       tp.schedule( boost::bind( &Kmerizer::mergeBin, this, bin ) );
+    tp.wait();
     fprintf(stderr,"all bins merged\n");
     state = QUERY;
 }
@@ -742,34 +734,9 @@ void Kmerizer::mergeBin(size_t bin) {
         sprintf(new_fname,"%s/%zi-mers.%zi.bsi",outdir,k,bin);
         int result = rename(old_fname, new_fname);
 
-        // check the api - file should be the same
-        BitSlicedIndex<kword_t> *bsidx = new BitSlicedIndex<kword_t>(new_fname);
-        bsidx->saveIndex(old_fname);
-        delete bsidx;
-
         sprintf(old_fname,"%s/%zi-mers.%zi.%u.rei",outdir,k,bin,batches[bin]);
         sprintf(new_fname,"%s/%zi-mers.%zi.rei",outdir,k,bin);
         result = rename(old_fname, new_fname);
-
-        // check the api - file should be the same
-        RangeEncodedIndex *reidx = new RangeEncodedIndex(new_fname);
-        sprintf(new_fname,"%s/%zi-mers.%zi.txt",outdir,k,bin);
-        FILE *fp;
-        fp = fopen(new_fname, "w");
-        size_t row=0;
-        uint32_t t;
-        vector<uint32_t> vec;
-        while (reidx->decode(row,&t)) {
-            vec.push_back(t);
-            row++;
-            fprintf(fp,"%u\n",t);
-        }
-        fclose(fp);
-        
-        RangeEncodedIndex *reidx2 = new RangeEncodedIndex(vec);
-        reidx2->saveIndex(old_fname);
-        delete reidx;
-        delete reidx2;
 
         return;
     }

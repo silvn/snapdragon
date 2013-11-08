@@ -57,17 +57,19 @@ RangeEncodedIndex::RangeEncodedIndex(vector<uint32_t> &values) {
                 overflow.push_back(*it);
             }
         }
-        sort(overflow.begin(),overflow.end());
-        it = unique(overflow.begin(), overflow.end());
-        overflow.resize(distance(overflow.begin(),it));
         for(int i=0;i<256;i++) {
             uint64_t bits = bv[i];
             while (bits) {
-                ranges.push_back(i*64 + ffs(bits) - 1); // ffs() defined in bitvector.h. overloads __builtin_ffs(bits)
+                ranges.push_back(i*64 + __builtin_ffsll(bits) - 1);
                 bits &= bits-1;
             }
         }
-        ranges.insert(ranges.end(), overflow.begin(), overflow.end());
+        if (overflow.size() > 0) {
+            sort(overflow.begin(),overflow.end());
+            it = unique(overflow.begin(), overflow.end());
+            overflow.resize(distance(overflow.begin(),it));
+            ranges.insert(ranges.end(), overflow.begin(), overflow.end());
+        }
     }
     
     // populate a bvec for each distinct value
@@ -87,7 +89,6 @@ RangeEncodedIndex::RangeEncodedIndex(vector<uint32_t> &values) {
     it = values.begin();
     vector<uint32_t>::iterator lb = lower_bound(ranges.begin(), ranges.end(), *it);
     int prevIdx = lb - ranges.begin();
-    fprintf(stderr,"*it %u prevIdx %i currentPos %u\n",*it,prevIdx,currentPos);
     it++;
     currentPos++;
     while(it != values.end()) {
@@ -96,7 +97,6 @@ RangeEncodedIndex::RangeEncodedIndex(vector<uint32_t> &values) {
             lb = lower_bound(ranges.begin(), lb, *it);
             idx = lb - ranges.begin();
             for(int i=idx+1;i<=prevIdx;i++) {
-                // fprintf(stderr,"appendFill1(%u) i=%i\n",currentPos - runStart[i], i);
                 bvec[i]->appendFill1(currentPos - runStart[i]);
                 runStart[i] = currentPos;
             }
@@ -105,30 +105,23 @@ RangeEncodedIndex::RangeEncodedIndex(vector<uint32_t> &values) {
             lb = lower_bound(lb+1, ranges.end(), *it);
             idx = lb - ranges.begin();
             for(int i=prevIdx+1; i<=idx; i++) {
-                // fprintf(stderr,"appendFill0(%u) i=%i\n",currentPos - runStart[i], i);
                 bvec[i]->appendFill0(currentPos - runStart[i]);
                 runStart[i] = currentPos;
             }
         }
-        // fprintf(stderr,"*it %u prevIdx %i idx %i currentPos %u\n",*it,prevIdx,idx,currentPos);
         prevIdx = idx;
         it++;
         currentPos++;
     }
     // finish each bitvector
-    for(int i=0;i<=prevIdx;i++) {
-        // fprintf(stderr,"appendFill1(%u) i=%i\n",currentPos - runStart[i], i);
+    for(int i=0;i<=prevIdx;i++)
         bvec[i]->appendFill1(currentPos - runStart[i]);
-    }
-    for(int i=prevIdx+1;i<ranges.size();i++) {
-        // fprintf(stderr,"appendFill0(%u) i=%i\n",currentPos - runStart[i], i);
+    for(int i=prevIdx+1;i<ranges.size();i++)
         bvec[i]->appendFill0(currentPos - runStart[i]);
-    }
     delete runStart;
 }
 
 RangeEncodedIndex::RangeEncodedIndex(char *fname) {
-    fprintf(stderr,"RangeEncodedIndex(%s)\n",fname);
     FILE *fp;
     fp = fopen(fname, "rb");
 
@@ -152,7 +145,6 @@ RangeEncodedIndex::RangeEncodedIndex(char *fname) {
         bvbuffer = (uint64_t*) malloc(nWords*sizeof(uint64_t));
         result = fread(bvbuffer,sizeof(uint64_t), nWords, fp);
         bvec[i] = new BitVector<uint64_t>(bvbuffer);
-        fprintf(stderr,"bvec[%i] size: %llu count: %llu\n",i,bvec[i]->getSize(),bvec[i]->getCount());
         free(bvbuffer);
     }
     fclose(fp);
@@ -165,7 +157,6 @@ RangeEncodedIndex::RangeEncodedIndex(char *fname) {
 }
 
 void RangeEncodedIndex::saveIndex(char *fname) {
-    fprintf(stderr,"saveIndex(%s)\n",fname);
     // open an output file
     FILE *fp;
     fp = fopen(fname, "wb");
@@ -178,7 +169,6 @@ void RangeEncodedIndex::saveIndex(char *fname) {
     fwrite(ranges.data(),sizeof(uint32_t),nVectors,fp);
     // write each bitvector
     for(int i=0;i<nVectors;i++) {
-        fprintf(stderr,"bvec[%i] size: %llu count: %llu\n",i,bvec[i]->getSize(),bvec[i]->getCount());
         uint64_t *buf;
         size_t nWords = bvec[i]->dump(&buf);
         fwrite(&nWords,sizeof(size_t),1,fp);
@@ -196,8 +186,8 @@ void RangeEncodedIndex::fillBuffer(size_t idx) {
         bvec[i]->inflateWord(&bits,bufferStart);
         if (bits == 0) break;
         while (bits) {
-            buffer[ffs(bits)-1] = ranges[i];
-            bits &= bits-1;
+            buffer[__builtin_ffsll(bits)-1] = ranges[i];
+            bits &= bits - 1ULL;
         }
     }
 }

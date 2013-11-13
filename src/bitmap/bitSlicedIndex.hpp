@@ -24,7 +24,6 @@ public:
     void saveIndex(char* fname);
     // append the referenced value
     void append(T *value);
-    void append(T *value, int x);
     // reconstruct the value stored at position idx, return false if idx is invalid
     bool decode(size_t idx, T *value);
     size_t size() {return nValues;}
@@ -88,7 +87,7 @@ BitSlicedIndex<T>::BitSlicedIndex(char* fname) {
         free(bvbuffer);
     }
     fclose(fp);
-
+    
     this->bufferCapacity = nbits;
     this->bufferOffset=0;
     this->bufferStart=0;
@@ -103,7 +102,7 @@ template <class T>
 void BitSlicedIndex<T>::transpose(uint64_t A[64]) {
     int j, k;
     uint64_t m, t;
-    m = 0x00000000FFFFFFFF;
+    m = 0x00000000FFFFFFFFULL;
     for (j = 32; j != 0; j = j >> 1, m = m ^ (m << j)) {
         for (k = 0; k < 64; k = (k + j + 1) & ~j) {
             t = (A[k] ^ (A[k+j] >> j)) & m;
@@ -158,21 +157,6 @@ void BitSlicedIndex<T>::append(T* value) {
     nValues++;
 }
 
-template <class T>
-void BitSlicedIndex<T>::append(T* value, int x) {
-    for(int i=0; i<nwords; i++)
-        buffer[i][bufferOffset] = value[i];
-    bufferOffset++;
-    if (bufferOffset == nbits) {
-        for(int i=0;i<nwords;i++) {
-            this->transpose(buffer[i]);
-            for(int j=0;j<nbits;j++)
-                bvec[i*nbits + j]->appendWord(buffer[i][j]);
-        }
-        bufferOffset = 0;
-    }
-    nValues++;
-}
 
 template <class T>
 void BitSlicedIndex<T>::fillBuffer(size_t idx) {
@@ -189,7 +173,7 @@ void BitSlicedIndex<T>::fillBuffer(size_t idx) {
 template <class T>
 bool BitSlicedIndex<T>::decode(size_t idx, T *value) {
     if (idx >= nValues) return false;
-    if (idx >= (bufferStart + nbits) || idx < bufferStart)
+    if ((idx >= bufferStart + nbits) || idx < bufferStart)
         fillBuffer(idx);
     
     int offset= idx - bufferStart;

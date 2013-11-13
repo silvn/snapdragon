@@ -674,6 +674,15 @@ void Kmerizer::writeBatch(size_t bin, vector<uint32_t> &tally) {
         fwrite(tally.data(), sizeof(uint32_t), tally.size(), fp);
         fclose(fp);
     }
+    if (0) {
+        FILE *fp;
+        char kmer_file[100];
+        sprintf(kmer_file,"%s/%zi-mers.%zi.%u.txt",outdir,k,bin,batches[bin]);
+        fp = fopen(kmer_file, "w");
+        for(int i=0;i<kmerBuf1[bin].size();i++)
+            fprintf(fp,"%llu\t%u\n",kmerBuf1[bin][i], tally[i]);
+        fclose(fp);
+    }
     if (1) {
         char kmer_file[100];
         sprintf(kmer_file,"%s/%zi-mers.%zi.%u.bsi",outdir,k,bin,batches[bin]);
@@ -709,7 +718,6 @@ void Kmerizer::save() {
     state = MERGE;
     // merge the batches
     for(size_t bin=0; bin < NBINS; bin++)
-        // mergeBin(bin);
        tp.schedule( boost::bind( &Kmerizer::mergeBin, this, bin ) );
     tp.wait();
     fprintf(stderr,"all bins merged\n");
@@ -725,10 +733,9 @@ void Kmerizer::saveBin(size_t bin) {
 void Kmerizer::mergeBin(size_t bin) {
     if (batches[bin] == 0) return;
     // create new bitmap indexes for the kmers (binary encoded) and their frequencies (range encoded)
-    // review notes on hybrid merge
     if (batches[bin]==1) {
         // nothing to merge - only one batch for this bin
-        // move the .bsi and .rei files from .1.rei to .rei
+        // rename the index files
         char old_fname[100], new_fname[100];
         sprintf(old_fname,"%s/%zi-mers.%zi.%u.bsi",outdir,k,bin,batches[bin]);
         sprintf(new_fname,"%s/%zi-mers.%zi.bsi",outdir,k,bin);
@@ -760,27 +767,21 @@ void Kmerizer::mergeBin(size_t bin) {
     // for the merged bit sliced index
     BitSlicedIndex<kword_t> *mergedBsi = new BitSlicedIndex<kword_t>(nwords);
     vector<uint32_t> mergedCounts;
-    mergedCounts.reserve(2 * bsi[0]->size());
-    fprintf(stderr,"mergedCounts.capacity() %zi\n",mergedCounts.capacity());
-    // diy priority_queue to manage the merge
-    kword_t *kmerPairs;
-    kmerPairs = (kword_t*) calloc(nBatches*(nwords+1), sizeof(kword_t)); // the extra word holds the batch number
+    // mergedCounts.reserve(nBatches * bsi[0]->size());
+    // fprintf(stderr,"mergedCounts.capacity() %zi\n",mergedCounts.capacity());
+
+    kword_t *batchKmers;
+    batchKmers = (kword_t*) calloc(nBatches*nwords, sizeof(kword_t));
+
     // load a kmerPair from each batch
-    size_t offset=0;
     for(size_t i=0;i<nBatches;i++) {
-        if (bsi[i]->decode(0,kmerPairs + offset)) {
-            offset += nwords;
-            kmerPairs[offset]=(kword_t)i;
-            offset++;
-        }
-        else {
+        if (! bsi[i]->decode(0,batchKmers + i*nwords)) {
             fprintf(stderr,"batch %zi is empty!\n",i);
             exit(3);
         }
     }
-    offset=0;
     
-    kword_t *maxKmer, *kmer;
+    kword_t *minKmer, *maxKmer, *kmer;
     int nbits = 12; // tune me
     kword_t lutSize = 1 << nbits;
     uint64_t *inSet; // diy bitvector to mark set bits
@@ -788,36 +789,23 @@ void Kmerizer::mergeBin(size_t bin) {
     uint32_t v;
     inSet = (uint64_t*) calloc(lutSize >> 6, sizeof(uint64_t));
     counts = (uint32_t*) calloc(lutSize, sizeof(uint32_t));
-    maxKmer = (kword_t*) malloc(nwords*sizeof(kword_t));
     kmer = (kword_t*) malloc(nwords*sizeof(kword_t));
-    while (nBatches > 1) {
-        // for(size_t i=0;i<nBatches;i++) {
-        //     fprintf(stderr,"unsorted %zi ",i);
-        //     printBits(sizeof(kword_t), kmerPairs + i*(nwords+1));
-        //     fprintf(stderr," (%llu) batch: %llu\n",kmerPairs[i*(nwords+1)],kmerPairs[1+i*(nwords+1)]);
-        // }
-        // sort the kmerPairs
-        if      (nwords == 1) sort((kmer2_t*)kmerPairs, (kmer2_t*)(kmerPairs + (nwords+1)*nBatches));
-        else if (nwords == 2) sort((kmer3_t*)kmerPairs, (kmer3_t*)(kmerPairs + (nwords+1)*nBatches));
-        else if (nwords == 3) sort((kmer4_t*)kmerPairs, (kmer4_t*)(kmerPairs + (nwords+1)*nBatches));
-        else if (nwords == 4) sort((kmer5_t*)kmerPairs, (kmer5_t*)(kmerPairs + (nwords+1)*nBatches));
-        else if (nwords == 5) sort((kmer6_t*)kmerPairs, (kmer6_t*)(kmerPairs + (nwords+1)*nBatches));
-        else if (nwords == 6) sort((kmer7_t*)kmerPairs, (kmer7_t*)(kmerPairs + (nwords+1)*nBatches));
-        else if (nwords == 7) sort((kmer8_t*)kmerPairs, (kmer8_t*)(kmerPairs + (nwords+1)*nBatches));
-        else if (nwords == 8) sort((kmer9_t*)kmerPairs, (kmer9_t*)(kmerPairs + (nwords+1)*nBatches));
-
-        // fprintf(stderr,"nBatches: %zi\n",nBatches);
-        // for(int i=0;i<nBatches;i++) {
-        //     for(int k=0;k<nwords;k++) {
-        //         fprintf(stderr,"i: %i, batch: %llu, kword[%i]: ",
-        //         i,kmerPairs[i*(nwords+1)+nwords],k);
-        //         printBits(sizeof(kword_t), kmerPairs + i*(nwords+1)+k);
-        //         fprintf(stderr,"\n");
-        //     }
-        // }
-        // exit(0);
-        // take the minimum value (pointer to beginning of list)
-        kword_t *minKmer = kmerPairs;
+    maxKmer = (kword_t*) malloc(nwords*sizeof(kword_t));
+    vector<size_t> remainingBatches, todo;
+    for(size_t b=0;b<nBatches;b++)
+        remainingBatches.push_back(b);
+    
+    while (remainingBatches.size() > 1) {
+        // select minKmer from the batchKmers
+        vector<size_t>::iterator bi = remainingBatches.begin();
+        minKmer = batchKmers + *bi*nwords;
+        bi++;
+        while (bi != remainingBatches.end()) {
+            if(kmerless(batchKmers + *bi*nwords, minKmer, nwords))
+                minKmer = batchKmers + *bi*nwords;
+            bi++;
+        }
+        
         // maximum value that will fit in the lookup table + 1
         for(int i=0;i<nwords;i++) maxKmer[i]=minKmer[i];
         if ((kword_t)~(kword_t)0 - minKmer[nwords-1] < lutSize)
@@ -825,89 +813,65 @@ void Kmerizer::mergeBin(size_t bin) {
         else
             maxKmer[nwords-1] += lutSize;
 
-        vector<kword_t> remainingBatches;
-        for(int i=0;i<nBatches;i++) {
-            kword_t batch = kmerPairs[i*(nwords+1) + nwords];
-            bool check = bsi[batch]->decode(batchOffset[batch],kmer);
+        for(bi = remainingBatches.begin(); bi != remainingBatches.end(); bi++) {
+            bool check = bsi[*bi]->decode(batchOffset[*bi],kmer);
             while (check) {
-                // for(int j=0;j<nwords;j++) fprintf(stderr,"%i %i kmer:%llu min:%llu max:%llu\n",i,j,kmer[j],minKmer[j],maxKmer[j]);
                 if (kmerless(kmer,maxKmer,nwords)) {
-                    if (kmerless(kmer,minKmer,nwords)) {
-                        fprintf(stderr,"kmers out of order\nkmer:");
-                        printBits(sizeof(kword_t), kmer);
-                        fprintf(stderr,"\n min:");
-                        printBits(sizeof(kword_t), minKmer);
-                        fprintf(stderr,"\n");
-                    }
                     kword_t koffset = kmer[nwords-1] - minKmer[nwords-1];
-                    // fprintf(stderr,"i %i batch %llu koffset %llu\n",i,batch,koffset);
-                    inSet[koffset >> 6] |= (kword_t)1 << (koffset & 63);
-                    if (rei[batch]->decode(batchOffset[batch], &v))
+                    inSet[koffset >> 6] |= ((kword_t)1 << (koffset & 63));
+                    if (rei[*bi]->decode(batchOffset[*bi], &v))
                         counts[koffset] += v;
                     else
                         { fputs("error decoding from rei",stderr); exit(3); }
-                    batchOffset[batch]++;
-                    check = bsi[batch]->decode(batchOffset[batch],kmer);
+                    batchOffset[*bi]++;
+                    check = bsi[*bi]->decode(batchOffset[*bi],kmer);
                 }
                 else {
-                    // fprintf(stderr,"kmer ge max\n");
                     check = false;
-                    remainingBatches.push_back(batch);
+                    todo.push_back(*bi);
                 }
             }
         }
-        if (nBatches > remainingBatches.size())
-            fprintf(stderr,"exhausted a batch nBatches now %zi\n",nBatches);
-        nBatches = remainingBatches.size();
-
-        // populate the kmerPairs array for each of the remaining batches
-        for(int i=0;i<nBatches;i++) {
-            kword_t batch = remainingBatches[i];
-            bsi[batch]->decode(batchOffset[batch],kmerPairs + i*(nwords+1));
-            kmerPairs[i*(nwords+1) + nwords] = batch;
-        }
-
         // loop over the set bits and reconstruct (merged) kmers
         // encode the kmers and save the counts for after the loop in mergedCounts.push_back(counts[offset])
         // because the range encoded bitmap index needs all the data before it can do anything
+        // fprintf(stderr,"reconstruct kmers from lut\n");
         int iter = lutSize >> 6;
         for(int i=0;i<iter;i++) {
             uint64_t bits = inSet[i];
-            inSet[i]=(uint64_t)0;
-            int oi = (i<<6) - 1; // - 1 because ffs(bits) is 1 based
-            while (bits) {
-                offset = ffs(bits) + oi;
-                mergedCounts.push_back(counts[offset]);
-                counts[offset] = 0; // reset to 0 for next time
-                maxKmer[nwords-1] = minKmer[nwords-1] + offset;
-                mergedBsi->append(maxKmer);
-                bits &= bits-1;
+            if (bits) {
+                inSet[i]=(uint64_t)0;
+                int oi = (i<<6) - 1; // - 1 because ffs(bits) is 1 based
+                while (bits) {
+                    int offset = __builtin_ffsll(bits) + oi;
+                    mergedCounts.push_back(counts[offset]);
+                    counts[offset] = 0; // reset to 0 for next time
+                    maxKmer[nwords-1] = minKmer[nwords-1] + offset;
+                    mergedBsi->append(maxKmer);
+                    bits &= bits-1;
+                }
             }
         }
+        
+        // finished a batch?
+        if (remainingBatches.size() > todo.size())
+            swap(remainingBatches,todo);
+        todo.clear();
+        
+        // populate the batchKmers array for each of the remaining batches
+        for(bi = remainingBatches.begin(); bi!=remainingBatches.end();bi++)
+            bsi[*bi]->decode(batchOffset[*bi],batchKmers + *bi*nwords);
     }
-    if (nBatches==1) {
-        kword_t batch = kmerPairs[nwords];
-        while (bsi[batch]->decode(batchOffset[batch],kmer)) {
+    if (remainingBatches.size()==1) {
+        size_t batch = remainingBatches[0];
+        size_t bo = batchOffset[batch];
+        while (bsi[batch]->decode(bo,kmer)) {
             mergedBsi->append(kmer);
-            if (rei[batch]->decode(batchOffset[batch], &v))
+            if (rei[batch]->decode(bo, &v))
                 mergedCounts.push_back(v);
-            batchOffset[batch]++;
+            bo++;
         }
     }
-    fprintf(stderr,"after merge mergedCounts.size() %zi mergedBsi.size() %zi\n",mergedCounts.size(),mergedBsi->size());
-    
-    char merged_fname[100];
-    sprintf(merged_fname,"%s/%zi-mers.%zi.bsi",outdir,k,bin);
-    fprintf(stderr,"mergedBsi->saveIndex(%s)\n",merged_fname);
-    mergedBsi->saveIndex(merged_fname);
-    delete mergedBsi;
-    sprintf(merged_fname,"%s/%zi-mers.%zi.rei",outdir,k,bin);
-    fprintf(stderr,"RangeEncodedIndex(mergedCounts) size=%zi\n",mergedCounts.size());
-    RangeEncodedIndex *mergedRei = new RangeEncodedIndex(mergedCounts);
-    fprintf(stderr,"mergedRei->saveIndex(%s) mergedRei->size() %zi\n",merged_fname,mergedRei->size());
-    mergedRei->saveIndex(merged_fname);
-    delete mergedRei;
-
     for(int i=0;i<batches[bin];i++) {
         delete bsi[i];
         delete rei[i];
@@ -917,4 +881,13 @@ void Kmerizer::mergeBin(size_t bin) {
         sprintf(batchFname,"%s/%zi-mers.%zi.%i.rei",outdir,k,bin,i+1);
         if (remove(batchFname)) { fprintf(stderr, "error removing %s\n",batchFname); exit(3); }
     }
+    
+    char merged_fname[100];
+    sprintf(merged_fname,"%s/%zi-mers.%zi.bsi",outdir,k,bin);
+    mergedBsi->saveIndex(merged_fname);
+    delete mergedBsi;
+    sprintf(merged_fname,"%s/%zi-mers.%zi.rei",outdir,k,bin);
+    RangeEncodedIndex *mergedRei = new RangeEncodedIndex(mergedCounts);
+    mergedRei->saveIndex(merged_fname);
+    delete mergedRei;
 }

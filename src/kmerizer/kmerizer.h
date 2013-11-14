@@ -12,7 +12,7 @@
 
 #include "../boost/threadpool.hpp"
 #include "../bitmap/bitSlicedIndex.hpp"
-#include "../bitmap/rangeEncodedIndex.hpp"
+// #include "../bitmap/rangeEncodedIndex.hpp"
 
 typedef uint64_t kword_t;
 using namespace std;

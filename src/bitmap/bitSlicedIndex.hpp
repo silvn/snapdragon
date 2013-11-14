@@ -68,19 +68,20 @@ BitSlicedIndex<T>::BitSlicedIndex(int nwords) {
 template <class T>
 BitSlicedIndex<T>::BitSlicedIndex(char* fname) {
     this->nbits = 8*sizeof(T);
+    // fprintf(stderr,"BitSlicedIndex(%s) nbits %zi\n",fname,nbits);
     // fread() the number of words
     FILE *fp;
     fp = fopen(fname, "rb");
     size_t result = fread(&nwords,sizeof(int),1,fp);
-    if (result != 1) {fputs ("Reading error",stderr); exit (3);}
+    if (result != 1) {fputs ("Reading error1",stderr); exit (3);}
     result = fread(&nValues, sizeof(size_t),1,fp);
-    if (result != 1) {fputs ("Reading error",stderr); exit (3);}
+    if (result != 1) {fputs ("Reading error2",stderr); exit (3);}
     int nVectors = nwords*nbits;
     bvec = (BitVector<T>**) malloc(nVectors*sizeof(BitVector<T>*));
     for(int i=0;i<nVectors;i++) {
         T nT,*bvbuffer;
-        result = fread(&nT,sizeof(size_t),1,fp);
-        if (result != 1) {fputs ("Reading error",stderr); exit (3);}
+        result = fread(&nT,sizeof(int),1,fp);
+        if (result != 1) {fputs ("Reading error3",stderr); exit (3);}
         bvbuffer = (T*) malloc(nT*sizeof(T));
         result = fread(bvbuffer,sizeof(T), nT, fp);
         bvec[i] = new BitVector<T>(bvbuffer);
@@ -88,6 +89,8 @@ BitSlicedIndex<T>::BitSlicedIndex(char* fname) {
     }
     fclose(fp);
     
+    // fprintf(stderr,"BitSlicedIndex(%s) nValues %zi nVectors %i\n",fname,nValues,nVectors);
+ 
     this->bufferCapacity = nbits;
     this->bufferOffset=0;
     this->bufferStart=0;
@@ -160,6 +163,7 @@ void BitSlicedIndex<T>::append(T* value) {
 
 template <class T>
 void BitSlicedIndex<T>::fillBuffer(size_t idx) {
+    // fprintf(stderr,"fillBuffer(%zi)\n",idx);
     // in each bitvector, fetch an uncompressed bitvector word that contains idx
     // populate the buffers by transposing the uncompressed words
     bufferStart = idx & ~(nbits - 1);
@@ -172,6 +176,7 @@ void BitSlicedIndex<T>::fillBuffer(size_t idx) {
 
 template <class T>
 bool BitSlicedIndex<T>::decode(size_t idx, T *value) {
+    // fprintf(stderr,"decode(%zi) nValues: %zi bufferStart: %zi nbits: %zi\n",idx,nValues,bufferStart,nbits);
     if (idx >= nValues) return false;
     if ((idx >= bufferStart + nbits) || idx < bufferStart)
         fillBuffer(idx);
@@ -206,7 +211,7 @@ void BitSlicedIndex<T>::saveIndex(char *fname) {
     for(int i=0; i<nwords*nbits; i++) {
         T *buf;
         size_t nT = bvec[i]->dump(&buf);
-        fwrite(&nT,sizeof(size_t),1,fp);
+        fwrite(&nT,sizeof(int),1,fp);
         fwrite(buf,sizeof(T),nT,fp);
         free(buf);
     }

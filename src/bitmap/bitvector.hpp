@@ -22,6 +22,12 @@ public:
     uint64_t getSize() { return size; }
     uint64_t getCount() { return count; }
 
+    BitVector<T>* operator&(const BitVector<T>& rhs) const;
+    BitVector<T>* operator|(const BitVector<T>& rhs) const;
+    void operator&=(const BitVector<T>& rhs);
+    void operator|=(const BitVector<T>& rhs);
+    void flip();
+
 private:
     vector<T> words;  // a mix of literal and fill words. MSB of fill words indicate the type of fill
     vector<T> isFill; // uncompressed bitvector indicating which words are fills
@@ -40,6 +46,8 @@ private:
     uint64_t activeWordEnd;   // uncompressed bit position after last bit in a word
 
     void seek(size_t wordStart); // locate the activeWord that contains wordStart
+    void firstActiveWord(); // jump directly to first word
+    void nextActiveWord(); // advance to next word
 };
 
 // for debugging
@@ -96,7 +104,12 @@ BitVector<T>::BitVector(T *buf) {
         fprintf(stderr,"isFill.size() != nfills %zi %zi\n",isFill.size(),nfills);
         exit(1);
     }
-    
+
+    firstActiveWord();
+}
+
+template <class T>
+void BitVector<T>::firstActiveWord() {
     activeWordIdx   = 0;
     activeWordStart = 0;
     activeWordEnd   = nbits;
@@ -107,6 +120,23 @@ BitVector<T>::BitVector(T *buf) {
         else
             activeWordType = ZEROFILL;
         activeWordEnd = words[0] << shiftby;
+    }
+}
+
+template <class T>
+void BitVector<T>::nextActiveWord() {
+    activeWordIdx++;
+    activeWordStart = activeWordEnd;
+    if (isFill[activeWordIdx >> shiftby] & ((T)1 << (activeWordIdx & (nbits-1)))) {
+        if (words[activeWordIdx] >> (nbits-1))
+            activeWordType = ONEFILL;
+        else
+            activeWordType = ZEROFILL;
+        activeWordEnd += (words[activeWordIdx] << shiftby);
+    }
+    else {
+        activeWordType  = LITERAL;
+        activeWordEnd += nbits;
     }
 }
 
@@ -237,8 +267,15 @@ void BitVector<T>::appendFill0(size_t length) {
     else if (activeWordType == ONEFILL)
         size += length;
     else if (activeWordType == ZEROFILL) {
-        fprintf(stderr,"appendFill0 called when activeWordType == ZEROFILL!\n");
-        exit(5);
+        // extend current zerofill
+        size+=length;
+        T nfills = (T)length >> shiftby;
+        if (nfills) {
+            words[words.size()-1] += nfills;
+            length &= nbits-1;
+        }
+        // fprintf(stderr,"appendFill0 called when activeWordType == ZEROFILL!\n");
+        // exit(5);
     }
     else // for the first word
         size += length;
@@ -286,8 +323,15 @@ void BitVector<T>::appendFill1(size_t length) {
         size += length;
     }
     else if (activeWordType == ONEFILL) {
-        fprintf(stderr,"appendFill1 called with activeWordType == ONEFILL\n");
-        exit(4);
+        // extend current onefill
+        size+=length;
+        T nfills = (T)length >> shiftby;
+        if (nfills) {
+            words[words.size()-1] += nfills;
+            length &= nbits-1;
+        }
+        // fprintf(stderr,"appendFill1 called with activeWordType == ONEFILL\n");
+        // exit(4);
     }
     else // for the first word
         size += length;
@@ -313,6 +357,150 @@ void BitVector<T>::appendFill1(size_t length) {
         activeWordType = LITERAL;
         activeWordIdx = words.size()-1;
     }
+}
+
+template <class T>
+BitVector<T>* BitVector<T>::operator&(const BitVector<T>& rhs) const {
+    BitVector<T> *res = new BitVector<T>();
+    // first ensure that rhs is the same size.
+    if (rhs.size != size) {
+        fprintf(stderr,"rhs.size != size\n");
+        return res;
+    }
+    firstActiveWord();
+    rhs.firstActiveWord();
+    while (activeWordIdx<words.size() and rhs.activeWordIdx < rhs.words.size()) {
+        // advance until words overlap
+        while (activeWordEnd <= rhs.activeWordStart) nextActiveWord();
+        while (rhs.activeWordEnd <= activeWordStart) rhs.nextActiveWord();
+        // compare overlapping words
+        if (activeWordType == LITERAL) {
+            if (rhs.activeWordType == LITERAL)
+                res->appendWord(words[activeWordIdx] & rhs.words[rhs.activeWordIdx]);
+            else if (rhs.activeWordType == ONEFILL)
+                res->appendWord(words[activeWordIdx]);
+            else
+                res->appendFill0(rhs.activeWordEnd - activeWordStart);
+            nextActiveWord();
+        }
+        else if (activeWordType == ONEFILL) {
+            if (rhs.activeWordType == LITERAL) {
+                res->appendWord(rhs.words[rhs.activeWordIdx]);
+                rhs.nextActiveWord();
+            }
+            else if (rhs.activeWordType == ONEFILL) {
+                if (activeWordEnd <= rhs.activeWordEnd) {
+                    res->appendFill1(activeWordEnd - res->size);
+                    nextActiveWord();
+                }
+                else {
+                    res->appendFill1(rhs.activeWordEnd - res->size);
+                    rhs.nextActiveWord();
+                }
+            }
+            else {
+                res->appendFill0(rhs.activeWordEnd - res->size);
+                rhs.nextActiveWord();
+            }
+        }
+        else { // ZEROFILL
+            if (activeWordEnd <= rhs.activeWordEnd) {
+                res->appendFill0(activeWordEnd - res->size);
+                nextActiveWord();
+            }
+            else {
+                res->appendFill0(rhs.activeWordEnd - res->size);
+                rhs.nextActiveWord();
+            }
+        }
+    }
+    return res;
+}
+
+template <class T>
+BitVector<T>* BitVector<T>::operator|(const BitVector<T>& rhs) const {
+    BitVector<T> *res = new BitVector<T>();
+    // first ensure that rhs is the same size.
+    if (rhs.size != size) {
+        fprintf(stderr,"rhs.size != size\n");
+        return res;
+    }
+    firstActiveWord();
+    rhs.firstActiveWord();
+    while (activeWordIdx<words.size() and rhs.activeWordIdx < rhs.words.size()) {
+        // advance until words overlap
+        while (activeWordEnd <= rhs.activeWordStart) nextActiveWord();
+        while (rhs.activeWordEnd <= activeWordStart) rhs.nextActiveWord();
+        // compare overlapping words
+        if (activeWordType == LITERAL) {
+            if (rhs.activeWordType == LITERAL)
+                res->appendWord(words[activeWordIdx] | rhs.words[rhs.activeWordIdx]);
+            else if (rhs.activeWordType == ZEROFILL)
+                res->appendWord(words[activeWordIdx]);
+            else
+                res->appendFill1(rhs.activeWordEnd - activeWordStart);
+            nextActiveWord();
+        }
+        else if (activeWordType == ZEROFILL) {
+            if (rhs.activeWordType == LITERAL) {
+                res->appendWord(rhs.words[rhs.activeWordIdx]);
+                rhs.nextActiveWord();
+            }
+            else if (rhs.activeWordType == ZEROFILL) {
+                if (activeWordEnd <= rhs.activeWordEnd) {
+                    res->appendFill0(activeWordEnd - res->size);
+                    nextActiveWord();
+                }
+                else {
+                    res->appendFill0(rhs.activeWordEnd - res->size);
+                    rhs.nextActiveWord();
+                }
+            }
+            else {
+                res->appendFill1(rhs.activeWordEnd - res->size);
+                rhs.nextActiveWord();
+            }
+        }
+        else { // ONEFILL
+            res->appendFill1(activeWordEnd - res->size);
+            nextActiveWord();
+        }
+    }
+    return res;
+}
+
+template <class T>
+void BitVector<T>::operator&=(const BitVector<T>& rhs) {
+    BitVector<T>* res = this & rhs;
+    words.swap(res->words);
+    isFill.swap(res->isFill);
+    count = res->count;
+}
+
+template <class T>
+void BitVector<T>::operator|=(const BitVector<T>& rhs) {
+    BitVector<T>* res = this | rhs;
+    words.swap(res->words);
+    isFill.swap(res->isFill);
+    count = res->count;
+}
+
+template <class T>
+void BitVector<T>::flip() {
+    // iterate over the words
+    // flip fill words by toggling MSB
+    // flip literal words with XOR ~0
+    T allones = ~(T)0;
+    T one2zero = allones >> 1;
+    T zero2one = ~one2zero;
+    for(size_t i=0;i<words.size();i++)
+        if(isFill[i >> shiftby] & ((T)1 << (i & (nbits-1))))
+            if (words[i] >> (nbits-1)) // one-fill
+                words[i] &= one2zero;
+            else
+                words[i] |= zero2one;
+        else
+            words[i] ^= allones;
 }
 
 #endif

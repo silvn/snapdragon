@@ -28,6 +28,8 @@ public:
     bool decode(size_t idx, T *value);
     size_t size() {return nValues;}
     
+    BitVector<T>* operator==(T *value);
+    
 
 private:
     BitVector<T> **bvec;
@@ -217,5 +219,14 @@ void BitSlicedIndex<T>::saveIndex(char *fname) {
     }
     fclose(fp);
 }
+
+template <class T>
+BitVector<T>* BitSlicedIndex<T>::operator==(T *value) {
+    // for each set bit in value, AND the corresponding bitvectors (while count>0)
+    // for each unset bit in value, OR the corresponding bitvectors (while count < size-1) and then flip
+    // finally AND the results
+}
+
+
 
 #endif

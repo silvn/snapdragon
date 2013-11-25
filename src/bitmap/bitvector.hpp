@@ -310,11 +310,12 @@ void BitVector<T>::appendFill1(size_t length) {
         int remainingBits = nbits - usedBits;
         size += length;
         if (remainingBits) {
-            words[activeWordIdx] |= (((T)~(T)0) << usedBits); // fill the word with 1's
-            if (remainingBits > length) { // flip some bits back to 0
-                words[activeWordIdx] &= (((T)~(T)0) >> (remainingBits - length));
+            if (length < remainingBits) {
+                words[activeWordIdx] |= (((T)1 << length) - 1) << remainingBits - length;
                 return;
             }
+            else
+                words[activeWordIdx] |= ((T)1 << remainingBits) - 1;
             length -= remainingBits;
         }
         if (length) activeWordStart += nbits;
@@ -353,7 +354,7 @@ void BitVector<T>::appendFill1(size_t length) {
     if (length > 0) {
         // set length bits to 1 in literal word
         if ((words.size() & (nbits-1)) == 0) isFill.push_back((T)0);
-        words.push_back((T)~(T)0 >> (nbits - (int)length));
+        words.push_back((T)~(T)0 << (nbits - (int)length));
         activeWordType = LITERAL;
         activeWordIdx = words.size()-1;
     }

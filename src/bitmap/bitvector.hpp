@@ -1,5 +1,6 @@
 #ifndef SNAPDRAGON_BITVECTOR_H
 #define SNAPDRAGON_BITVECTOR_H
+#include <cstdio>
 #include <vector>
 using namespace std;
 #define ZEROFILL 0

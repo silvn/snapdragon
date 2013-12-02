@@ -117,8 +117,9 @@ LCBitSlicedIndex<T>::LCBitSlicedIndex(char* fname) {
     int nVectors = nbits;
     bvec = (BitVector<T>**) malloc(nVectors*sizeof(BitVector<T>*));
     for(int i=0;i<nVectors;i++) {
-        T nT,*bvbuffer;
-        result = fread(&nT,sizeof(int),1,fp);
+        size_t nT;
+        T *bvbuffer;
+        result = fread(&nT,sizeof(size_t),1,fp);
         if (result != 1) {fputs ("Reading error3",stderr); exit (3);}
         bvbuffer = (T*) malloc(nT*sizeof(T));
         result = fread(bvbuffer,sizeof(T), nT, fp);
@@ -285,7 +286,7 @@ void LCBitSlicedIndex<T>::saveIndex(char *fname) {
     for(int i=0; i<nbits; i++) {
         T *buf;
         size_t nT = bvec[i]->dump(&buf);
-        fwrite(&nT,sizeof(int),1,fp);
+        fwrite(&nT,sizeof(size_t),1,fp);
         fwrite(buf,sizeof(T),nT,fp);
         free(buf);
     }

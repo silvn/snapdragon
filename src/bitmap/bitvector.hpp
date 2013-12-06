@@ -51,6 +51,51 @@ private:
     void nextActiveWord(); // advance to next word
 };
 
+// template <class T>
+// void LCBitSlicedIndex<T>::transpose(uint64_t A[64]) {
+void transpose(uint64_t A[64]) {
+    int j, k;
+    uint64_t m, t;
+    m = 0x00000000FFFFFFFFULL;
+    for (j = 32; j != 0; j = j >> 1, m = m ^ (m << j)) {
+        for (k = 0; k < 64; k = (k + j + 1) & ~j) {
+            t = (A[k] ^ (A[k+j] >> j)) & m;
+            A[k] = A[k] ^ t;
+            A[k+j] = A[k+j] ^ (t << j);
+        }
+    }
+}
+// template <class T>
+// void LCBitSlicedIndex<T>::transpose(uint32_t A[32]) {
+void transpose(uint32_t A[32]) {
+    int j, k;
+    uint32_t m, t;
+    
+    m = 0x0000FFFF;
+    for (j = 16; j != 0; j = j >> 1, m = m ^ (m << j)) {
+        for (k = 0; k < 32; k = (k + j + 1) & ~j) {
+            t = (A[k] ^ (A[k+j] >> j)) & m;
+            A[k] = A[k] ^ t;
+            A[k+j] = A[k+j] ^ (t << j);
+        }
+    }
+}
+// template <class T>
+// void LCBitSlicedIndex<T>::transpose(uint16_t A[16]) {
+void transpose(uint16_t A[16]) {
+    int j, k;
+    uint16_t m, t;
+    
+    m = 0x00FF;
+    for (j = 8; j != 0; j = j >> 1, m = m ^ (m << j)) {
+        for (k = 0; k < 16; k = (k + j + 1) & ~j) {
+            t = (A[k] ^ (A[k+j] >> j)) & m;
+            A[k] = A[k] ^ t;
+            A[k+j] = A[k+j] ^ (t << j);
+        }
+    }
+}
+
 // for debugging
 void printBits(size_t const size, void const * const ptr) {
     unsigned char *b = (unsigned char*) ptr;

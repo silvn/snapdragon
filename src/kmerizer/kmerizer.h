@@ -5,11 +5,13 @@
 #define NBINS 256
 #define CANONICAL 'C'
 #define BOTH 'B'
+#define ASIS 'A'
 #define COUNT 'C'
 #define SAVE 'S'
 #define MERGE 'M'
 #define QUERY 'Q'
-
+#include <queue>
+#include <utility>
 #include "../boost/threadpool.hpp"
 #include "../bitmap/bitSlicedIndex.hpp"
 #include "../bitmap/lcbitSlicedIndex.hpp"
@@ -49,6 +51,8 @@ class Kmerizer {
     uint32_t   batches[NBINS]; // keep track of the number of serialized batches
 
     boost::threadpool::pool tp;
+    
+    BitVector<uint32_t> *BitMask[NBINS]; // query results (default all)
 
 public:
     // constructor
@@ -69,11 +73,16 @@ public:
     // write distinct kmers and counts to disk (merging multiple batches)
     void save();
 
-    // setup access to bitmap indexes
-    void load() {}
-    
-    // frequency distribution
-    void histogram() {}
+    // query functions
+    void filter(uint32_t min, uint32_t max); // results are stored in BitMask
+    void query(); // what's the use case for this?????
+    void intersect(const char * lhs, const char * rhs); // for many kmers, intersect databases
+
+    // BitMask is used by all of these functions
+    void stats(); // unique, distinct, total, max_count
+    void histo(); // for each frequency, report the number of kmers
+    void dump(bool dumpfasta); // write tab delimited text or fasta to stdout
+    void histogram(); // frequency distribution ()
 
 private:
 
@@ -111,14 +120,18 @@ private:
     // partition kmers into bins before calling sortCount1()
     uint32_t binSortCount1(kword_t *kb, uint32_t kbt, vector<uint32_t> &tally);
     void binSortCount1(vector<kword_t> &kb, vector<uint32_t> &tally);
+    void binSortCount1(vector<kword_t> &kb, BitSlicedIndex<kword_t> *kmerIdx, LCBitSlicedIndex<uint32_t> *countIdx);
+    void sortCount1(vector<kword_t> &kb, BitSlicedIndex<kword_t> *kmerIdx, LCBitSlicedIndex<uint32_t> *countIdx);
 
     void writeBatch(size_t bin, vector<uint32_t> &tally);
+    void sortwriteBatch(size_t bin);
     
     // call uniqify again and write lookup table to disk
     void saveBin(size_t bin);
     
     // merge raw kmers and counts into bitmap self-indexes
     void mergeBin(size_t bin);
+    void mergeBin1(size_t bin);
 
     static uint64_t reverse_complement(uint64_t v) {
       v = ((v >> 2)  & 0x3333333333333333UL) | ((v & 0x3333333333333333UL) << 2);
@@ -155,5 +168,7 @@ private:
         return rctable[val & 255UL];
     }
 };
+void binSortCounter(vector<kword_t> &kb, unsigned int my_k, vector<uint32_t> &tally);
+void sortCountKmers(vector<kword_t> &kmers, vector<uint32_t> &tally);
 #include "kmerizer.tpp"
 #endif // #ifndef SNAPDRAGON_KMERIZER_H

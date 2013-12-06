@@ -42,9 +42,9 @@ private:
     size_t bufferStart; // position of the beginning of the Buffer
     void fillBuffer(size_t idx); // fill the buffer with words to cover idx, returns false if idx too large
 
-    void transpose(uint64_t A[64]);
-    void transpose(uint32_t A[32]);
-    void transpose(uint16_t A[16]);
+    // void transpose(uint64_t A[64]);
+    // void transpose(uint32_t A[32]);
+    // void transpose(uint16_t A[16]);
 };
 
 template <class T>
@@ -104,47 +104,6 @@ BitSlicedIndex<T>::BitSlicedIndex(char* fname) {
     fillBuffer(0);
 }
 
-template <class T>
-void BitSlicedIndex<T>::transpose(uint64_t A[64]) {
-    int j, k;
-    uint64_t m, t;
-    m = 0x00000000FFFFFFFFULL;
-    for (j = 32; j != 0; j = j >> 1, m = m ^ (m << j)) {
-        for (k = 0; k < 64; k = (k + j + 1) & ~j) {
-            t = (A[k] ^ (A[k+j] >> j)) & m;
-            A[k] = A[k] ^ t;
-            A[k+j] = A[k+j] ^ (t << j);
-        }
-    }
-}
-template <class T>
-void BitSlicedIndex<T>::transpose(uint32_t A[32]) {
-    int j, k;
-    uint32_t m, t;
-    
-    m = 0x0000FFFF;
-    for (j = 16; j != 0; j = j >> 1, m = m ^ (m << j)) {
-        for (k = 0; k < 32; k = (k + j + 1) & ~j) {
-            t = (A[k] ^ (A[k+j] >> j)) & m;
-            A[k] = A[k] ^ t;
-            A[k+j] = A[k+j] ^ (t << j);
-        }
-    }
-}
-template <class T>
-void BitSlicedIndex<T>::transpose(uint16_t A[16]) {
-    int j, k;
-    uint16_t m, t;
-    
-    m = 0x00FF;
-    for (j = 8; j != 0; j = j >> 1, m = m ^ (m << j)) {
-        for (k = 0; k < 16; k = (k + j + 1) & ~j) {
-            t = (A[k] ^ (A[k+j] >> j)) & m;
-            A[k] = A[k] ^ t;
-            A[k+j] = A[k+j] ^ (t << j);
-        }
-    }
-}
 
 
 template <class T>
@@ -154,7 +113,7 @@ void BitSlicedIndex<T>::append(T* value) {
     bufferOffset++;
     if (bufferOffset == nbits) {
         for(int i=0;i<nwords;i++) {
-            this->transpose(buffer[i]);
+            transpose(buffer[i]);
             for(int j=0;j<nbits;j++)
                 bvec[i*nbits + j]->appendWord(buffer[i][j]);
         }
@@ -173,7 +132,7 @@ void BitSlicedIndex<T>::fillBuffer(size_t idx) {
     for(int i=0;i<nwords;i++) {
         for(int j=0;j<nbits;j++)
             bvec[i*nbits+j]->inflateWord(buffer[i]+j,bufferStart);
-        this->transpose(buffer[i]);
+        transpose(buffer[i]);
     }
 }
 
@@ -198,7 +157,7 @@ void BitSlicedIndex<T>::saveIndex(char *fname) {
             // fill buffer with 0's
             for(int j=bufferOffset;j<nbits;j++)
                 buffer[i][j] = (T)0;
-            this->transpose(buffer[i]);
+            transpose(buffer[i]);
             for(int j=0;j<nbits;j++)
                 bvec[i*nbits + j]->appendWord(buffer[i][j]);
         }

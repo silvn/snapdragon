@@ -38,14 +38,19 @@ int Kmerizer::allocate(const size_t maximem) {
     double elapsedTime;
     gettimeofday(&t1, NULL);
 
-    memset(batches,        0, sizeof(uint32_t) * NBINS);
+    memset(batches, 0, sizeof(uint32_t) * NBINS);
 
     if (nwords>1)
-        memset(kmerBufTally,   0, sizeof(uint32_t) * NBINS);
+        memset(kmerBufTally, 0, sizeof(uint32_t) * NBINS);
 
-    uniformBins = true;
-    uint32_t capacity = 100000;
     this->reservedSpace = maximem / kmerSize / NBINS;
+    uint32_t capacity = reservedSpace; //100000;
+
+    if (nwords == 1)
+        uniformBins = true;
+    else
+        capacity = reservedSpace;
+     
     if (reservedSpace > capacity)
         reservedSpace -= capacity;
     else
@@ -394,12 +399,10 @@ void Kmerizer::resizeBins1() {
         entries += kmerBuf1[bin].size();
         vacancies += kmerBufSize[bin] - kmerBuf1[bin].size();
     }
-    float ratio = (float)vacancies/(float)entries;
-    // fprintf(stderr,"resizeBins1() entries: %u vacancies: %u reservedSpace: %u\n",entries,vacancies,reservedSpace);
+    double ratio = (double)vacancies/(double)entries;
 
     for(size_t bin=0;bin<NBINS;bin++) {
-        kmerBufSize[bin] = kmerBuf1[bin].size() + 1 + floor(kmerBuf1[bin].size()*ratio);
-        // fprintf(stderr,"kmerBufSize[%zi]=%u\n",bin,kmerBufSize[bin]);
+        kmerBufSize[bin] = kmerBuf1[bin].size() + 1 + floor(ratio*(double)kmerBuf1[bin].size());
         if (kmerBufSize[bin] < kmerBuf1[bin].capacity()) {
             // make a copy and swap
             vector<kword_t> v (kmerBuf1[bin]);
@@ -476,15 +479,19 @@ void Kmerizer::uniqify1(size_t bin) {
     // copy them into the LUT
 
     // if (state == SAVE || kmerBufTally[bin] > 0.9*(float)kmerBufSize[bin]) {
-    if (state == SAVE || kmerBuf1[bin].size() > 0.9*(float)kmerBufSize[bin]) {
+    if (state == SAVE || kmerBuf1[bin].size() > floor(0.9*(float)kmerBufSize[bin])) {
         vector<uint32_t> tally;
         // output distinct kmers
         // if (kmerBufTally[bin] > 0) {
         if (kmerBuf1[bin].size() > 0) {
-            binSortCount1(kmerBuf1[bin],tally);
+            // fprintf(stderr,"%zi\t%zi\n",bin,kmerBuf1[bin].size());
+            // binSortCount1(kmerBuf1[bin],tally);
+            // sortCountKmers(kmerBuf1[bin],tally);
             // sortCount1(kmerBuf1[bin],tally);
             batches[bin]++;
-            writeBatch(bin, tally);
+
+            // writeBatch(bin, tally);
+            sortwriteBatch(bin);
             // declare the buffer empty
             // kmerBufTally[bin]=0;
             kmerBuf1[bin].clear();
@@ -538,26 +545,75 @@ void Kmerizer::sortCount1(vector<kword_t> &kb, vector<uint32_t> &tally) {
     kb.resize(distinct+1);
 }
 
-uint32_t Kmerizer::sortCount1(kword_t *kb, uint32_t kbt, vector<uint32_t> &tally) {
-    sort(kb, kb + kbt);
+void Kmerizer::sortCount1(vector<kword_t> &kb, BitSlicedIndex<kword_t> *kmerIdx, LCBitSlicedIndex<uint32_t> *countIdx) {
+    sort(kb.begin(), kb.end());
     // uniq -c
-    uint32_t distinct = 0;
-    kword_t prevKmer = kb[distinct]; // to be cache friendly
-    tally.push_back(1); // first kmer
-    for (size_t i=1;i<kbt;i++) {
-        if(kb[i] == prevKmer)
-            tally.back()++;
+    kword_t kmer = kb[0];
+    uint32_t tally = 1; // first kmer
+    for(vector<kword_t>::iterator it = kb.begin()+1; it < kb.end(); it++) {
+        if(*it == kmer)
+            tally++;
         else {
-            distinct++;
-            tally.push_back(1);
-            kb[distinct] = kb[i];
-            prevKmer = kb[i];
+            kmerIdx->append(&kmer);
+            countIdx->append(&tally);
+            tally=1;
+            kmer = *it;
         }
     }
-    return distinct+1;
+    kmerIdx->append(&kmer);
+    countIdx->append(&tally);
+}
+
+void Kmerizer::binSortCount1(vector<kword_t> &kb, BitSlicedIndex<kword_t> *kmerIdx, LCBitSlicedIndex<uint32_t> *countIdx) {
+    if (kb.size() < (1 << 18)) {
+        sortCount1(kb,kmerIdx,countIdx);
+        return;
+    }
+    int hbits = 12;
+    int hbins = 1 << hbits; // 4096
+    uint32_t *histogram = (uint32_t *) calloc(hbins, sizeof(uint32_t));
+
+    int shiftby = 2*k - hbits;
+    if (shiftby <= 0) {
+        // direct hashing
+        for(size_t i=0;i<kb.size();i++)
+            histogram[kb[i]]++;
+
+        for(uint32_t b = 0; b < hbins; b++)
+            if (histogram[b] > 0) {
+                kword_t kmerized_b = (kword_t)b;
+                kmerIdx->append(&kmerized_b);
+                countIdx->append(histogram + b);
+            }
+    }
+    else {
+        vector<vector<kword_t> > keys;// [hbins];
+        keys.resize(hbins);
+        // count the number of kmers in each bin
+        for(vector<kword_t>::iterator it = kb.begin(); it < kb.end(); it++)
+            histogram[*it >> shiftby]++;
+        
+        // allocate space for each bin
+        for(int i=0; i<hbins; i++)
+            if (histogram[i] > 0)
+                keys[i].reserve(histogram[i]);
+
+        // loop over the kmers again and copy them into their bins
+        for(vector<kword_t>::iterator it = kb.begin(); it < kb.end(); it++)
+            keys[*it >> shiftby].push_back(*it);
+        
+        for(uint32_t b = 0; b < hbins; b++)
+            if (keys[b].size() > 0)
+                sortCount1(keys[b],kmerIdx,countIdx);
+    }
+    free(histogram);
 }
 
 void Kmerizer::binSortCount1(vector<kword_t> &kb, vector<uint32_t> &tally) {
+    if (kb.size() < (1 << 18)) {
+        sortCount1(kb,tally);
+        return;
+    }
     int hbits = 12;
     int hbins = 1 << hbits; // 4096
     uint32_t *histogram = (uint32_t *) calloc(hbins, sizeof(uint32_t));
@@ -604,54 +660,6 @@ void Kmerizer::binSortCount1(vector<kword_t> &kb, vector<uint32_t> &tally) {
     free(histogram);
 }
 
-uint32_t Kmerizer::binSortCount1(kword_t *kb, uint32_t kbt, vector<uint32_t> &tally) {
-    int hbits = 12;
-    int hbins = 1 << hbits; // 4096
-    uint32_t *histogram = (uint32_t *) calloc(hbins, sizeof(uint32_t));
-    uint32_t distinct = 0;
-
-    int shiftby = 2*k - hbits;
-    if (shiftby <= 0) {
-        // direct hashing
-        for(size_t i=0;i<kbt;i++)
-            histogram[kb[i]]++;
-
-        for(uint32_t b = 0; b < hbins; b++)
-            if (histogram[b] > 0) {
-                kb[distinct] = (kword_t) b;
-                distinct++;
-                tally.push_back(histogram[b]);
-            }
-    }
-    else {
-        vector<vector<kword_t> > keys;// [hbins];
-        keys.resize(hbins);
-        
-        // count the number of kmers in each bin
-        for(size_t i=0;i<kbt;i++)
-            histogram[kb[i] >> shiftby]++;
-        
-        // allocate space for each bin
-        for(int i=0; i<hbins; i++)
-            if (histogram[i] > 0)
-                keys[i].reserve(histogram[i]);
-        free(histogram);
-
-        // loop over the kmers again and copy them into their bins
-        for(uint32_t i=0;i<kbt;i++)
-            keys[kb[i] >> shiftby].push_back(kb[i]);
-        
-        for(uint32_t b = 0; b < hbins; b++) {
-            if (keys[b].size() > 0) {
-                kword_t *K = keys[b].data();
-                uint32_t bin_distinct = sortCount1(K,keys[b].size(),tally);
-                memcpy(kb + distinct, K, sizeof(kword_t) * bin_distinct);
-                distinct += bin_distinct;
-            }
-        }
-    }
-    return distinct;
-}
 
 void Kmerizer::writeBatch(size_t bin, vector<uint32_t> &tally) {
     // if (bin != 0) return;
@@ -692,7 +700,8 @@ void Kmerizer::writeBatch(size_t bin, vector<uint32_t> &tally) {
         uint32_t *cbuf = tally.data();
         if (nwords == 1) {
             kword_t *buf = kmerBuf1[bin].data();
-            for(int i = 0; i < kmerBuf1[bin].size(); i++) {
+            size_t n_vals = kmerBuf1[bin].size();
+            for(int i = 0; i < n_vals; i++) {
                 bsi->append(buf + i);
                 lcbsi->append(cbuf + i);
             }
@@ -702,14 +711,32 @@ void Kmerizer::writeBatch(size_t bin, vector<uint32_t> &tally) {
                 bsi->append(kmerBuf[bin] + i*nwords);
                 lcbsi->append(cbuf + i);
             }
-        bsi->saveIndex(kmer_file);
-        lcbsi->saveIndex(kmerCount_file);
+        // bsi->saveIndex(kmer_file);
+        // lcbsi->saveIndex(kmerCount_file);
         delete bsi;
         delete lcbsi;
 
         // RangeEncodedIndex *rei = new RangeEncodedIndex(tally);
         // rei->saveIndex(kmerCount_file);
         // delete rei;
+    }
+}
+void Kmerizer::sortwriteBatch(size_t bin) {
+    // if (bin != 0) return;
+    if (1) {
+        char kmer_file[100];
+        sprintf(kmer_file,"%s/%zi-mers.%zi.%u.bsi",outdir,k,bin,batches[bin]);
+        BitSlicedIndex<kword_t> *bsi = new BitSlicedIndex<kword_t>(nwords);
+        char kmerCount_file[100];
+        sprintf(kmerCount_file,"%s/%zi-mers.%zi.%u.lcbsi",outdir,k,bin,batches[bin]);
+        LCBitSlicedIndex<uint32_t> *lcbsi = new LCBitSlicedIndex<uint32_t>();
+
+        binSortCount1(kmerBuf1[bin],bsi,lcbsi);
+
+        bsi->saveIndex(kmer_file);
+        lcbsi->saveIndex(kmerCount_file);
+        delete bsi;
+        delete lcbsi;
     }
 }
 
@@ -731,10 +758,14 @@ void Kmerizer::save() {
     
     state = MERGE;
     // merge the batches
+    fprintf(stderr,"starting merge\n");
     // mergeBin(0);
-    for(size_t bin=0; bin < NBINS; bin++)
-        // mergeBin(bin);
-       tp.schedule( boost::bind( &Kmerizer::mergeBin, this, bin ) );
+    if (nwords == 1)
+        for(size_t bin=0; bin < NBINS; bin++)
+           tp.schedule( boost::bind( &Kmerizer::mergeBin1, this, bin ) );
+    else
+        for(size_t bin=0; bin < NBINS; bin++)
+           tp.schedule( boost::bind( &Kmerizer::mergeBin, this, bin ) );
     tp.wait();
     fprintf(stderr,"all bins merged\n");
     state = QUERY;
@@ -745,6 +776,164 @@ void Kmerizer::saveBin(size_t bin) {
     else uniqify(bin);
 }
 
+// sort | uniq -c
+// values are initially randomly distributed
+// sort cache friendly batches (2MB?)
+// merge and count with rolling direct hashing method
+// initially, replace the input vector and populate tally vector
+// later, append values and counts to bit sliced index
+
+// merge and count too slow
+// use a proper priority queue instead of this rolling hash crap
+
+class mycmp {
+public:
+    mycmp() { }
+    bool operator() (const pair <kword_t, size_t>& lhs, const pair <kword_t, size_t>& rhs) const {
+        return (lhs.first > rhs.first);
+    }
+};
+typedef priority_queue<pair <kword_t,size_t>, vector<pair <kword_t,size_t> >, mycmp> pq_type;
+
+void sortCountKmers(vector<kword_t> &kmers, vector<uint32_t> &tally) {
+    size_t batch_size = 1 << 18; // 2^21 bytes = 2MB
+    // sort batches and find the global minimum kmer
+    size_t n_kmers = kmers.size();
+    kword_t *karray = kmers.data();
+    size_t to=batch_size;
+    // kword_t min_kmer = kmers[0];
+    vector<size_t> offsets;
+    timeval t1, t2;
+    double elapsedTime;
+    gettimeofday(&t1, NULL);
+    pq_type pq;
+    for(size_t from=0; from < n_kmers; from += batch_size) {
+        if (to > n_kmers) to = n_kmers;
+        sort(karray + from, karray + to);
+        // if (karray[from] < min_kmer) min_kmer = karray[from];
+        pq.push(make_pair(karray[from],from));
+        offsets.push_back(from);
+        to += batch_size;
+    }
+    gettimeofday(&t2, NULL);
+    elapsedTime = t2.tv_sec - t1.tv_sec + (t2.tv_usec - t1.tv_usec) / 1000000.0;   // us to ms
+    fprintf(stderr,"sorting %zi kmers in %zi batches took %f seconds\n",n_kmers,offsets.size(),elapsedTime);
+
+    // merge using priority queue
+    gettimeofday(&t1, NULL);
+    vector<kword_t> merged;
+    merged.reserve(n_kmers); // reserve memory now to avoid realloc (n_kmers is the upper bound)
+    merged.push_back(pq.top().first); // make merged and tally non empty
+    tally.push_back(0);
+    pair <kword_t,size_t> ks;
+    while (!pq.empty()) {
+        ks = pq.top();
+        pq.pop();
+        if (merged.back() == ks.first)
+            tally.back()++;
+        else {
+            merged.push_back(ks.first);
+            tally.push_back(1);
+        }
+        ks.second++;
+        if (ks.second < n_kmers && ks.second % batch_size != 0) { 
+            ks.first = karray[ks.second];
+            pq.push(ks);
+        }
+    }
+
+    
+    // // merge and count distinct kmers using a rolling hash
+    // vector<kword_t> merged;
+    // vector<size_t> batches, todo;
+    // batches.resize(offsets.size());
+    // for(size_t i=0;i<offsets.size();i++) batches[i]=i;
+    // 
+    // int nbits = 18; // tune me
+    // kword_t lutSize = 1 << nbits;
+    // uint64_t *inSet; // diy bitvector to mark set bits
+    // uint32_t *counts; // direct hash of merged counts
+    // inSet = (uint64_t*) calloc(lutSize >> 6, sizeof(uint64_t));
+    // counts = (uint32_t*) calloc(lutSize, sizeof(uint32_t));
+    // 
+    // int iterations=0;
+    // while (batches.size() > 1) {
+    //     kword_t max_kmer, kmer;
+    //     // maximum value that will fit in the lookup table + 1
+    //     if ((kword_t)~(kword_t)0 - min_kmer < lutSize)
+    //         max_kmer = (kword_t)~(kword_t)0;
+    //     else
+    //         max_kmer = min_kmer + lutSize;
+    //     if (iterations % 1000 == 0) fprintf(stderr,"iteration %i min_kmer %llu max_kmer %llu\n",iterations,min_kmer,max_kmer);
+    //     // if (iterations>10) exit(4);
+    //     for(vector<size_t>::iterator bi = batches.begin(); bi < batches.end(); bi++) {
+    //         size_t batchOffset = offsets[*bi];
+    //         size_t end = (*bi + 1) * batch_size;
+    //         if (end > n_kmers) end = n_kmers;
+    //         while (batchOffset < end) {
+    //             if (kmers[batchOffset] < max_kmer) {
+    //                 kword_t koffset = kmers[batchOffset] - min_kmer;
+    //                 inSet[koffset >> 6] |= ((kword_t)1 << (koffset & (kword_t)63));
+    //                 counts[koffset]++;
+    //                 batchOffset++;
+    //             }
+    //             else {
+    //                 todo.push_back(*bi);
+    //                 break;
+    //             }
+    //         }
+    //         offsets[*bi] = batchOffset;
+    //     }
+    //     // loop over the set bits and reconstruct (merged) kmers
+    //     // fprintf(stderr,"reconstruct kmers from lut\n");
+    //     int iter = lutSize >> 6;
+    //     for(int i=0;i<iter;i++) {
+    //         uint64_t bits = inSet[i];
+    //         if (bits) {
+    //             inSet[i]=(uint64_t)0;
+    //             int oi = (i<<6) - 1; // - 1 because ffs(bits) is 1 based
+    //             while (bits) {
+    //                 int offset = __builtin_ffsll(bits) + oi;
+    //                 tally.push_back(counts[offset]);
+    //                 counts[offset] = 0; // reset to 0 for next time
+    //                 merged.push_back(min_kmer + offset);
+    //                 bits &= bits-1;
+    //             }
+    //         }
+    //     }
+    //     
+    //     // finished a batch?
+    //     if (batches.size() > todo.size())
+    //         swap(batches,todo);
+    //     todo.clear();
+    //     if (batches.size() > 0) {
+    //         // find the min_kmer for the next iteration
+    //         min_kmer = kmers[offsets[batches[0]]];
+    //         for(int i=1;i<batches.size();i++)
+    //             if (kmers[offsets[batches[i]]] < min_kmer)
+    //                 min_kmer = kmers[offsets[batches[i]]];
+    //     }
+    //     iterations++;
+    // }
+    // if (batches.size()==1) {
+    //     size_t batch = batches[0];
+    //     size_t end = batch_size * (batch + 1);
+    //     if (end > n_kmers) end = n_kmers;
+    //     for(size_t bo = offsets[batch]; bo < end; bo++) {
+    //         if (merged.back() < kmers[bo]) {
+    //             merged.push_back(kmers[bo]);
+    //             tally.push_back(1);
+    //         }
+    //         else
+    //             tally.back()++;
+    //     }
+    // }
+    swap(merged, kmers);
+    gettimeofday(&t2, NULL);
+    elapsedTime = t2.tv_sec - t1.tv_sec + (t2.tv_usec - t1.tv_usec) / 1000000.0;   // us to ms
+    fprintf(stderr,"merging took %f seconds\n",elapsedTime);
+    // exit(3);
+}
 
 void Kmerizer::mergeBin(size_t bin) {
     // fprintf(stderr,"mergeBin(%zi) batches: %zi\n",bin,batches[bin]);
@@ -947,4 +1136,126 @@ void Kmerizer::mergeBin(size_t bin) {
     // sprintf(merged_fname,"%s/%zi-mers.%zi.rei",outdir,k,bin);
     // mergedRei->saveIndex(merged_fname);
     // delete mergedRei;
+}
+
+struct kcb_type {
+    kword_t kmer;
+    uint32_t tally;
+    size_t batch;
+};
+class kcb_cmp {
+public:
+    kcb_cmp() { }
+    bool operator() (const kcb_type& lhs, const kcb_type& rhs) const {
+        return (lhs.kmer > rhs.kmer);
+    }
+};
+typedef priority_queue<kcb_type, vector<kcb_type>, kcb_cmp> kcb_pq_type;
+
+void Kmerizer::mergeBin1(size_t bin) {
+    if (batches[bin] == 0) return;
+    // create new bitmap indexes for the kmers and their frequencies
+    if (batches[bin]==1) {
+        // nothing to merge - only one batch for this bin
+        // rename the index files
+        char old_fname[100], new_fname[100];
+        sprintf(old_fname,"%s/%zi-mers.%zi.%u.bsi",outdir,k,bin,batches[bin]);
+        sprintf(new_fname,"%s/%zi-mers.%zi.bsi",outdir,k,bin);
+        int result = rename(old_fname, new_fname);
+
+        sprintf(old_fname,"%s/%zi-mers.%zi.%u.lcbsi",outdir,k,bin,batches[bin]);
+        sprintf(new_fname,"%s/%zi-mers.%zi.lcbsi",outdir,k,bin);
+        result = rename(old_fname, new_fname);
+
+        return;
+    }
+    // need to merge the batches
+    // load each from disk
+    BitSlicedIndex<kword_t> **bsi;
+    LCBitSlicedIndex<uint32_t> **lcbsi;
+
+    size_t *batchOffset;
+    size_t nBatches = batches[bin];
+
+    bsi = (BitSlicedIndex<kword_t> **) malloc(nBatches*sizeof(BitSlicedIndex<kword_t>*));
+    lcbsi = (LCBitSlicedIndex<uint32_t> **) malloc(nBatches*sizeof(LCBitSlicedIndex<uint32_t>*));
+
+    batchOffset = (size_t *) calloc(nBatches,sizeof(size_t));
+    for(size_t i=0;i<nBatches;i++) {
+        char batchFname[100];
+        sprintf(batchFname,"%s/%zi-mers.%zi.%zi.bsi",outdir,k,bin,i+1);
+        bsi[i] = new BitSlicedIndex<kword_t>(batchFname);
+        sprintf(batchFname,"%s/%zi-mers.%zi.%zi.lcbsi",outdir,k,bin,i+1);
+        lcbsi[i] = new LCBitSlicedIndex<uint32_t>(batchFname);
+    }
+    // for the merged bit sliced index
+    BitSlicedIndex<kword_t> *mergedBsi = new BitSlicedIndex<kword_t>(1);
+    LCBitSlicedIndex<uint32_t> *mergedlcBsi = new LCBitSlicedIndex<uint32_t>();
+
+    // put the first kmer and its frequency from each batch into a priority queue
+    kcb_pq_type pq;
+
+    kcb_type kcb_triple;
+    kword_t kmer;
+    uint32_t tally;
+    size_t batch;
+    for(size_t i=0;i<nBatches;i++) {
+        if (! bsi[i]->decode(0,&(kcb_triple.kmer))) {
+            fprintf(stderr,"batch %zi is empty!\n",i);
+            exit(3);
+        }
+        if (! lcbsi[i]->decode(0,&(kcb_triple.tally))) {
+            fprintf(stderr,"count batch %zi is empty\n",i);
+            exit(3);
+        }
+        kcb_triple.batch = i;
+        pq.push(kcb_triple);
+    }
+
+    // iterate until the priority queue is empty
+    kcb_triple = pq.top();
+    kmer = kcb_triple.kmer;
+    tally = 0;
+    while (!pq.empty()) {
+        kcb_triple = pq.top();
+        pq.pop();
+        if (kcb_triple.kmer == kmer)
+            tally += kcb_triple.tally;
+        else {
+            mergedBsi->append(&kmer);
+            mergedlcBsi->append(&tally);
+            kmer = kcb_triple.kmer;
+            tally = kcb_triple.tally;
+        }
+        batch = kcb_triple.batch;
+        batchOffset[batch]++;
+        if (bsi[batch]->decode(batchOffset[batch],&(kcb_triple.kmer)) &&
+            lcbsi[batch]->decode(batchOffset[batch],&(kcb_triple.tally)))
+            pq.push(kcb_triple);
+    }
+    mergedBsi->append(&kmer);
+    mergedlcBsi->append(&tally);
+
+
+    for(int i=0;i<batches[bin];i++) {
+        delete bsi[i];
+        delete lcbsi[i];
+        // delete rei[i];
+        char batchFname[100];
+        sprintf(batchFname,"%s/%zi-mers.%zi.%i.bsi",outdir,k,bin,i+1);
+        if (remove(batchFname)) { fprintf(stderr, "error removing %s\n",batchFname); exit(3); }
+        // sprintf(batchFname,"%s/%zi-mers.%zi.%i.rei",outdir,k,bin,i+1);
+        sprintf(batchFname,"%s/%zi-mers.%zi.%i.lcbsi",outdir,k,bin,i+1);
+        if (remove(batchFname)) { fprintf(stderr, "error removing %s\n",batchFname); exit(3); }
+    }
+    
+    char merged_fname[100];
+    sprintf(merged_fname,"%s/%zi-mers.%zi.bsi",outdir,k,bin);
+    mergedBsi->saveIndex(merged_fname);
+    delete mergedBsi;
+
+    sprintf(merged_fname,"%s/%zi-mers.%zi.lcbsi",outdir,k,bin);
+    mergedlcBsi->saveIndex(merged_fname);
+    delete mergedlcBsi;
+
 }

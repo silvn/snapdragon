@@ -1,50 +1,111 @@
 #include <zlib.h>
 #include <sys/stat.h> // mkdir()
+#include <unistd.h> // getopt()
 #include "kseq.h"
 #include "kmerizer.h"
 
 KSEQ_INIT(gzFile, gzread)
 int main(int argc, char *argv[])
 {
-	// parse args
-	if (argc != 7) {
-		fprintf(stderr, "Usage: %s <input file> <k> <threads> <cap_bytes> <mode ('A|B|C')> <output dir>\n", argv[0]);
-		return 1;
-	}
-	gzFile fp;
-	fp = gzopen(argv[1], "r");
-	size_t k = atoi(argv[2]);
-	size_t threads = atoi(argv[3]);
-	size_t cap_bytes = atoll(argv[4]);
-	char* mode = argv[5];
-	char* outprefix = argv[6];
-	// create output directory if it doesn't exist
-	mkdir(outprefix,0755);
+    extern char *optarg;
+    extern int optind;
+    int c=0,k=0,t=0,u=0,l=0;
+    size_t s=0;
+    char m,*program,*d,*f;
+    bool help=false;
+    while ((c = getopt (argc, argv, "p:k:s:t:m:d:u:f:l:")) != -1)
+        switch (c) {
+            case 'p': // program to run (count, stats, histo, dump)
+                program = optarg;
+                break;
+            case 'k': // kmer length
+                k = atoi(optarg);
+                break;
+            case 's': // size bytes to reserve for counting
+                s = atoll(optarg);
+                break;
+            case 't': // number of threads
+                t = atoi(optarg);
+                break;
+            case 'm': // counting mode (A|B|C)
+                m = optarg[0];
+                break;
+            case 'd': // data directory (save or read)
+                d = optarg;
+                break;
+            case 'f': // input file
+                f = optarg;
+                break;
+            case 'l': // lower count
+                l = atoi(optarg);
+                break;
+            case 'u': // upper count
+                u = atoi(optarg);
+                break;
+            case '?': // help required
+                help = true;
+                break;
+        }
+    
+    if (help || ! program) {
+        switch (program[0]) {
+            case 'c': // count help
+                fprintf(stderr,"count -f <fast[aq] input> -k <kmer length> -s <max memory> -t <number of threads> -m <mode (A|B|C)> -d <output dir>");
+            case 's': // stats help
+                fprintf(stderr,"stats -d <index dir> -k <kmer length>\n");
+            case 'h': // histo help
+                fprintf(stderr,"histo -d <index dir> -k <kmer length>\n");
+            case 'd': // dump help
+                fprintf(stderr,"dump -d <index dir> -k <kmer length> -l <lower count> -u <upper count>\n");
+            default: // generic help
+                fprintf(stderr,"Usage: %s <cmd> [options]\nWhere cmd is one of: count, stats, histo, dump\ntry %s <cmd> -?\n",argv[0],argv[0]);
+        }
+        return 1;
+    }
 
-	Kmerizer *counter = new Kmerizer(k, threads, outprefix, mode[0]);
-	int rc = counter->allocate(cap_bytes);
-	if (rc != 0) {
-		fprintf(stderr,"failed to allocate %zi bytes\n",cap_bytes);
-		exit(1);
-	}
-	// process each seq from input
-	kseq_t *seq = kseq_init(fp);
-	int length;
-	while ((length = kseq_read(seq)) >= 0) {
-        int offset=0;
-        while (offset < length) {
-            while (offset < length && seq->seq.s[offset] == 'N') offset++;
-            // offset is next non-N
-            int offset2=offset+1;
-            while (offset2 < length && seq->seq.s[offset2] != 'N') offset2++;
-            // offset2 is end of seq or next N
-            if (offset2 - offset > k)
-                counter->addSequence(seq->seq.s + offset, offset2 - offset);
-            offset = offset2;
+    switch (program[0]) {
+        case 'c': { // count
+            Kmerizer *counter = new Kmerizer(k, t, d, m);
+        	mkdir(d,0755);
+
+        	int rc = counter->allocate(s);
+        	if (rc != 0) {
+        		fprintf(stderr,"failed to allocate %zi bytes\n",s);
+        		exit(1);
+        	}
+        	// process each seq from input
+            gzFile fp;
+        	fp = gzopen(f, "r");
+        	kseq_t *seq = kseq_init(fp);
+        	int length;
+        	while ((length = kseq_read(seq)) >= 0) {
+                int offset=0;
+                while (offset < length) {
+                    while (offset < length && seq->seq.s[offset] == 'N') offset++;
+                    // offset is next non-N
+                    int offset2=offset+1;
+                    while (offset2 < length && seq->seq.s[offset2] != 'N') offset2++;
+                    // offset2 is end of seq or next N
+                    if (offset2 - offset > k)
+                        counter->addSequence(seq->seq.s + offset, offset2 - offset);
+                    offset = offset2;
+                }
+            }
+        	kseq_destroy(seq);
+        	gzclose(fp);
+        	counter->save();
+            break;
+        }
+        case 's': { // stats
+            Kmerizer *counter = new Kmerizer(k, 1, d, 'A');
+            counter->stats();
+            break;
+        }
+        case 'h': { // histo
+            Kmerizer *counter = new Kmerizer(k, 1, d, 'A');
+            counter->histo();
+            break;
         }
     }
-	kseq_destroy(seq);
-	gzclose(fp);
-	counter->save();
-	return 0;
+    return 0;
 }

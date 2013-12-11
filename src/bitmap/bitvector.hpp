@@ -23,10 +23,10 @@ public:
     uint64_t getSize() { return size; }
     uint64_t getCount() { return count; }
 
-    BitVector<T>* operator&(const BitVector<T>& rhs) const;
-    BitVector<T>* operator|(const BitVector<T>& rhs) const;
-    void operator&=(const BitVector<T>& rhs);
-    void operator|=(const BitVector<T>& rhs);
+    BitVector<T>* operator&(BitVector<T>* rhs);
+    BitVector<T>* operator|(BitVector<T>* rhs);
+    void operator&=(BitVector<T>* rhs);
+    void operator|=(BitVector<T>* rhs);
     void flip();
 
 private:
@@ -407,57 +407,57 @@ void BitVector<T>::appendFill1(size_t length) {
 }
 
 template <class T>
-BitVector<T>* BitVector<T>::operator&(const BitVector<T>& rhs) const {
+BitVector<T>* BitVector<T>::operator&(BitVector<T>* rhs) {
     BitVector<T> *res = new BitVector<T>();
     // first ensure that rhs is the same size.
-    if (rhs.size != size) {
-        fprintf(stderr,"rhs.size != size\n");
+    if (rhs->size != size) {
+        fprintf(stderr,"rhs->size != size\n");
         return res;
     }
     firstActiveWord();
-    rhs.firstActiveWord();
-    while (activeWordIdx<words.size() and rhs.activeWordIdx < rhs.words.size()) {
+    rhs->firstActiveWord();
+    while (activeWordIdx<words.size() and rhs->activeWordIdx < rhs->words.size()) {
         // advance until words overlap
-        while (activeWordEnd <= rhs.activeWordStart) nextActiveWord();
-        while (rhs.activeWordEnd <= activeWordStart) rhs.nextActiveWord();
+        while (activeWordEnd <= rhs->activeWordStart) nextActiveWord();
+        while (rhs->activeWordEnd <= activeWordStart) rhs->nextActiveWord();
         // compare overlapping words
         if (activeWordType == LITERAL) {
-            if (rhs.activeWordType == LITERAL)
-                res->appendWord(words[activeWordIdx] & rhs.words[rhs.activeWordIdx]);
-            else if (rhs.activeWordType == ONEFILL)
+            if (rhs->activeWordType == LITERAL)
+                res->appendWord(words[activeWordIdx] & rhs->words[rhs->activeWordIdx]);
+            else if (rhs->activeWordType == ONEFILL)
                 res->appendWord(words[activeWordIdx]);
             else
-                res->appendFill0(rhs.activeWordEnd - activeWordStart);
+                res->appendFill0(rhs->activeWordEnd - activeWordStart);
             nextActiveWord();
         }
         else if (activeWordType == ONEFILL) {
-            if (rhs.activeWordType == LITERAL) {
-                res->appendWord(rhs.words[rhs.activeWordIdx]);
-                rhs.nextActiveWord();
+            if (rhs->activeWordType == LITERAL) {
+                res->appendWord(rhs->words[rhs->activeWordIdx]);
+                rhs->nextActiveWord();
             }
-            else if (rhs.activeWordType == ONEFILL) {
-                if (activeWordEnd <= rhs.activeWordEnd) {
+            else if (rhs->activeWordType == ONEFILL) {
+                if (activeWordEnd <= rhs->activeWordEnd) {
                     res->appendFill1(activeWordEnd - res->size);
                     nextActiveWord();
                 }
                 else {
-                    res->appendFill1(rhs.activeWordEnd - res->size);
-                    rhs.nextActiveWord();
+                    res->appendFill1(rhs->activeWordEnd - res->size);
+                    rhs->nextActiveWord();
                 }
             }
             else {
-                res->appendFill0(rhs.activeWordEnd - res->size);
-                rhs.nextActiveWord();
+                res->appendFill0(rhs->activeWordEnd - res->size);
+                rhs->nextActiveWord();
             }
         }
         else { // ZEROFILL
-            if (activeWordEnd <= rhs.activeWordEnd) {
+            if (activeWordEnd <= rhs->activeWordEnd) {
                 res->appendFill0(activeWordEnd - res->size);
                 nextActiveWord();
             }
             else {
-                res->appendFill0(rhs.activeWordEnd - res->size);
-                rhs.nextActiveWord();
+                res->appendFill0(rhs->activeWordEnd - res->size);
+                rhs->nextActiveWord();
             }
         }
     }
@@ -465,47 +465,47 @@ BitVector<T>* BitVector<T>::operator&(const BitVector<T>& rhs) const {
 }
 
 template <class T>
-BitVector<T>* BitVector<T>::operator|(const BitVector<T>& rhs) const {
+BitVector<T>* BitVector<T>::operator|(BitVector<T>* rhs) {
     BitVector<T> *res = new BitVector<T>();
     // first ensure that rhs is the same size.
-    if (rhs.size != size) {
-        fprintf(stderr,"rhs.size != size\n");
+    if (rhs->size != size) {
+        fprintf(stderr,"rhs->size != size\n");
         return res;
     }
     firstActiveWord();
-    rhs.firstActiveWord();
-    while (activeWordIdx<words.size() and rhs.activeWordIdx < rhs.words.size()) {
+    rhs->firstActiveWord();
+    while (activeWordIdx<words.size() and rhs->activeWordIdx < rhs->words.size()) {
         // advance until words overlap
-        while (activeWordEnd <= rhs.activeWordStart) nextActiveWord();
-        while (rhs.activeWordEnd <= activeWordStart) rhs.nextActiveWord();
+        while (activeWordEnd <= rhs->activeWordStart) nextActiveWord();
+        while (rhs->activeWordEnd <= activeWordStart) rhs->nextActiveWord();
         // compare overlapping words
         if (activeWordType == LITERAL) {
-            if (rhs.activeWordType == LITERAL)
-                res->appendWord(words[activeWordIdx] | rhs.words[rhs.activeWordIdx]);
-            else if (rhs.activeWordType == ZEROFILL)
+            if (rhs->activeWordType == LITERAL)
+                res->appendWord(words[activeWordIdx] | rhs->words[rhs->activeWordIdx]);
+            else if (rhs->activeWordType == ZEROFILL)
                 res->appendWord(words[activeWordIdx]);
             else
-                res->appendFill1(rhs.activeWordEnd - activeWordStart);
+                res->appendFill1(rhs->activeWordEnd - activeWordStart);
             nextActiveWord();
         }
         else if (activeWordType == ZEROFILL) {
-            if (rhs.activeWordType == LITERAL) {
-                res->appendWord(rhs.words[rhs.activeWordIdx]);
-                rhs.nextActiveWord();
+            if (rhs->activeWordType == LITERAL) {
+                res->appendWord(rhs->words[rhs->activeWordIdx]);
+                rhs->nextActiveWord();
             }
-            else if (rhs.activeWordType == ZEROFILL) {
-                if (activeWordEnd <= rhs.activeWordEnd) {
+            else if (rhs->activeWordType == ZEROFILL) {
+                if (activeWordEnd <= rhs->activeWordEnd) {
                     res->appendFill0(activeWordEnd - res->size);
                     nextActiveWord();
                 }
                 else {
-                    res->appendFill0(rhs.activeWordEnd - res->size);
-                    rhs.nextActiveWord();
+                    res->appendFill0(rhs->activeWordEnd - res->size);
+                    rhs->nextActiveWord();
                 }
             }
             else {
-                res->appendFill1(rhs.activeWordEnd - res->size);
-                rhs.nextActiveWord();
+                res->appendFill1(rhs->activeWordEnd - res->size);
+                rhs->nextActiveWord();
             }
         }
         else { // ONEFILL
@@ -517,16 +517,16 @@ BitVector<T>* BitVector<T>::operator|(const BitVector<T>& rhs) const {
 }
 
 template <class T>
-void BitVector<T>::operator&=(const BitVector<T>& rhs) {
-    BitVector<T>* res = this & rhs;
+void BitVector<T>::operator&=(BitVector<T>* rhs) {
+    BitVector<T>* res = *this & rhs;
     words.swap(res->words);
     isFill.swap(res->isFill);
     count = res->count;
 }
 
 template <class T>
-void BitVector<T>::operator|=(const BitVector<T>& rhs) {
-    BitVector<T>* res = this | rhs;
+void BitVector<T>::operator|=(BitVector<T>* rhs) {
+    BitVector<T>* res = *this | rhs;
     words.swap(res->words);
     isFill.swap(res->isFill);
     count = res->count;

@@ -15,6 +15,7 @@ public:
     LCBitSlicedIndex();
     // load an index from a file
     LCBitSlicedIndex(char* fname);
+    LCBitSlicedIndex(char* fname, bool onlyCounts);
     // clean up
     ~LCBitSlicedIndex() {
         for(int i=0;i<nbits;i++)
@@ -32,14 +33,23 @@ public:
     BitVector<T>* continuousRange(const T min, const T max);
     // given a list of values, convert into a set of continuousRange queries
     // and OR the result vectors
-    BitVector<T>* discreteRange(vector<T> vals);        
-
+    BitVector<T>* discreteRange(vector<T> vals);
+    
+    vector<T> dValues; // vector of distinct sorted values
+    vector<uint32_t> dFrequency; // corresponding vector of frequencies
+    uint32_t unique() { return (dValues[0] > 1) ? 0 : dFrequency[0]; }
+    uint32_t maxCount() { return dValues[dValues.size()-1]; }
+    uint32_t totalFrequency() {
+        uint32_t total;
+        for(vector<uint32_t>::iterator it=dFrequency.begin();it < dFrequency.end(); it++)
+            total += *it;
+        return total;
+    }
+    
 private:
     BitVector<T> **bvec;
     T nbits; // 8*sizeof(T)
     size_t nValues; // total number of values represented - same as size of each bvec
-    vector<T> dValues; // vector of distinct sorted values
-    vector<uint32_t> dFrequency; // corresponding vector of frequencies
     
     uint64_t bv[256]; // 256*64 bits = 2^14 = 16384
     uint32_t counts[16384];
@@ -134,6 +144,28 @@ LCBitSlicedIndex<T>::LCBitSlicedIndex(char* fname) {
 
     this->buffer = (T*) malloc(bufferCapacity*sizeof(T));
     fillBuffer(0);
+}
+
+template <class T>
+LCBitSlicedIndex<T>::LCBitSlicedIndex(char* fname, bool onlyCounts) {
+    this->nbits = 8*sizeof(T);
+    FILE *fp;
+    fp = fopen(fname, "rb");
+    // read number of values (length)
+    size_t result = fread(&nValues, sizeof(size_t),1,fp);
+    if (result != 1) {fputs ("Reading error2",stderr); exit (3);}
+    // read number of distinct values
+    size_t nDistinct;
+    result = fread(&nDistinct, sizeof(size_t),1,fp);
+    if (result != 1) {fputs ("Reading error2",stderr); exit (3);}
+    // read distinct values and corresponding frequencies
+    dValues.resize(nDistinct);
+    result = fread(dValues.data(), sizeof(T), nDistinct, fp);
+    if (result != nDistinct) {fputs ("Reading error2",stderr); exit (3);}
+    dFrequency.resize(nDistinct);
+    result = fread(dFrequency.data(), sizeof(T), nDistinct, fp);
+    if (result != nDistinct) {fputs ("Reading error2",stderr); exit (3);}
+    fclose(fp);
 }
 
 
@@ -279,10 +311,10 @@ BitVector<T>* LCBitSlicedIndex<T>::evalGE(T x) {
     T selector = (T)1 << (nbits-1);
     for (int b = msb; b <= lsb; b++)
         if (x & (selector >> b))
-            partial &= bvec[b];
+            *partial &= bvec[b];
         else
-            results |= partial & bvec[b]; 
-    results |= partial;
+            *results |= *partial & bvec[b]; 
+    *results |= partial;
     return results;
 }
 
@@ -304,7 +336,7 @@ BitVector<T>* LCBitSlicedIndex<T>::continuousRange(const T min, const T max) {
     BitVector<T> *gelow = evalGE(*low);
     BitVector<T> *geup  = evalGE(*up);
     geup->flip();
-    return gelow & geup;
+    return *gelow & geup;
 }
 
 // given a list of values, convert into a set of continuousRange queries

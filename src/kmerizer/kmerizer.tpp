@@ -1259,3 +1259,84 @@ void Kmerizer::mergeBin1(size_t bin) {
     delete mergedlcBsi;
 
 }
+
+// unique, distinct, total, max_count
+void Kmerizer::stats() {
+    uint32_t unique=0,distinct=0,total=0,max_count=0;
+    for(size_t bin=0; bin < NBINS; bin++) {
+        char fname[100];
+        sprintf(fname,"%s/%zi-mers.%zi.lcbsi",outdir,k,bin);
+        LCBitSlicedIndex<uint32_t> *lcbsi;
+        lcbsi = new LCBitSlicedIndex<uint32_t>(fname,true);
+        unique += lcbsi->unique();
+        distinct += lcbsi->size();
+        total += lcbsi->totalFrequency();
+        if (max_count < lcbsi->maxCount()) max_count = lcbsi->maxCount();
+    }
+    fprintf(stdout,"unique: %u\ndistinct: %u\ntotal: %u\nmax_count: %u\n",unique,distinct,total,max_count);
+}
+
+class mycmp2 {
+public:
+    mycmp2() { }
+    bool operator() (const pair <uint32_t, uint32_t>& lhs, const pair <uint32_t, uint32_t>& rhs) const {
+        return (lhs.first > rhs.first);
+    }
+};
+typedef priority_queue<pair <uint32_t,uint32_t>, vector<pair <uint32_t,uint32_t> >, mycmp2> pq32_type;
+
+// for each frequency, report the number of kmers
+void Kmerizer::histo() {
+    char fname[100];
+    pq32_type pq;
+    for(size_t bin=0; bin < NBINS; bin++) {
+        sprintf(fname,"%s/%zi-mers.%zi.lcbsi",outdir,k,bin);
+        LCBitSlicedIndex<uint32_t> *lcbsi;
+        lcbsi = new LCBitSlicedIndex<uint32_t>(fname,true);
+        vector<uint32_t>::iterator i1 = lcbsi->dValues.begin();
+        vector<uint32_t>::iterator i2 = lcbsi->dFrequency.begin();
+        
+        while (i1 != lcbsi->dValues.end()) {
+            pq.push(make_pair(*i1,*i2));
+            i1++;
+            i2++;
+        }
+    }
+    uint32_t v = 0;
+    uint32_t f = 0;
+    while (!pq.empty()) {
+        if (v == pq.top().first)
+            f += pq.top().second;
+        else {
+            if (f>0) fprintf(stdout,"%u\t%u\n",v,f);
+            v = pq.top().first;
+            f = pq.top().second;
+        }
+        pq.pop();
+    }
+    if (f>0) fprintf(stdout,"%u\t%u\n",v,f);
+}
+
+// results are stored in BitMask
+void Kmerizer::filter(uint32_t min, uint32_t max) {
+    fprintf(stderr,"filter(%u, %u)\n",min,max);
+
+    for(size_t bin=0; bin < NBINS; bin++)
+        tp.schedule( boost::bind( &Kmerizer::filterBin, this, bin, min, max ) );
+
+    tp.wait();
+
+    fprintf(stderr,"all bins filtered\n");
+    
+}
+
+void Kmerizer::filterBin(size_t bin, uint32_t min, uint32_t max) {
+    char fname[100];
+    sprintf(fname,"%s/%zi-mers.%zi.lcbsi",outdir,k,bin);
+    LCBitSlicedIndex<uint32_t> *lcbsi;
+    lcbsi = new LCBitSlicedIndex<uint32_t>(fname);
+    BitMask[bin] = lcbsi->continuousRange(min,max);
+}
+
+void Kmerizer::dump(bool dumpfasta) {} // write tab delimited text or fasta to stdout
+

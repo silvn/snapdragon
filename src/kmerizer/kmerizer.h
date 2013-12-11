@@ -82,7 +82,6 @@ public:
     void stats(); // unique, distinct, total, max_count
     void histo(); // for each frequency, report the number of kmers
     void dump(bool dumpfasta); // write tab delimited text or fasta to stdout
-    void histogram(); // frequency distribution ()
 
 private:
 
@@ -132,7 +131,7 @@ private:
     // merge raw kmers and counts into bitmap self-indexes
     void mergeBin(size_t bin);
     void mergeBin1(size_t bin);
-
+    void filterBin(size_t bin, uint32_t min, uint32_t max);
     static uint64_t reverse_complement(uint64_t v) {
       v = ((v >> 2)  & 0x3333333333333333UL) | ((v & 0x3333333333333333UL) << 2);
       v = ((v >> 4)  & 0x0F0F0F0F0F0F0F0FUL) | ((v & 0x0F0F0F0F0F0F0F0FUL) << 4);

@@ -72,16 +72,19 @@ public:
 
     // write distinct kmers and counts to disk (merging multiple batches)
     void save();
+    
+    // called after filter()
+    void saveSubset(char *fname);
 
     // query functions
-    void filter(uint32_t min, uint32_t max); // results are stored in BitMask
-    void query(); // what's the use case for this?????
-    void intersect(const char * lhs, const char * rhs); // for many kmers, intersect databases
+    void filter(char *colname, uint32_t min, uint32_t max); // results are stored in BitMask
+    void query(const char* seq, const int length); // extracts kmers, queries indexes, stores results in BitMask
+    void intersect(const char * lhs, const char * rhs); // for MANY kmers, intersect databases
 
     // BitMask is used by all of these functions
-    void stats(); // unique, distinct, total, max_count
-    void histo(); // for each frequency, report the number of kmers
-    void dump(bool dumpfasta); // write tab delimited text or fasta to stdout
+    void stats(char *colname); // unique, distinct, total, max_count
+    void histo(char *colname); // for each frequency, report the number of kmers
+    void dump(vector<char *> &columns); // write tab delimited text or fasta to stdout
 
 private:
 
@@ -131,7 +134,7 @@ private:
     // merge raw kmers and counts into bitmap self-indexes
     void mergeBin(size_t bin);
     void mergeBin1(size_t bin);
-    void filterBin(size_t bin, uint32_t min, uint32_t max);
+    void filterBin(size_t bin, char *colname, uint32_t min, uint32_t max);
     static uint64_t reverse_complement(uint64_t v) {
       v = ((v >> 2)  & 0x3333333333333333UL) | ((v & 0x3333333333333333UL) << 2);
       v = ((v >> 4)  & 0x0F0F0F0F0F0F0F0FUL) | ((v & 0x0F0F0F0F0F0F0F0FUL) << 4);

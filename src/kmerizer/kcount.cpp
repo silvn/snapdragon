@@ -15,7 +15,8 @@ int main(int argc, char *argv[])
     bool help=false;
     vector<char *> columns;
     m='A';
-    while ((ca = getopt (argc, argv, "p:k:s:t:m:d:u:f:l:c:")) != -1)
+    program = NULL;
+    while ((ca = getopt (argc, argv, "p:k:s:t:m:d:o:u:f:l:c:h?")) != -1)
         switch (ca) {
             case 'p': // program to run (count, stats, histo, filter, query)
                 program = optarg;
@@ -50,25 +51,35 @@ int main(int argc, char *argv[])
             case 'c': // column name(s) for dump - defaults to seq and count
                 columns.push_back(optarg);
                 break;
+            case 'h':
             case '?': // help required
                 help = true;
                 break;
         }
-    
-    if (help || ! program) {
+    if (! program) {
+        fprintf(stderr,"Usage: %s <cmd> [options]\nWhere cmd is one of: count, stats, histo, filter, query\ntry %s <cmd> -?\n",argv[0],argv[0]);
+        return 2;
+    }
+    if (help) {
         switch (program[0]) {
             case 'c': // count help
-                fprintf(stderr,"count -f <fast[aq] input> -k <kmer length> -s <max memory> -t <number of threads> -m <mode (A|B|C)> -o <output dir>");
+                fprintf(stderr,"count -f <fast[aq] input> -k <kmer length> -s <max memory> -t <number of threads> -m <mode (A|B|C)> -o <output dir>\n");
+                break;
             case 's': // stats help
                 fprintf(stderr,"stats -d <index dir> -k <kmer length>\n");
+                break;
             case 'h': // histo help
                 fprintf(stderr,"histo -d <index dir> -k <kmer length>\n");
+                break;
             case 'f': // filter help
                 fprintf(stderr,"filter -d <index dir> -k <kmer length> -l <lower count> -u <upper count> -c <columns>\n");
+                break;
             case 'q': // query help
                 fprintf(stderr,"query -d <index dir> -k <kmer length> -f <fast[aq] input> -c <columns>\n");
+                break;
             default: // generic help
                 fprintf(stderr,"Usage: %s <cmd> [options]\nWhere cmd is one of: count, stats, histo, filter, query\ntry %s <cmd> -?\n",argv[0],argv[0]);
+                break;
         }
         return 1;
     }
@@ -76,7 +87,7 @@ int main(int argc, char *argv[])
     switch (program[0]) {
         case 'c': { // count
             Kmerizer *counter = new Kmerizer(k, t, o, m);
-        	mkdir(d,0755);
+        	mkdir(o,0755);
 
         	int rc = counter->allocate(s);
         	if (rc != 0) {
@@ -108,20 +119,23 @@ int main(int argc, char *argv[])
         }
         case 's': { // stats
             Kmerizer *counter = new Kmerizer(k, t, d, m);
-            for(int i=0;i<columns.size();i++)
-                counter->stats(columns[i]);
+            // for(int i=0;i<columns.size();i++)
+            //     counter->stats(columns[i]);
+            counter->stats("count");
             break;
         }
         case 'h': { // histo
             Kmerizer *counter = new Kmerizer(k, t, d, m);
-            for(int i=0;i<columns.size();i++)
-                counter->histo(columns[i]);
+            // for(int i=0;i<columns.size();i++)
+            //     counter->histo(columns[i]);
+            counter->histo("count");
             break;
         }
         case 'f': { // filter
             Kmerizer *counter = new Kmerizer(k, t, d, m);
             counter->filter("count",l,u); // TODO: arbitrary where clause
             counter->dump(columns);
+            break;
         }
         case 'q': { // query
             Kmerizer *counter = new Kmerizer(k, t, d, m);
@@ -149,6 +163,7 @@ int main(int argc, char *argv[])
         	kseq_destroy(seq);
         	gzclose(fp);
             counter->dump(columns);
+            break;
         }
     }
     return 0;

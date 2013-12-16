@@ -18,7 +18,11 @@ public:
     void appendWord(T word); // append uncompressed bits in word 
     void appendFill0(size_t length); // extend the bitvector by length 0 bits
     void appendFill1(size_t length); // extend the bitvector by length 1 bits
-    void inflateWord(T *word, size_t wordStart); // fills a word with uncompressed bits starting at wordStart
+    void inflateWord(T *word, size_t wordStart); // fills a word with uncompressed bits starting at wordStart (for random access)
+    void inflateNextWord(T *word, size_t wordStart); // fills a word with uncompressed bits starting at wordStart (for sequential access)
+
+    void rewind() {firstActiveWord();}
+    bool nextSetBit(size_t *idx); // update idx to the position of the next set bit >= *idx return true on success
     
     uint64_t getSize() { return size; }
     uint64_t getCount() { return count; }
@@ -32,6 +36,11 @@ public:
 private:
     vector<T> words;  // a mix of literal and fill words. MSB of fill words indicate the type of fill
     vector<T> isFill; // uncompressed bitvector indicating which words are fills
+    // extra to enable random access
+    bool randomAccess;
+    vector<T> fillStart; // start positions of fill words in uncompressed bitvector
+    vector<T> fillIdx;   // words[fillIdx[i]] is the ith fill word
+    void setupRandomAccess();
 
     uint64_t count;   // cache the number of set bits
     uint64_t size;    // bits in the uncompressed bitvector
@@ -47,9 +56,17 @@ private:
     uint64_t activeWordEnd;   // uncompressed bit position after last bit in a word
 
     void seek(size_t wordStart); // locate the activeWord that contains wordStart
+    void scan(size_t wordStart);
     void firstActiveWord(); // jump directly to first word
     void nextActiveWord(); // advance to next word
 };
+
+int my_ffs(unsigned long long x) { return __builtin_ffsll(x); }
+int my_ffs(unsigned long      x) { return __builtin_ffsl(x); }
+int my_ffs(unsigned int       x) { return __builtin_ffs(x); }
+int my_clz(unsigned long long x) { return __builtin_clzll(x); }
+int my_clz(unsigned long      x) { return __builtin_clzl(x); }
+int my_clz(unsigned int       x) { return __builtin_clz(x); }
 
 // template <class T>
 // void LCBitSlicedIndex<T>::transpose(uint64_t A[64]) {
@@ -257,8 +274,9 @@ void BitVector<T>::appendWord(T word) {
 }
 
 template <class T>
-void BitVector<T>::seek(size_t wordStart) {
+void BitVector<T>::scan(size_t wordStart) {
     if ((activeWordStart <= wordStart) && (wordStart < activeWordEnd)) return; // already here
+    // fprintf(stderr,"scan(%zi) aw: %zi %llu %llu\n",wordStart,activeWordIdx,activeWordStart,activeWordEnd);
     while (activeWordEnd <= wordStart) { // seek forward
         activeWordIdx++;
         activeWordStart = activeWordEnd;
@@ -277,6 +295,7 @@ void BitVector<T>::seek(size_t wordStart) {
         else
             activeWordStart -= nbits;
     }
+    // found it. lookup word type
     activeWordType = LITERAL;
     if (isFill[activeWordIdx >> shiftby] & ((T)1 << (activeWordIdx & (nbits-1)))) {
         if (words[activeWordIdx] >> (nbits-1))
@@ -284,6 +303,65 @@ void BitVector<T>::seek(size_t wordStart) {
         else
             activeWordType = ZEROFILL;
     }
+}
+
+// iterate over the fill words and populate the vectors fillStart and fillIdx
+template <class T>
+void BitVector<T>::setupRandomAccess() {
+    // first populate fillIdx
+    T idx=0;
+    for(typename vector<T>::iterator it = isFill.begin(); it < isFill.end(); it++) {
+        T bits = *it;
+        while (bits) {
+            fillIdx.push_back(idx + my_ffs(bits) - 1);
+            bits &= bits-1;
+        }
+        idx += nbits;
+    }
+    // poplulate fillStart
+    T startPos=0;
+    idx=0;
+    for(typename vector<T>::iterator it = fillIdx.begin(); it < fillIdx.end(); it++) {
+        startPos += (*it - idx) * nbits;
+        fillStart.push_back(startPos);
+        startPos += words[*it] << shiftby;
+        idx = *it + 1;
+    }
+
+    randomAccess = true;
+}
+// assumes random access pattern
+template <class T>
+void BitVector<T>::seek(size_t wordStart) {
+    if ((activeWordStart <= wordStart) && (wordStart < activeWordEnd)) return; // already here
+
+    if (!randomAccess) setupRandomAccess();
+
+    typename vector<T>::iterator ub = upper_bound(fillStart.begin(),fillStart.end(),wordStart);
+    // ub points to first fill word that starts after wordStart or fillStarts.end() if none
+    activeWordIdx=0;
+    activeWordStart=0;
+    if (ub != fillStart.begin()) { // there are fill words starting <= wordStart
+        ub--;
+        // is wordStart in that fill?
+        activeWordIdx = fillIdx[ub - fillStart.begin()];
+        activeWordEnd = *ub + (words[activeWordIdx] << shiftby);
+        if (wordStart < activeWordEnd) {// found it!
+            activeWordStart = *ub;
+            if (words[activeWordIdx] >> (nbits-1))
+                activeWordType = ONEFILL;
+            else
+                activeWordType = ZEROFILL;
+            return;
+        }
+        activeWordStart = activeWordEnd;
+        activeWordIdx++;
+    }
+    T offset = ((wordStart - activeWordStart) >> shiftby);
+    activeWordIdx += offset;
+    activeWordStart += nbits*offset;
+    activeWordEnd = activeWordStart + nbits;
+    activeWordType = LITERAL;
 }
 
 // fills a word shaped uncompressed bitvector starting at wordStart
@@ -296,6 +374,42 @@ void BitVector<T>::inflateWord(T *word, size_t wordStart) {
         *word = (T)~(T)0;
     else
         *word = (T)0;
+}
+
+// fills a word shaped uncompressed bitvector starting at wordStart
+template <class T>
+void BitVector<T>::inflateNextWord(T *word, size_t wordStart) {
+    scan(wordStart);
+    if (activeWordType == LITERAL)
+        *word = words[activeWordIdx];
+    else if (activeWordType == ONEFILL)
+        *word = (T)~(T)0;
+    else
+        *word = (T)0;
+}
+
+template <class T>
+bool BitVector<T>::nextSetBit(size_t *idx) {
+    // fprintf(stderr,"nextSetBit(%zi)\n",*idx);
+    if (*idx >= size) return false;
+    scan(*idx);
+    if (activeWordType == LITERAL) {
+        T word = words[activeWordIdx] & ((T)~(T)0 >> (*idx - activeWordStart));
+        if (word == 0) {
+            *idx = activeWordEnd;
+            return nextSetBit(idx);
+        }
+        else {
+            *idx = activeWordStart + my_clz(word);
+            return true;
+        }
+    }
+    else if (activeWordType == ONEFILL) return true;
+    else { // if (activeWordType == ZEROFILL) {
+        *idx = activeWordEnd;
+        return nextSetBit(idx);
+    }
+    return true;
 }
 
 // extends the bitvector by length 0 bits (assumes previous bit was a 1)
@@ -409,11 +523,6 @@ void BitVector<T>::appendFill1(size_t length) {
 template <class T>
 BitVector<T>* BitVector<T>::operator&(BitVector<T>* rhs) {
     BitVector<T> *res = new BitVector<T>();
-    // first ensure that rhs is the same size.
-    if (rhs->size != size) {
-        fprintf(stderr,"rhs->size != size\n");
-        return res;
-    }
     firstActiveWord();
     rhs->firstActiveWord();
     while (activeWordIdx<words.size() and rhs->activeWordIdx < rhs->words.size()) {
@@ -467,11 +576,6 @@ BitVector<T>* BitVector<T>::operator&(BitVector<T>* rhs) {
 template <class T>
 BitVector<T>* BitVector<T>::operator|(BitVector<T>* rhs) {
     BitVector<T> *res = new BitVector<T>();
-    // first ensure that rhs is the same size.
-    if (rhs->size != size) {
-        fprintf(stderr,"rhs->size != size\n");
-        return res;
-    }
     firstActiveWord();
     rhs->firstActiveWord();
     while (activeWordIdx<words.size() and rhs->activeWordIdx < rhs->words.size()) {

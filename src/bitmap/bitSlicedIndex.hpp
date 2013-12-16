@@ -125,14 +125,25 @@ void BitSlicedIndex<T>::append(T* value) {
 
 template <class T>
 void BitSlicedIndex<T>::fillBuffer(size_t idx) {
-    // fprintf(stderr,"fillBuffer(%zi)\n",idx);
     // in each bitvector, fetch an uncompressed bitvector word that contains idx
     // populate the buffers by transposing the uncompressed words
-    bufferStart = idx & ~(nbits - 1);
-    for(int i=0;i<nwords;i++) {
-        for(int j=0;j<nbits;j++)
-            bvec[i*nbits+j]->inflateWord(buffer[i]+j,bufferStart);
-        transpose(buffer[i]);
+
+    // if this is the next buffer use a simple bitvector function
+    if (idx == bufferStart + nbits) {
+        bufferStart = idx;
+        for(int i=0;i<nwords;i++) {
+            for(int j=0;j<nbits;j++)
+                bvec[i*nbits+j]->inflateNextWord(buffer[i]+j,bufferStart);
+            transpose(buffer[i]);
+        }
+    }
+    else { // assume random access
+        bufferStart = idx & ~(nbits - 1);
+        for(int i=0;i<nwords;i++) {
+            for(int j=0;j<nbits;j++)
+                bvec[i*nbits+j]->inflateWord(buffer[i]+j,bufferStart);
+            transpose(buffer[i]);
+        }
     }
 }
 

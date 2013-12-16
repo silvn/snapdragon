@@ -228,12 +228,20 @@ void LCBitSlicedIndex<T>::append(T* value) {
 
 template <class T>
 void LCBitSlicedIndex<T>::fillBuffer(size_t idx) {
-    // fprintf(stderr,"fillBuffer(%zi)\n",idx);
     // in each bitvector, fetch an uncompressed bitvector word that contains idx
     // populate the buffers by transposing the uncompressed words
-    bufferStart = idx & ~(nbits - 1);
-    for(int j=0;j<nbits;j++)
-        bvec[j]->inflateWord(buffer+j,bufferStart);
+
+    // if this is the next buffer use a simple bitvector function
+    if (idx == bufferStart + nbits) {
+        bufferStart = idx;
+        for(int j=0;j<nbits;j++)
+            bvec[j]->inflateNextWord(buffer+j,bufferStart);
+    }
+    else { // assume random access
+        bufferStart = idx & ~(nbits - 1);
+        for(int j=0;j<nbits;j++)
+            bvec[j]->inflateWord(buffer+j,bufferStart);
+    }
     transpose(buffer);
 }
 
@@ -295,6 +303,7 @@ inline int clz(unsigned int bits)       { return __builtin_clz  (bits); }
 // create a bitvector marking rows where the value >= x
 template <class T>
 BitVector<T>* LCBitSlicedIndex<T>::evalGE(T x) {
+    // fprintf(stderr,"evalGE(%llu)\n",x);
     if (x == dValues[0]) {
         // return a bitvector of all ones
         BitVector<T> *res = new BitVector<T>();
@@ -307,13 +316,15 @@ BitVector<T>* LCBitSlicedIndex<T>::evalGE(T x) {
     results->appendFill0(nValues);
     partial->appendFill1(nValues);
     int msb = clz(dValues.back());
-    int lsb = nbits - ffs(x);
+    int lsb = nbits - my_ffs(x);
     T selector = (T)1 << (nbits-1);
-    for (int b = msb; b <= lsb; b++)
+    // fprintf(stderr,"nValues: %zi results: %zi partial: %zi msb: %i lsb: %i\n",nValues,results->getSize(),partial->getSize(),msb,lsb);
+    for (int b = msb; b <= lsb; b++) {
         if (x & (selector >> b))
             *partial &= bvec[b];
         else
             *results |= *partial & bvec[b]; 
+    }
     *results |= partial;
     return results;
 }
@@ -322,6 +333,7 @@ BitVector<T>* LCBitSlicedIndex<T>::evalGE(T x) {
 template <class T>
 BitVector<T>* LCBitSlicedIndex<T>::continuousRange(const T min, const T max) {
     // find lower and upper bound based on min and max
+    // fprintf(stderr,"continuousRange(%u,%u) dValues [%u,%u]\n",min,max,dValues.front(),dValues.back());
     typename vector<T>::iterator low,up;
     low=lower_bound (dValues.begin(), dValues.end(), min);
     if (low == dValues.end()) {
@@ -331,7 +343,8 @@ BitVector<T>* LCBitSlicedIndex<T>::continuousRange(const T min, const T max) {
         return res;
     }
     up= upper_bound (dValues.begin(), dValues.end(), max);
-
+    if (up == dValues.end()) up--;
+    // fprintf(stderr,"continuousRange(%i, %i),low %i up %i dValues.back() %i\n",min,max,*low,*up,dValues.back());
     // >= *low _AND_ NOT >= *up
     BitVector<T> *gelow = evalGE(*low);
     BitVector<T> *geup  = evalGE(*up);

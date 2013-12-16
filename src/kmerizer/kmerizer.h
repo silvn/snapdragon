@@ -53,7 +53,7 @@ class Kmerizer {
     boost::threadpool::pool tp;
     
     BitVector<uint32_t> *BitMask[NBINS]; // query results (default all)
-
+    char filtered[NBINS];
 public:
     // constructor
     Kmerizer(const size_t klength,
@@ -91,6 +91,8 @@ private:
     // function to extract (canonical) kmers from a sequence of [ACGT]
     void addSeq(const char* seq, const int length);
     void addSeq1(const char* seq, const int length);
+
+    void unpack(kword_t *kmer, size_t bin, char *kmerStr);
 
     // k-mers are not distributed evenly among the bins
     // redistributes free space among the bins

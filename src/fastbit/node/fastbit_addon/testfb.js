@@ -1,4 +1,4 @@
-var bins = 100;
+var bins = 10;
 var fb = require('./build/Release/fb');
 var data = "/Users/olson/Desktop/glycine_max";
 var args = {

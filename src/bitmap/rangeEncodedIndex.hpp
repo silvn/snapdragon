@@ -174,6 +174,7 @@ void RangeEncodedIndex::saveIndex(char *fname) {
         fwrite(&nWords,sizeof(size_t),1,fp);
         fwrite(buf,sizeof(uint64_t),nWords,fp);
         free(buf);
+        fprintf(stderr,"saveIndex(%s) %i/%zi nWords %zi\n",fname,i,nVectors,nWords);
     }
     fclose(fp);
 }

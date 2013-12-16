@@ -30,6 +30,8 @@ Kmerizer::Kmerizer(const size_t klength,
     this->kmerSize   = this->nwords * sizeof(kword_t);
 
     tp.size_controller().resize(nthreads);
+
+    memset(filtered,0,NBINS);
 }
 
 int Kmerizer::allocate(const size_t maximem) {
@@ -266,6 +268,27 @@ size_t Kmerizer::nextKmer1(kword_t* kmer, size_t bin, const char nucl) {
     static const kword_t lut[4] = {0UL,1UL,3UL,2UL};
     *kmer = ((*kmer << 2) | lut[(nucl >> 1) & 3]) & kmask;
     return bin;
+}
+
+void Kmerizer::unpack(kword_t *kmer, size_t bin, char *kmerStr) {
+    // space already allocated for kmerStr of length k+4
+    static const char lut[4] = {'A','C','G','T'}; // check this
+    kmerStr[0] = lut[bin >> 6];
+    kmerStr[1] = lut[(bin >> 4) & 3];
+    kmerStr[2] = lut[(bin >> 2) & 3];
+    kmerStr[3] = lut[bin & 3];
+    if (nwords == 1)
+        for(int i=0;i<k;i++)
+            kmerStr[4+i] = lut[(kmer[0] >> 2*(k-i-1)) & 3];
+    else {
+        for(int w=0;w<nwords-1;w++)
+            for(int i=0;i<k;i++)
+                kmerStr[4 + i + w*32] = lut[(kmer[w] >> 2*(31-i)) & 3];
+        // last word
+        int kmod = k%32;
+        for(int i=0;i<kmod;i++)
+            kmerStr[4 + i + (nwords-1)*32] = lut[(kmer[nwords-1] >> 2*(kmod-i-1)) & 3];
+    }
 }
 
 
@@ -1138,17 +1161,61 @@ void Kmerizer::filterBin(size_t bin, char* colname, uint32_t min, uint32_t max) 
     sprintf(fname,"%s/%zi-mer.%s.%zi",outdir,k,colname,bin);
     LCBitSlicedIndex<uint32_t> *lcbsi;
     lcbsi = new LCBitSlicedIndex<uint32_t>(fname);
-    if (BitMask[bin]) // if results exist, AND with this filter
+    if (filtered[bin]) // if results exist, AND with this filter
         *BitMask[bin] &= lcbsi->continuousRange(min,max);
-    else
+    else {
         BitMask[bin] = lcbsi->continuousRange(min,max);
+        filtered[bin] = 1;
+    }
+    if (BitMask[bin]->getCount() > 0)
+        fprintf(stderr,"filterBin(%zi,%s,%u,%u) BitMask[bin]->getCount() %zi\n",bin,colname,min,max,BitMask[bin]->getCount());
 }
 
 void Kmerizer::dump(vector<char *> &columns) { // write tab delimited text to stdout
-    // named columns (seq, count, <user supplied column names>)
+    // TODO: named columns (seq, count, <user supplied column names>)
+    for(size_t bin=0;bin < NBINS; bin++) {
+        char fname[100];
+        sprintf(fname,"%s/%zi-mer.count.%zi",outdir,k,bin);
+        LCBitSlicedIndex<uint32_t> *lcbsi;
+        lcbsi = new LCBitSlicedIndex<uint32_t>(fname);
+        sprintf(fname,"%s/%zi-mer.seq.%zi",outdir,k,bin);
+        BitSlicedIndex<kword_t> *bsi;
+        bsi = new BitSlicedIndex<kword_t>(fname);
+        kword_t *kmer;
+        char *kmerStr;
+        uint32_t count;
+        kmer = (kword_t *) malloc(nwords * sizeof(kword_t));
+        kmerStr = (char *) malloc(k+4);
+        // fprintf(stderr,"dump() bin %zi BitMask[bin]->getCount() %u\n",bin,BitMask[bin]->getCount());
+        if (filtered[bin]) {
+            if (BitMask[bin]->getCount() > 0) {
+                // iterate over the set bits and decode from each column
+                size_t i=0;
+                BitMask[bin]->rewind();
+                while (BitMask[bin]->nextSetBit(&i)) {
+                    // fprintf(stderr, "next set bit is %zi\n",i);
+                    bsi->decode(i,kmer);
+                    unpack(kmer,bin,kmerStr);
+                    lcbsi->decode(i,&count);
+                    fprintf(stdout, "%s\t%u\n",kmerStr,count);
+                    i++;
+                }
+            }
+        }
+        else {
+            // iterate over all positions and decode from each column
+            for(size_t i=0;i < bsi->size(); i++) {
+                bsi->decode(i,kmer);
+                unpack(kmer,bin,kmerStr);
+                lcbsi->decode(i,&count);
+                fprintf(stdout, "%s\t%u\n",kmerStr,count);
+            }
+        }
+    }
 }
 
 void Kmerizer::query(const char* seq, const int length) { // extracts kmers, queries indexes, stores results in BitMask
     // the BitMask is initially all 0's and is OR'ed with query results. Subsequent calls only extend the result set
+    
 }
 

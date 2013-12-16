@@ -32,7 +32,7 @@ v8::Handle<v8::Object> TabletoJs(const ibis::table &tbl)
 	tbl.getPartitions(parts);
 	if (parts.size() != 1) {
 		std::cerr << "parts.size() = " << parts.size() << " expected 1" << std::endl;
-		return results;
+        return results;
 	}
 	int ierr = 0;
 	for (size_t j = 0; j < nms.size(); ++ j) {
@@ -56,12 +56,12 @@ v8::Handle<v8::Object> TabletoJs(const ibis::table &tbl)
 				ierr = tbl.getColumnAsUInts(nms[j], buf);
 				ibis::column *col = parts[0]->getColumn(nms[j]);
 				const ibis::dictionary *dic = col->getDictionary();
-				if (dic == 0)
-					for (size_t i = 0; i < nr; ++ i)
-						column->Set(i,v8::Uint32::New(buf[i]));
-				else
+				if (dic)
 					for (size_t i = 0; i < nr; ++ i)
 						column->Set(i,v8::String::New((*dic)[buf[i]]));
+                else
+					for (size_t i = 0; i < nr; ++ i)
+						column->Set(i,v8::Uint32::New(buf[i]));
 				break;
 			}
 			case ibis::FLOAT:
@@ -92,41 +92,37 @@ v8::Handle<v8::Object> TabletoJs(const ibis::table &tbl)
 	return results;
 }
 
-v8::Handle<v8::Value> run_query(v8::Handle<v8::Object> p, ibis::table*& res)
+// v8::Handle<v8::Value> run_query(v8::Handle<v8::Object> p, ibis::table*& res)
+ibis::table* run_query(v8::Handle<v8::Object> p)
 {
 	if (! p->Has(v8::String::New("from"))) {
 		v8::ThrowException(v8::Exception::TypeError(v8::String::New("Missing 'from' argument")));
-		return v8::Undefined();
+		return 0;// v8::Undefined();
 	}
 	if (! p->Has(v8::String::New("select"))) {
 		v8::ThrowException(v8::Exception::TypeError(v8::String::New("Missing 'select' argument")));
-		return v8::Undefined();
+		return 0;//v8::Undefined();
 	}
 
 	std::string data_dir = c_stringify(p->Get(v8::String::New("from")));
 	ibis::table* tbl = ibis::table::create(data_dir.c_str());
 	
-	const ibis::qExpr* query;
+	std::string select_str = c_stringify(p->Get(v8::String::New("select")));
+
+    ibis::table *res;
 	if (p->Has(v8::String::New("where"))) {
 		std::string query_cnd = c_stringify(p->Get(v8::String::New("where")));
-		ibis::whereClause tmp = ibis::whereClause(query_cnd.c_str());
-		query = tmp.getExpr()->dup();
+        res = tbl->select(select_str.c_str(),query_cnd.c_str());
 	}
 	else {
-		ibis::whereClause tmp = ibis::whereClause("1=1");
-		query = tmp.getExpr()->dup();
+        res = tbl->select(select_str.c_str(),"1=1");
 	}
 	
-	// check for qExpr
-	
-	std::string select_str = c_stringify(p->Get(v8::String::New("select")));
-	res = tbl->select(select_str.c_str(), query);
-	
-	if (p->Has(v8::String::New("orderby"))) {
-		std::string order_by = c_stringify(p->Get(v8::String::New("orderby")));
+	if (p->Has(v8::String::New("order_by"))) {
+		std::string order_by = c_stringify(p->Get(v8::String::New("order_by")));
 		res->orderby(order_by.c_str());
 	}
-	return v8::String::New("OK");
+    return res;
 }
 
 // histogram params
@@ -178,10 +174,7 @@ v8::Handle<v8::Value> histogram(const v8::Arguments& args)
 		return rc;
 
 	// preprocess
-	ibis::table *res = 0;
-	rc = run_query(p,res);
-	if (rc->IsUndefined())
-		return rc;
+	ibis::table *res = run_query(p);
 
 	// no data after querying
 	if (res->nRows() <= 0)
@@ -189,34 +182,38 @@ v8::Handle<v8::Value> histogram(const v8::Arguments& args)
 
 	ibis::table::stringList nms = res->columnNames();
 
-	std::vector<const ibis::part*> parts;
-	res->getPartitions(parts);
-	if (parts.size() != 1) {
-		v8::ThrowException(v8::Exception::Error(v8::String::New("WTF! expected one partition after preprocessing")));
-		return v8::Undefined();
-	}
+    std::vector<const ibis::part*> parts;
+    res->getPartitions(parts);
+        fprintf(stderr,"parts.size() %zi\n",parts.size());
+    if (parts.size() != 1) {
+        v8::ThrowException(v8::Exception::Error(v8::String::New("WTF! expected one partition after preprocessing")));
+        return v8::Undefined();
+    }
 
 	long ierr;
 	v8::Handle<v8::Object> JSON = v8::Object::New();
 	v8::Handle<v8::Array> v8bounds = v8::Array::New();
 	v8::Handle<v8::Array> v8counts = v8::Array::New();
 	if (adaptive) {
-		std::vector<double> bounds;
-		std::vector<uint32_t> counts;
-		ierr = parts[0]->get1DDistribution("1=1",nms[0],nbins,bounds,counts);
-		if (ierr < 0) {
-			v8::ThrowException(v8::Exception::Error(v8::String::New("adaptive 1D Distribution error")));
-			return v8::Undefined();
-		}
-		// format results
-		for(size_t i=0; i < counts.size(); i++) {
-			v8bounds->Set(i,v8::Number::New(bounds[i]));
-			v8counts->Set(i,v8::Number::New(counts[i]));
-		}
+        std::vector<double> bounds;
+        std::vector<uint32_t> counts;
+        ierr = parts[0]->get1DDistribution("1=1",nms[0],nbins,bounds,counts);
+        if (ierr < 0) {
+            v8::ThrowException(v8::Exception::Error(v8::String::New("adaptive 1D Distribution error")));
+            return v8::Undefined();
+        }
+        // format results
+        for(size_t i=0; i < counts.size(); i++) {
+            v8bounds->Set(i,v8::Number::New(bounds[i]));
+            v8counts->Set(i,v8::Number::New(counts[i]));
+        }
 	}
 	else {
 		std::vector<uint32_t> counts;
-		ierr = parts[0]->get1DDistribution("1=1",nms[0],begin,end,stride,counts);
+        //         fprintf(stderr,"calling get1DDistribution(\"1=1\",%s,%f,%f,%f,counts)\n",nms[0],begin,end,stride);
+        // ierr = parts[0]->get1DDistribution("1=1",nms[0],begin,end,stride,counts);
+        ierr = res->getHistogram("1=1",nms[0],begin,end,stride,counts);
+        // fprintf(stderr,"back\n");
 		if (ierr < 0) {
 			v8::ThrowException(v8::Exception::Error(v8::String::New("uniform 1D Distribution error")));
 			return v8::Undefined();
@@ -299,10 +296,10 @@ v8::Handle<v8::Value> scatter(const v8::Arguments& args)
 		return rc;
 
 	// preprocess
-	ibis::table *res=0;
-	rc = run_query(p,res);
-	if (rc->IsUndefined())
-		return rc;
+	ibis::table *res=run_query(p);
+    // rc = run_query(p,res);
+    // if (rc->IsUndefined())
+    //     return rc;
 
 	// no data after querying
 	if (res->nRows() <= 0)
@@ -310,12 +307,12 @@ v8::Handle<v8::Value> scatter(const v8::Arguments& args)
 
 	ibis::table::stringList nms = res->columnNames();
 
-	std::vector<const ibis::part*> parts;
-	res->getPartitions(parts);
-	if (parts.size() != 1) {
-		v8::ThrowException(v8::Exception::Error(v8::String::New("WTF! expected one partition after preprocessing")));
-		return v8::Undefined();
-	}
+    std::vector<const ibis::part*> parts;
+    res->getPartitions(parts);
+    if (parts.size() != 1) {
+        v8::ThrowException(v8::Exception::Error(v8::String::New("WTF! expected one partition after preprocessing")));
+        return v8::Undefined();
+    }
 
 	long ierr;
 	v8::Handle<v8::Object> JSON = v8::Object::New();
@@ -326,22 +323,23 @@ v8::Handle<v8::Value> scatter(const v8::Arguments& args)
 	std::vector<double> bounds2;
 	std::vector<uint32_t> counts;
 	if (adaptive) {
-		ierr = parts[0]->get2DDistribution(nms[0],nms[1],nbins1,nbins2,bounds1,bounds2,counts);
-		if (ierr < 0) {
-			v8::ThrowException(v8::Exception::Error(v8::String::New("adaptive 2D Distribution error")));
-			return v8::Undefined();
-		}
-		// format results
-		for(size_t i=0; i < counts.size(); i++)
-			v8counts->Set(i,v8::Number::New(counts[i]));
-		for(size_t i=0; i < bounds1.size(); i++)
-			v8bounds1->Set(i,v8::Number::New(bounds1[i]));
-		for(size_t i=0; i < bounds2.size(); i++)
-			v8bounds2->Set(i,v8::Number::New(bounds2[i]));
+        ierr = parts[0]->get2DDistribution(nms[0],nms[1],nbins1,nbins2,bounds1,bounds2,counts);
+        if (ierr < 0) {
+            v8::ThrowException(v8::Exception::Error(v8::String::New("adaptive 2D Distribution error")));
+            return v8::Undefined();
+        }
+        // format results
+        for(size_t i=0; i < counts.size(); i++)
+            v8counts->Set(i,v8::Number::New(counts[i]));
+        for(size_t i=0; i < bounds1.size(); i++)
+            v8bounds1->Set(i,v8::Number::New(bounds1[i]));
+        for(size_t i=0; i < bounds2.size(); i++)
+            v8bounds2->Set(i,v8::Number::New(bounds2[i]));
 	}
 	else {
 		std::vector<uint32_t> counts;
-		ierr = parts[0]->get2DDistribution("1=1",nms[0],begin1,end1,stride1,nms[1],begin2,end2,stride2,counts);
+        // ierr = parts[0]->get2DDistribution("1=1",nms[0],begin1,end1,stride1,nms[1],begin2,end2,stride2,counts);
+        ierr = res->getHistogram2D("1=1",nms[0],begin1,end1,stride1,nms[1],begin2,end2,stride2,counts);
 		if (ierr < 0) {
 			v8::ThrowException(v8::Exception::Error(v8::String::New("uniform 2D Distribution error")));
 			return v8::Undefined();
@@ -378,13 +376,10 @@ v8::Handle<v8::Value> SQL(const v8::Arguments& args)
 
 	v8::Handle<v8::Object> p = v8::Handle<v8::Object>::Cast(args[0]);
 
-	ibis::table *res=0;
-	v8::Handle<v8::Value> rc = run_query(p,res);
-
-	if (rc->IsUndefined())
-		return scope.Close(rc);
+	ibis::table *res= run_query(p);
 
 	v8::Handle<v8::Object> jsObj = TabletoJs(*res);
+
 	delete res;
 	return jsObj;
 }

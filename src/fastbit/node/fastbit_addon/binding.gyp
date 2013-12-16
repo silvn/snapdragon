@@ -3,8 +3,10 @@
     {
       "target_name": "fb",
       "sources": [ "fb.cc" ],
-	  "include_dirs": ["../../include"],
-	  "libraries": ["-L../../../lib",'-lfastbit'],
+	  "xxxinclude_dirs": ["../../../../vendor/fastbit/src"],
+	  "xxxlibraries": ["-L../../../../../vendor/fastbit/src/.libs",'-lfastbit'],
+	  "include_dirs": ["/usr/local/include"],
+	  "libraries": ["-L/usr/local/lib",'-lfastbit'],
 	  "conditions": [
 		  ['OS=="mac"', {
 			  'xcode_settings': {

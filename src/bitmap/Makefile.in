@@ -78,10 +78,8 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-bin_PROGRAMS = fbsql$(EXEEXT) fbsql_tab$(EXEEXT) join_once$(EXEEXT) \
-	scatter$(EXEEXT) gwas2go$(EXEEXT) ranges$(EXEEXT) \
-	stacker$(EXEEXT) loadBED$(EXEEXT) playground$(EXEEXT)
-subdir = src/fastbit
+bin_PROGRAMS = transpose$(EXEEXT)
+subdir = src/bitmap
 DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
 	$(top_srcdir)/test/depcomp
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
@@ -97,37 +95,13 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
-fbsql_SOURCES = fbsql.cpp
-fbsql_OBJECTS = fbsql.$(OBJEXT)
-fbsql_LDADD = $(LDADD)
+am_transpose_OBJECTS = test_transpose.$(OBJEXT)
+transpose_OBJECTS = $(am_transpose_OBJECTS)
+transpose_LDADD = $(LDADD)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
 am__v_lt_1 = 
-fbsql_tab_SOURCES = fbsql_tab.cpp
-fbsql_tab_OBJECTS = fbsql_tab.$(OBJEXT)
-fbsql_tab_LDADD = $(LDADD)
-gwas2go_SOURCES = gwas2go.cpp
-gwas2go_OBJECTS = gwas2go.$(OBJEXT)
-gwas2go_LDADD = $(LDADD)
-join_once_SOURCES = join_once.cpp
-join_once_OBJECTS = join_once.$(OBJEXT)
-join_once_LDADD = $(LDADD)
-loadBED_SOURCES = loadBED.cpp
-loadBED_OBJECTS = loadBED.$(OBJEXT)
-loadBED_DEPENDENCIES =
-playground_SOURCES = playground.cpp
-playground_OBJECTS = playground.$(OBJEXT)
-playground_LDADD = $(LDADD)
-ranges_SOURCES = ranges.cpp
-ranges_OBJECTS = ranges.$(OBJEXT)
-ranges_LDADD = $(LDADD)
-scatter_SOURCES = scatter.cpp
-scatter_OBJECTS = scatter.$(OBJEXT)
-scatter_LDADD = $(LDADD)
-stacker_SOURCES = stacker.cpp
-stacker_OBJECTS = stacker.$(OBJEXT)
-stacker_DEPENDENCIES =
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -162,10 +136,8 @@ AM_V_CXXLD = $(am__v_CXXLD_@AM_V@)
 am__v_CXXLD_ = $(am__v_CXXLD_@AM_DEFAULT_V@)
 am__v_CXXLD_0 = @echo "  CXXLD   " $@;
 am__v_CXXLD_1 = 
-SOURCES = fbsql.cpp fbsql_tab.cpp gwas2go.cpp join_once.cpp \
-	loadBED.cpp playground.cpp ranges.cpp scatter.cpp stacker.cpp
-DIST_SOURCES = fbsql.cpp fbsql_tab.cpp gwas2go.cpp join_once.cpp \
-	loadBED.cpp playground.cpp ranges.cpp scatter.cpp stacker.cpp
+SOURCES = $(transpose_SOURCES)
+DIST_SOURCES = $(transpose_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -200,7 +172,7 @@ AUTOHEADER = @AUTOHEADER@
 AUTOMAKE = @AUTOMAKE@
 AWK = @AWK@
 BUILD_FASTBIT = @BUILD_FASTBIT@
-CC = g++
+CC = @CC@
 CCDEPMODE = @CCDEPMODE@
 CFLAGS = @CFLAGS@
 CPP = @CPP@
@@ -230,7 +202,7 @@ INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
 LIBOBJS = @LIBOBJS@
-LIBS = -lfastbit -lm
+LIBS = @LIBS@
 LIBTOOL = @LIBTOOL@
 LIPO = @LIPO@
 LN_S = @LN_S@
@@ -312,13 +284,9 @@ target_alias = @target_alias@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-AM_DEFAULT_SOURCE_EXT = .cpp
-fastbit_dir = $(top_srcdir)/vendor/fastbit
-AM_CPPFLAGS = -I$(fastbit_dir)/src
-AM_LDFLAGS = -L$(fastbit_dir)/src/.libs -Wl,-rpath,$(libdir)
 @MACOS_TRUE@suff = -mt
-stacker_LDADD = -lboost_thread$(suff) -lboost_system$(suff)
-loadBED_LDADD = -lboost_thread$(suff) -lboost_system$(suff)
+AM_CPPFLAGS = -g3 -O0
+transpose_SOURCES = test_transpose.cpp
 all: all-am
 
 .SUFFIXES:
@@ -332,9 +300,9 @@ $(srcdir)/Makefile.in:  $(srcdir)/Makefile.am  $(am__configure_deps)
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign src/fastbit/Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign src/bitmap/Makefile'; \
 	$(am__cd) $(top_srcdir) && \
-	  $(AUTOMAKE) --foreign src/fastbit/Makefile
+	  $(AUTOMAKE) --foreign src/bitmap/Makefile
 .PRECIOUS: Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \
@@ -403,41 +371,9 @@ clean-binPROGRAMS:
 	echo " rm -f" $$list; \
 	rm -f $$list
 
-fbsql$(EXEEXT): $(fbsql_OBJECTS) $(fbsql_DEPENDENCIES) $(EXTRA_fbsql_DEPENDENCIES) 
-	@rm -f fbsql$(EXEEXT)
-	$(AM_V_CXXLD)$(CXXLINK) $(fbsql_OBJECTS) $(fbsql_LDADD) $(LIBS)
-
-fbsql_tab$(EXEEXT): $(fbsql_tab_OBJECTS) $(fbsql_tab_DEPENDENCIES) $(EXTRA_fbsql_tab_DEPENDENCIES) 
-	@rm -f fbsql_tab$(EXEEXT)
-	$(AM_V_CXXLD)$(CXXLINK) $(fbsql_tab_OBJECTS) $(fbsql_tab_LDADD) $(LIBS)
-
-gwas2go$(EXEEXT): $(gwas2go_OBJECTS) $(gwas2go_DEPENDENCIES) $(EXTRA_gwas2go_DEPENDENCIES) 
-	@rm -f gwas2go$(EXEEXT)
-	$(AM_V_CXXLD)$(CXXLINK) $(gwas2go_OBJECTS) $(gwas2go_LDADD) $(LIBS)
-
-join_once$(EXEEXT): $(join_once_OBJECTS) $(join_once_DEPENDENCIES) $(EXTRA_join_once_DEPENDENCIES) 
-	@rm -f join_once$(EXEEXT)
-	$(AM_V_CXXLD)$(CXXLINK) $(join_once_OBJECTS) $(join_once_LDADD) $(LIBS)
-
-loadBED$(EXEEXT): $(loadBED_OBJECTS) $(loadBED_DEPENDENCIES) $(EXTRA_loadBED_DEPENDENCIES) 
-	@rm -f loadBED$(EXEEXT)
-	$(AM_V_CXXLD)$(CXXLINK) $(loadBED_OBJECTS) $(loadBED_LDADD) $(LIBS)
-
-playground$(EXEEXT): $(playground_OBJECTS) $(playground_DEPENDENCIES) $(EXTRA_playground_DEPENDENCIES) 
-	@rm -f playground$(EXEEXT)
-	$(AM_V_CXXLD)$(CXXLINK) $(playground_OBJECTS) $(playground_LDADD) $(LIBS)
-
-ranges$(EXEEXT): $(ranges_OBJECTS) $(ranges_DEPENDENCIES) $(EXTRA_ranges_DEPENDENCIES) 
-	@rm -f ranges$(EXEEXT)
-	$(AM_V_CXXLD)$(CXXLINK) $(ranges_OBJECTS) $(ranges_LDADD) $(LIBS)
-
-scatter$(EXEEXT): $(scatter_OBJECTS) $(scatter_DEPENDENCIES) $(EXTRA_scatter_DEPENDENCIES) 
-	@rm -f scatter$(EXEEXT)
-	$(AM_V_CXXLD)$(CXXLINK) $(scatter_OBJECTS) $(scatter_LDADD) $(LIBS)
-
-stacker$(EXEEXT): $(stacker_OBJECTS) $(stacker_DEPENDENCIES) $(EXTRA_stacker_DEPENDENCIES) 
-	@rm -f stacker$(EXEEXT)
-	$(AM_V_CXXLD)$(CXXLINK) $(stacker_OBJECTS) $(stacker_LDADD) $(LIBS)
+transpose$(EXEEXT): $(transpose_OBJECTS) $(transpose_DEPENDENCIES) $(EXTRA_transpose_DEPENDENCIES) 
+	@rm -f transpose$(EXEEXT)
+	$(AM_V_CXXLD)$(CXXLINK) $(transpose_OBJECTS) $(transpose_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -445,15 +381,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/fbsql.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/fbsql_tab.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/gwas2go.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/join_once.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/loadBED.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/playground.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ranges.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/scatter.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/stacker.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test_transpose.Po@am__quote@
 
 .cpp.o:
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXXCOMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<

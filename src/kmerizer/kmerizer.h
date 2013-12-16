@@ -5,14 +5,29 @@
 #define NBINS 256
 #define CANONICAL 'C'
 #define BOTH 'B'
-#define READING 1
-#define QUERY 2
-
-#include <vector>
-#include "../bvec/bvec.h"
+#define ASIS 'A'
+#define COUNT 'C'
+#define SAVE 'S'
+#define MERGE 'M'
+#define QUERY 'Q'
+#include <queue>
+#include <utility>
+#include "../boost/threadpool.hpp"
+#include "../bitmap/bitSlicedIndex.hpp"
+#include "../bitmap/lcbitSlicedIndex.hpp"
+// #include "../bitmap/rangeEncodedIndex.hpp"
 
 typedef uint64_t kword_t;
 using namespace std;
+struct kmer1_t { kword_t a; };
+struct kmer2_t { kword_t a[2]; };
+struct kmer3_t { kword_t a[3]; };
+struct kmer4_t { kword_t a[4]; };
+struct kmer5_t { kword_t a[5]; };
+struct kmer6_t { kword_t a[6]; };
+struct kmer7_t { kword_t a[7]; };
+struct kmer8_t { kword_t a[8]; };
+struct kmer9_t { kword_t a[9]; };
 
 class Kmerizer {
     size_t  k;
@@ -21,297 +36,143 @@ class Kmerizer {
     size_t  rshift, lshift;
     size_t  nwords;
     size_t  kmerSize; // in bytes
-    size_t  threads;
-    size_t  threadBins;
-    size_t  batches;
-    size_t  maxKmersPerBin;
+    size_t  nthreads;
     char    mode;
-    char    state;
+    char state; // see #define (COUNT, SAVE, QUERY, etc.)
     char *  outdir;
+    bool    uniformBins;
 
-    // raw unsorted padded kmers, or sort|uniq'ed kmers
-    kword_t *             kmerBuf[NBINS];
+    // buffers for kmers
+    kword_t * kmerBuf [NBINS];
+    vector<kword_t> kmerBuf1[NBINS];
+    uint32_t   kmerBufTally[NBINS]; // number of kmers stored
+    uint32_t   kmerBufSize[NBINS];  // capacity of buffer
+
+    uint32_t   batches[NBINS]; // keep track of the number of serialized batches
+
+    boost::threadpool::pool tp;
     
-    // number of kmers in each bin (or number of distinct kmers)
-    uint32_t              binTally[NBINS];
-    
-    // sorted distinct kmer frequencies
-    vector<uint32_t>      kmerFreq[NBINS];
-
-    // bitmap index of frequency counts
-    vector<BitVector*>    counts[NBINS];
-
-    // bitmap self index of kmers
-    vector<BitVector*>    slices[NBINS];
-
+    BitVector<uint32_t> *BitMask[NBINS]; // query results (default all)
+    char filtered[NBINS];
 public:
     // constructor
-    Kmerizer(const size_t k,
-             const size_t threads,
+    Kmerizer(const size_t klength,
+             const size_t nthreads,
              const char * outdir,
              const char   mode);
 
-    // allocate memory for each kmerBuf
+    ~Kmerizer() {};
+
+    // allocate memory for counting, setup ProducerConsumerQueues and schedule consumeKmers() jobs
     int allocate(const size_t maximem);
 
-    // extract (canonicalized) kmers from the sequence
-    void addSequence(const char* seq,const int length);
+    // extract kmers from the sequence
+    // seq should only contain non-ACGT characters
+    void addSequence(const char* seq, const int length);
 
-    // write distinct kmers and RLE counts to disk (merging multiple batches)
+    // write distinct kmers and counts to disk (merging multiple batches)
     void save();
-
-    // read kmer indexes into memory
-    void load();
-
-    // output the kmer count frequency distribution
-    void histogram();
-    uint32_t find(const char* query);
-    void dump(char *fname);
-    void pdump(char *fname, BitVector **mask);
-    void sdump(char *fname, BitVector **mask);
-    void filter(uint32_t min, uint32_t max, BitVector **mask);
     
-    uint32_t frequency(size_t bin, uint32_t pos);
+    // called after filter()
+    void saveSubset(char *fname);
 
-    ~Kmerizer() {};
+    // query functions
+    void filter(char *colname, uint32_t min, uint32_t max); // results are stored in BitMask
+    void query(const char* seq, const int length); // extracts kmers, queries indexes, stores results in BitMask
+    void intersect(const char * lhs, const char * rhs); // for MANY kmers, intersect databases
+
+    // BitMask is used by all of these functions
+    void stats(char *colname); // unique, distinct, total, max_count
+    void histo(char *colname); // for each frequency, report the number of kmers
+    void dump(vector<char *> &columns); // write tab delimited text or fasta to stdout
 
 private:
 
-    // pack nucleotides into 2 bits
-    inline kword_t twoBit(const kword_t val) const;
+    // function to extract (canonical) kmers from a sequence of [ACGT]
+    void addSeq(const char* seq, const int length);
+    void addSeq1(const char* seq, const int length);
 
-    // shift kmer to make room for nucl
-    void nextKmer(kword_t* kmer, const char nucl);
+    void unpack(kword_t *kmer, size_t bin, char *kmerStr);
 
-    inline void unpack(kword_t* kmer, char *seq);
+    // k-mers are not distributed evenly among the bins
+    // redistributes free space among the bins
+    void resizeBins1();
+    uint32_t reservedSpace;
 
-    // reverse complement
-    inline kword_t revcomp(const kword_t val) const;
+    // update kmer given the next nucl by shifting by two bits, returns nextKmer's bin
+    size_t nextKmer (kword_t* kmer, size_t bin, const char nucl);
+    size_t nextKmer1(kword_t* kmer, size_t bin, const char nucl);
 
-    // to select a bin
-    inline uint8_t hashkmer(const kword_t *kmer, const uint8_t seed) const;
-
-    // count set bits in a kmer (actually XOR of 2 kmers)
-    inline unsigned int popCount(kword_t v) const;
-
-    // returns the position of the rth set bit in v
-    inline unsigned int selectBit(kword_t v, unsigned int r);
-
-    size_t pos2kmer(size_t pos, kword_t *kmer, vector<BitVector*> &index);
-
-    uint32_t pos2value(size_t pos, vector<uint32_t> &values,
-                       vector<BitVector*> &index);
-
-    kword_t* canonicalize(kword_t *packed, kword_t *rcpack) const;
-    uint32_t find(kword_t *kmer, size_t bin);
-
-    // kmerBuf is full. uniqify and write batch to disk
-    void serialize();
+    // choose the lesser between a kmer and its reverse complement
+    kword_t* canonicalize (kword_t *packed, kword_t *rcpack, size_t *bin);
+    kword_t* canonicalize1(kword_t *packed, kword_t *rcpack, size_t *bin);
     
-    // qsort each kmerBuf, update binTally, and fill counts
-    void uniqify();
-    
-    // for parallelization
-    void doUnique(const size_t from, const size_t to);
-    void writeBatch();
-    
-    // for parallelization
-    void doWriteBatch(const size_t from, const size_t to);
-    void mergeBatches();
-    void doMergeBatches(const size_t from, const size_t to);
-    void doLoadIndex(const size_t from, const size_t to);
-    void doDump(const size_t from, const size_t to, FILE *fp, BitVector **mask);
-    void doFilter(const size_t from,
-                  const size_t to,
-                  uint32_t min,
-                  uint32_t max,
-                  BitVector **mask);
-    void doPdump(const size_t from,
-                 const size_t to,
-                 char *buff,
-                 BitVector **mask);
-    // is this too generic to go here?
-    void rangeIndex(vector<uint32_t> &vec,
-                    vector<uint32_t> &values,
-                    vector<BitVector*> &index);
-    void readBitmap(const char* idxfile,
-                    vector<uint32_t> &values,
-                    vector<BitVector*> &index);
-    size_t findMin(const kword_t* kmers, const uint32_t* kcounts);
-    // uint32_t pos2value(size_t pos, vector<uint32_t> &values, vector<BitVector*> &index);
-    // size_t pos2kmer(size_t pos, kword_t *kmer, vector<BitVector*> &index);
-    void printKmer(kword_t *kmer);
-    void bitSlice(kword_t *kmers,
-                  const size_t n,
-                  BitVector **kmer_slices,
-                  size_t nbits);
+    // search lookup table (kmerLutK[bin]) and increment count (kmerLutV[bin])
+    // or save kmer for later (kmerBuf[bin])
+    void insertKmer(size_t bin, kword_t *kmer);
+    void insertKmer1(size_t bin, kword_t *kmer);
+        
+    // sort and count the kmers in kmerBuf[bin], updateLut (optional), write distinct kmers and counts to disk
+    void uniqify(size_t bin);
+    void uniqify1(size_t bin);
 
+    // sort and count the kbt kmers in kb and put counts in tally
+    uint32_t sortCount(kword_t *kb, uint32_t kbt, vector<uint32_t> &tally);
+    // specialization for nwords==1
+    uint32_t sortCount1(kword_t *kb, uint32_t kbt, vector<uint32_t> &tally);
+    void sortCount1(vector<kword_t> &kb, vector<uint32_t> &tally);
+    // partition kmers into bins before calling sortCount1()
+    uint32_t binSortCount1(kword_t *kb, uint32_t kbt, vector<uint32_t> &tally);
+    void binSortCount1(vector<kword_t> &kb, vector<uint32_t> &tally);
+    void binSortCount1(vector<kword_t> &kb, BitSlicedIndex<kword_t> *kmerIdx, LCBitSlicedIndex<uint32_t> *countIdx);
+    void sortCount1(vector<kword_t> &kb, BitSlicedIndex<kword_t> *kmerIdx, LCBitSlicedIndex<uint32_t> *countIdx);
+
+    void writeBatch(size_t bin, vector<uint32_t> &tally);
+    void sortwriteBatch(size_t bin);
+    
+    // call uniqify again and write lookup table to disk
+    void saveBin(size_t bin);
+    
+    // merge raw kmers and counts into bitmap self-indexes
+    void mergeBin(size_t bin);
+    void mergeBin1(size_t bin);
+    void filterBin(size_t bin, char *colname, uint32_t min, uint32_t max);
+    static uint64_t reverse_complement(uint64_t v) {
+      v = ((v >> 2)  & 0x3333333333333333UL) | ((v & 0x3333333333333333UL) << 2);
+      v = ((v >> 4)  & 0x0F0F0F0F0F0F0F0FUL) | ((v & 0x0F0F0F0F0F0F0F0FUL) << 4);
+      v = ((v >> 8)  & 0x00FF00FF00FF00FFUL) | ((v & 0x00FF00FF00FF00FFUL) << 8);
+      v = ((v >> 16) & 0x0000FFFF0000FFFFUL) | ((v & 0x0000FFFF0000FFFFUL) << 16);
+      v = ( v >> 32                        ) | ( v                         << 32);
+      return v ^ 0xFFFFFFFFFFFFFFFFUL;
+    }
+
+    // just return the reverse complement of the low 8 bits
+    static uint64_t revcomp_8(uint64_t val) {
+        // reverse complement lookup table (8 bits at a time)
+        static const uint64_t rctable[256] =
+        {
+            255,191,127,63,239,175,111,47,223,159,95,31,207,143,79,15,
+            251,187,123,59,235,171,107,43,219,155,91,27,203,139,75,11,
+            247,183,119,55,231,167,103,39,215,151,87,23,199,135,71,7,
+            243,179,115,51,227,163,99,35,211,147,83,19,195,131,67,3,
+            254,190,126,62,238,174,110,46,222,158,94,30,206,142,78,14,
+            250,186,122,58,234,170,106,42,218,154,90,26,202,138,74,10,
+            246,182,118,54,230,166,102,38,214,150,86,22,198,134,70,6,
+            242,178,114,50,226,162,98,34,210,146,82,18,194,130,66,2,
+            253,189,125,61,237,173,109,45,221,157,93,29,205,141,77,13,
+            249,185,121,57,233,169,105,41,217,153,89,25,201,137,73,9,
+            245,181,117,53,229,165,101,37,213,149,85,21,197,133,69,5,
+            241,177,113,49,225,161,97,33,209,145,81,17,193,129,65,1,
+            252,188,124,60,236,172,108,44,220,156,92,28,204,140,76,12,
+            248,184,120,56,232,168,104,40,216,152,88,24,200,136,72,8,
+            244,180,116,52,228,164,100,36,212,148,84,20,196,132,68,4,
+            240,176,112,48,224,160,96,32,208,144,80,16,192,128,64,0,
+        };
+    
+        return rctable[val & 255UL];
+    }
 };
-
-inline kword_t Kmerizer::twoBit(const kword_t val) const {
-    static const kword_t table[256] =
-    {
-        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-        0,0,0,1,0,0,0,2,0,0,0,0,0,0,0,0,
-        0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,
-        0,0,0,1,0,0,0,2,0,0,0,0,0,0,0,0,
-        0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,
-        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
-    };
-    return table[val];
-}
-
-// quickly count the number of set bits in a k-mer
-inline unsigned int Kmerizer::popCount(kword_t v) const {
-    // number of 1 bits in a value between 0 and 255
-    static const unsigned char t[256] = {
-    0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,
-    1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-    1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-    1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-    3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-    1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-    3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-    2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-    3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-    3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-    4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8};
-    unsigned char * p = (unsigned char *) &v;
-    return t[p[0]]+t[p[1]]+t[p[2]]+t[p[3]]+t[p[4]]+t[p[5]]+t[p[6]]+t[p[7]];
-}
-
-// select the bit position given the rank
-inline unsigned int Kmerizer::selectBit(kword_t v, unsigned int r) {
-    unsigned int s;
-    kword_t a, b, c, d;
-    unsigned int t;
-    // a = (v & 0x5555...) + ((v >> 1) & 0x5555...);
-    a =  v - ((v >> 1) & ~0UL/3);
-    // b = (a & 0x3333...) + ((a >> 2) & 0x3333...);
-    b = (a & ~0UL/5) + ((a >> 2) & ~0UL/5);
-    // c = (b & 0x0f0f...) + ((b >> 4) & 0x0f0f...);
-    c = (b + (b >> 4)) & ~0UL/0x11;
-    // d = (c & 0x00ff...) + ((c >> 8) & 0x00ff...);
-    d = (c + (c >> 8)) & ~0UL/0x101;
-    t = (d >> 32) + (d >> 48);
-    // Now do branchless select!                                                
-    s  = 64;
-    // if (r > t) {s -= 32; r -= t;}
-    s -= ((t - r) & 256) >> 3; r -= (t & ((t - r) >> 8));
-    t  = (d >> (s - 16)) & 0xff;
-    // if (r > t) {s -= 16; r -= t;}
-    s -= ((t - r) & 256) >> 4; r -= (t & ((t - r) >> 8));
-    t  = (c >> (s - 8)) & 0xf;
-    // if (r > t) {s -= 8; r -= t;}
-    s -= ((t - r) & 256) >> 5; r -= (t & ((t - r) >> 8));
-    t  = (b >> (s - 4)) & 0x7;
-    // if (r > t) {s -= 4; r -= t;}
-    s -= ((t - r) & 256) >> 6; r -= (t & ((t - r) >> 8));
-    t  = (a >> (s - 2)) & 0x3;
-    // if (r > t) {s -= 2; r -= t;}
-    s -= ((t - r) & 256) >> 7; r -= (t & ((t - r) >> 8));
-    t  = (v >> (s - 1)) & 0x1;
-    // if (r > t) s--;
-    s -= ((t - r) & 256) >> 8;
-    s = 65 - s;
-    return s-1;
-}
-
-inline void Kmerizer::unpack(kword_t* kmer, char* seq) {
-    static const char table[4] = {65, 67, 71, 84};
-    for(size_t i=0;i<k;i++) {
-        // which word, which nucl
-        size_t w = i>>5;
-        if (w == nwords-1) // not a full length word
-            seq[i] = table[(kmer[w] >> 2*(k-i)-2) & 3];
-        else
-            seq[i] = table[(kmer[w] >> (62 - 2*(i%32))) & 3];
-    }
-    seq[k] = '\0';
-}
-
-inline kword_t Kmerizer::revcomp(const kword_t val) const {
-    // bitwise reverse complement of values from 0 to 255
-    static const kword_t table[256] =
-    {
-        255,191,127,63,239,175,111,47,223,159,95,31,207,143,79,15,
-        251,187,123,59,235,171,107,43,219,155,91,27,203,139,75,11,
-        247,183,119,55,231,167,103,39,215,151,87,23,199,135,71,7,
-        243,179,115,51,227,163,99,35,211,147,83,19,195,131,67,3,
-        254,190,126,62,238,174,110,46,222,158,94,30,206,142,78,14,
-        250,186,122,58,234,170,106,42,218,154,90,26,202,138,74,10,
-        246,182,118,54,230,166,102,38,214,150,86,22,198,134,70,6,
-        242,178,114,50,226,162,98,34,210,146,82,18,194,130,66,2,
-        253,189,125,61,237,173,109,45,221,157,93,29,205,141,77,13,
-        249,185,121,57,233,169,105,41,217,153,89,25,201,137,73,9,
-        245,181,117,53,229,165,101,37,213,149,85,21,197,133,69,5,
-        241,177,113,49,225,161,97,33,209,145,81,17,193,129,65,1,
-        252,188,124,60,236,172,108,44,220,156,92,28,204,140,76,12,
-        248,184,120,56,232,168,104,40,216,152,88,24,200,136,72,8,
-        244,180,116,52,228,164,100,36,212,148,84,20,196,132,68,4,
-        240,176,112,48,224,160,96,32,208,144,80,16,192,128,64,0,
-    };
-    
-    return
-        (table[val&0xFFUL]<<56) |
-        (table[(val>>8)&0xFFUL]<<48) |
-        (table[(val>>16)&0xFFUL]<<40) |
-        (table[(val>>24)&0xFFUL]<<32) |
-        (table[(val>>32)&0xFFUL]<<24) |
-        (table[(val>>40)&0xFFUL]<<16) |
-        (table[(val>>48)&0xFFUL]<<8) |
-        (table[(val>>56)&0xFFUL]);
-}
-
-inline uint8_t
-Kmerizer::hashkmer(const kword_t *kmer, const uint8_t seed) const {
-    static const uint8_t Rand8[256] =
-    {
-        105,193,195, 26,208, 80, 38,156,128,  2,101,205, 75,116,139, 61,
-        197,120,244, 51,185,132, 55,150,177,241,103,196, 13,237,136, 24,
-        211, 56,207,  9, 30,145, 18,167,108, 32,106,151,  3, 54,248, 65,
-         17,198, 85, 95, 29, 83,  4,206,188,186,107,255,129, 35,142, 91,
-        203,158, 74,138,162,135,102,114, 81,170, 10, 19,215, 57,214, 70,
-         37,163,231,227,152, 14, 40, 84, 68,252,  0, 66,121,127,223, 78,
-        201, 34,225,240,124,191, 12, 42, 92,209,  1, 31,130,100, 28,224,
-        161,249,110, 77, 87,144,181, 21, 86, 58,174,113,194,147,242, 50,
-         59, 48,250, 88,184,245, 45, 44,148, 73,154,230,149, 89,118,119,
-         79,229,239,117,189,179,254,155, 20,176,157,212, 36,123,234, 46,
-        159,202,171, 67, 93, 62, 47,164,247, 15,137,235,216,160,200,133,
-        140,172,192,221,131,111,218,210,153,219, 41, 72, 63,183, 39,  8,
-         98,168, 52,213,175,134,115, 90, 82, 16,226,220,251, 69,243,233,
-        180,  5, 99, 60,  7,204,112,253,182,109, 25, 53, 94,187,190,178,
-         97, 49,126,  6, 64,143,169,173, 43,199, 33, 96, 76, 11,236, 23,
-        166,104,141,246,125,217,122,238, 27, 22,228,146,165, 71,232,222
-    };
-    uint8_t h=seed;
-    for(size_t i=0;i<nwords;i++) {
-        h = Rand8[h ^ (uint8_t)(kmer[i]>>56)];
-        h = Rand8[h ^ (uint8_t)(kmer[i]>>48) & 255];
-        h = Rand8[h ^ (uint8_t)(kmer[i]>>40) & 255];
-        h = Rand8[h ^ (uint8_t)(kmer[i]>>32) & 255];
-        h = Rand8[h ^ (uint8_t)(kmer[i]>>24) & 255];
-        h = Rand8[h ^ (uint8_t)(kmer[i]>>16) & 255];
-        h = Rand8[h ^ (uint8_t)(kmer[i]>>8) & 255];
-        h = Rand8[h ^ (uint8_t)kmer[i] & 255];
-    }
-    return h;
-}
-
-
+void binSortCounter(vector<kword_t> &kb, unsigned int my_k, vector<uint32_t> &tally);
+void sortCountKmers(vector<kword_t> &kmers, vector<uint32_t> &tally);
+#include "kmerizer.tpp"
 #endif // #ifndef SNAPDRAGON_KMERIZER_H

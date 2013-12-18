@@ -39,10 +39,10 @@ public:
     vector<uint32_t> dFrequency; // corresponding vector of frequencies
     uint32_t unique() { return (dValues[0] > 1) ? 0 : dFrequency[0]; }
     uint32_t maxCount() { return dValues[dValues.size()-1]; }
-    uint32_t totalFrequency() {
-        uint32_t total;
-        for(vector<uint32_t>::iterator it=dFrequency.begin();it < dFrequency.end(); it++)
-            total += *it;
+    T totalCount() {
+        T total=0;
+        for(size_t i=0;i<dValues.size();i++)
+            total += dValues[i]*dFrequency[i];
         return total;
     }
     
@@ -121,7 +121,7 @@ LCBitSlicedIndex<T>::LCBitSlicedIndex(char* fname) {
     result = fread(dValues.data(), sizeof(T), nDistinct, fp);
     if (result != nDistinct) {fputs ("Reading error2",stderr); exit (3);}
     dFrequency.resize(nDistinct);
-    result = fread(dFrequency.data(), sizeof(T), nDistinct, fp);
+    result = fread(dFrequency.data(), sizeof(uint32_t), nDistinct, fp);
     if (result != nDistinct) {fputs ("Reading error2",stderr); exit (3);}
     // read each bitvector (make this optional for when using histogram functions)
     int nVectors = nbits;
@@ -143,7 +143,9 @@ LCBitSlicedIndex<T>::LCBitSlicedIndex(char* fname) {
     this->bufferStart=0;
 
     this->buffer = (T*) malloc(bufferCapacity*sizeof(T));
-    fillBuffer(0);
+    for(int j=0;j<nbits;j++)
+        bvec[j]->inflateNextWord(buffer+j,bufferStart);
+    // fillBuffer(0);
 }
 
 template <class T>
@@ -163,7 +165,7 @@ LCBitSlicedIndex<T>::LCBitSlicedIndex(char* fname, bool onlyCounts) {
     result = fread(dValues.data(), sizeof(T), nDistinct, fp);
     if (result != nDistinct) {fputs ("Reading error2",stderr); exit (3);}
     dFrequency.resize(nDistinct);
-    result = fread(dFrequency.data(), sizeof(T), nDistinct, fp);
+    result = fread(dFrequency.data(), sizeof(uint32_t), nDistinct, fp);
     if (result != nDistinct) {fputs ("Reading error2",stderr); exit (3);}
     fclose(fp);
 }
@@ -185,7 +187,7 @@ void LCBitSlicedIndex<T>::makeDistinct() {
     for(int i=0;i<256;i++) {
         uint64_t bits = bv[i];
         while (bits) {
-            v = i*64 + __builtin_ffsll(bits) - 1;
+            v = i*64 + my_ffs(bits) - 1;
             dValues.push_back(v);
             dFrequency.push_back(counts[v]);
             bits &= bits-1;
@@ -293,12 +295,12 @@ void LCBitSlicedIndex<T>::saveIndex(char *fname) {
     fclose(fp);
 }
 
-inline int ffs(unsigned long long bits) { return __builtin_ffsll(bits); }
-inline int ffs(unsigned long bits)      { return __builtin_ffsl (bits); }
-inline int ffs(unsigned int bits)       { return __builtin_ffs  (bits); }
-inline int clz(unsigned long long bits) { return __builtin_clzll(bits); }
-inline int clz(unsigned long bits)      { return __builtin_clzl (bits); }
-inline int clz(unsigned int bits)       { return __builtin_clz  (bits); }
+// inline int ffs(unsigned long long bits) { return __builtin_ffsll(bits); }
+// inline int ffs(unsigned long bits)      { return __builtin_ffsl (bits); }
+// inline int ffs(unsigned int bits)       { return __builtin_ffs  (bits); }
+// inline int clz(unsigned long long bits) { return __builtin_clzll(bits); }
+// inline int clz(unsigned long bits)      { return __builtin_clzl (bits); }
+// inline int clz(unsigned int bits)       { return __builtin_clz  (bits); }
 
 // create a bitvector marking rows where the value >= x
 template <class T>
@@ -315,7 +317,7 @@ BitVector<T>* LCBitSlicedIndex<T>::evalGE(T x) {
     BitVector<T>* partial = new BitVector<T>();
     results->appendFill0(nValues);
     partial->appendFill1(nValues);
-    int msb = clz(dValues.back());
+    int msb = my_clz(dValues.back());
     int lsb = nbits - my_ffs(x);
     T selector = (T)1 << (nbits-1);
     // fprintf(stderr,"nValues: %zi results: %zi partial: %zi msb: %i lsb: %i\n",nValues,results->getSize(),partial->getSize(),msb,lsb);
@@ -333,23 +335,39 @@ BitVector<T>* LCBitSlicedIndex<T>::evalGE(T x) {
 template <class T>
 BitVector<T>* LCBitSlicedIndex<T>::continuousRange(const T min, const T max) {
     // find lower and upper bound based on min and max
-    // fprintf(stderr,"continuousRange(%u,%u) dValues [%u,%u]\n",min,max,dValues.front(),dValues.back());
     typename vector<T>::iterator low,up;
     low=lower_bound (dValues.begin(), dValues.end(), min);
-    if (low == dValues.end()) {
+    up= upper_bound (dValues.begin(), dValues.end(), max);
+
+    if (low >= up) {
         // return empty bitvector
         BitVector<T> *res = new BitVector<T>();
         res->appendFill0(nValues);
         return res;
     }
-    up= upper_bound (dValues.begin(), dValues.end(), max);
-    if (up == dValues.end()) up--;
-    // fprintf(stderr,"continuousRange(%i, %i),low %i up %i dValues.back() %i\n",min,max,*low,*up,dValues.back());
-    // >= *low _AND_ NOT >= *up
-    BitVector<T> *gelow = evalGE(*low);
-    BitVector<T> *geup  = evalGE(*up);
-    geup->flip();
-    return *gelow & geup;
+    // fprintf(stderr,"continuousRange(%u,%u) dValues [%u,%u] bounds [%u,%u]\n",min,max,dValues.front(),dValues.back(),*low,*up);
+    if (low == dValues.begin()) {
+        if (up == dValues.end()) {
+            BitVector<T> *res = new BitVector<T>();
+            res->appendFill1(nValues);
+            return res;
+        }
+        else {
+            BitVector<T> *geup = evalGE(*up);
+            geup->flip();
+            return geup;
+        }
+    }
+    else {
+        BitVector<T> *gelow = evalGE(*low);
+        if (up < dValues.end()) {
+            // >= *low _AND_ NOT >= *up
+            BitVector<T> *geup = evalGE(*up);
+            geup->flip();
+            return *gelow & geup;
+        }
+        return gelow;
+    }
 }
 
 // given a list of values, convert into a set of continuousRange queries

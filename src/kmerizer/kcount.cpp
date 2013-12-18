@@ -107,7 +107,7 @@ int main(int argc, char *argv[])
                     int offset2=offset+1;
                     while (offset2 < length && seq->seq.s[offset2] != 'N') offset2++;
                     // offset2 is end of seq or next N
-                    if (offset2 - offset > k)
+                    if (offset2 - offset >= k)
                         counter->addSequence(seq->seq.s + offset, offset2 - offset);
                     offset = offset2;
                 }
@@ -133,7 +133,8 @@ int main(int argc, char *argv[])
         }
         case 'f': { // filter
             Kmerizer *counter = new Kmerizer(k, t, d, m);
-            counter->filter("count",l,u); // TODO: arbitrary where clause
+            if (u>0)
+                counter->filter("count",l,u); // TODO: arbitrary where clause
             counter->dump(columns);
             break;
         }
@@ -155,7 +156,7 @@ int main(int argc, char *argv[])
                     int offset2=offset+1;
                     while (offset2 < length && seq->seq.s[offset2] != 'N') offset2++;
                     // offset2 is end of seq or next N
-                    if (offset2 - offset > k)
+                    if (offset2 - offset >= k)
                         counter->query(seq->seq.s + offset, offset2 - offset);
                     offset = offset2;
                 }

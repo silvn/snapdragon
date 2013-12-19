@@ -140,6 +140,7 @@ BitVector<T>::BitVector() {
     activeWordStart = 0;
     activeWordEnd   = 0;
     activeWordType  = NONEOFTHEABOVE;
+    randomAccess = false;
 }
 
 // constructor - given a previously dumped BitVector
@@ -169,6 +170,7 @@ BitVector<T>::BitVector(T *buf) {
     }
 
     firstActiveWord();
+    randomAccess = false;
 }
 
 template <class T>
@@ -309,7 +311,10 @@ void BitVector<T>::scan(size_t wordStart) {
 template <class T>
 void BitVector<T>::setupRandomAccess() {
     // first populate fillIdx
+    // fprintf(stderr,"setupRandomAccess()\n");
     T idx=0;
+    int n_fills=0;
+    
     for(typename vector<T>::iterator it = isFill.begin(); it < isFill.end(); it++) {
         T bits = *it;
         while (bits) {
@@ -327,37 +332,40 @@ void BitVector<T>::setupRandomAccess() {
         startPos += words[*it] << shiftby;
         idx = *it + 1;
     }
-
     randomAccess = true;
 }
 // assumes random access pattern
 template <class T>
 void BitVector<T>::seek(size_t wordStart) {
+    // fprintf(stderr,"seek(%zi)\n",wordStart);
     if ((activeWordStart <= wordStart) && (wordStart < activeWordEnd)) return; // already here
 
     if (!randomAccess) setupRandomAccess();
 
-    typename vector<T>::iterator ub = upper_bound(fillStart.begin(),fillStart.end(),wordStart);
-    // ub points to first fill word that starts after wordStart or fillStarts.end() if none
     activeWordIdx=0;
     activeWordStart=0;
-    if (ub != fillStart.begin()) { // there are fill words starting <= wordStart
-        ub--;
-        // is wordStart in that fill?
-        activeWordIdx = fillIdx[ub - fillStart.begin()];
-        activeWordEnd = *ub + (words[activeWordIdx] << shiftby);
-        if (wordStart < activeWordEnd) {// found it!
-            activeWordStart = *ub;
-            if (words[activeWordIdx] >> (nbits-1))
-                activeWordType = ONEFILL;
-            else
-                activeWordType = ZEROFILL;
-            return;
+    if(fillStart.size() > 0) {
+        typename vector<T>::iterator ub = upper_bound(fillStart.begin(),fillStart.end(),wordStart);
+        // ub points to first fill word that starts after wordStart or fillStarts.end() if none
+        if (ub != fillStart.begin()) { // there are fill words starting <= wordStart
+            ub--;
+            // is wordStart in the previous fill?
+            activeWordIdx = fillIdx[ub - fillStart.begin()];
+            activeWordEnd = *ub + (words[activeWordIdx] << shiftby);
+            if (wordStart < activeWordEnd) {// found it!
+                activeWordStart = *ub;
+                if (words[activeWordIdx] >> (nbits-1))
+                    activeWordType = ONEFILL;
+                else
+                    activeWordType = ZEROFILL;
+                return;
+            }
+            // wordStart is in the subsequent literal word(s)
+            activeWordStart = activeWordEnd;
+            activeWordIdx++;
         }
-        activeWordStart = activeWordEnd;
-        activeWordIdx++;
     }
-    T offset = ((wordStart - activeWordStart) >> shiftby);
+    size_t offset = (wordStart - activeWordStart) >> shiftby;
     activeWordIdx += offset;
     activeWordStart += nbits*offset;
     activeWordEnd = activeWordStart + nbits;
@@ -367,7 +375,10 @@ void BitVector<T>::seek(size_t wordStart) {
 // fills a word shaped uncompressed bitvector starting at wordStart
 template <class T>
 void BitVector<T>::inflateWord(T *word, size_t wordStart) {
-    seek(wordStart);
+    if (words.size() < nbits) 
+        scan(wordStart);
+    else
+        seek(wordStart);
     if (activeWordType == LITERAL)
         *word = words[activeWordIdx];
     else if (activeWordType == ONEFILL)

@@ -1097,10 +1097,10 @@ void Kmerizer::stats(char* colname) {
         lcbsi = new LCBitSlicedIndex<uint32_t>(fname,true);
         unique += lcbsi->unique();
         distinct += lcbsi->size();
-        total += lcbsi->totalFrequency();
+        total += lcbsi->totalCount();
         if (max_count < lcbsi->maxCount()) max_count = lcbsi->maxCount();
     }
-    fprintf(stdout,"unique: %u\ndistinct: %u\ntotal: %u\nmax_count: %u\n",unique,distinct,total,max_count);
+    fprintf(stdout,"unique:    %u\ndistinct:  %u\ntotal:     %u\nmax_count: %u\n",unique,distinct,total,max_count);
 }
 
 class mycmp2 {
@@ -1147,7 +1147,7 @@ void Kmerizer::histo(char *colname) {
 // results are stored in BitMask
 // sequential calls to filter() AND the result set
 void Kmerizer::filter(char *colname, uint32_t min, uint32_t max) {
-    fprintf(stderr,"filter(%s, %u, %u)\n",colname, min,max);
+    // fprintf(stderr,"filter(%s, %u, %u)\n",colname, min,max);
 
     for(size_t bin=0; bin < NBINS; bin++)
         tp.schedule( boost::bind( &Kmerizer::filterBin, this, bin, colname, min, max ) );
@@ -1159,6 +1159,7 @@ void Kmerizer::filter(char *colname, uint32_t min, uint32_t max) {
 void Kmerizer::filterBin(size_t bin, char* colname, uint32_t min, uint32_t max) {
     char fname[100];
     sprintf(fname,"%s/%zi-mer.%s.%zi",outdir,k,colname,bin);
+    // fprintf(stderr,"filterBin(%zi,%s,%u,%u) %s\n",bin,colname,min,max,fname);
     LCBitSlicedIndex<uint32_t> *lcbsi;
     lcbsi = new LCBitSlicedIndex<uint32_t>(fname);
     if (filtered[bin]) // if results exist, AND with this filter
@@ -1167,8 +1168,8 @@ void Kmerizer::filterBin(size_t bin, char* colname, uint32_t min, uint32_t max) 
         BitMask[bin] = lcbsi->continuousRange(min,max);
         filtered[bin] = 1;
     }
-    if (BitMask[bin]->getCount() > 0)
-        fprintf(stderr,"filterBin(%zi,%s,%u,%u) BitMask[bin]->getCount() %zi\n",bin,colname,min,max,BitMask[bin]->getCount());
+    // if (BitMask[bin]->getCount() > 0)
+    //     fprintf(stderr,"filterBin(%zi,%s,%u,%u) BitMask[bin]->getCount() %zi\n",bin,colname,min,max,BitMask[bin]->getCount());
 }
 
 void Kmerizer::dump(vector<char *> &columns) { // write tab delimited text to stdout
@@ -1185,7 +1186,8 @@ void Kmerizer::dump(vector<char *> &columns) { // write tab delimited text to st
         char *kmerStr;
         uint32_t count;
         kmer = (kword_t *) malloc(nwords * sizeof(kword_t));
-        kmerStr = (char *) malloc(k+4);
+        kmerStr = (char *) malloc(k+5);
+        kmerStr[k+4] = '\0';
         // fprintf(stderr,"dump() bin %zi BitMask[bin]->getCount() %u\n",bin,BitMask[bin]->getCount());
         if (filtered[bin]) {
             if (BitMask[bin]->getCount() > 0) {
@@ -1193,7 +1195,6 @@ void Kmerizer::dump(vector<char *> &columns) { // write tab delimited text to st
                 size_t i=0;
                 BitMask[bin]->rewind();
                 while (BitMask[bin]->nextSetBit(&i)) {
-                    // fprintf(stderr, "next set bit is %zi\n",i);
                     bsi->decode(i,kmer);
                     unpack(kmer,bin,kmerStr);
                     lcbsi->decode(i,&count);

@@ -99,9 +99,13 @@ BitSlicedIndex<T>::BitSlicedIndex(char* fname) {
     this->bufferStart=0;
 
     this->buffer = (T**) malloc(nwords*sizeof(T*));
-    for(int i=0;i<nwords;i++)
+    for(int i=0;i<nwords;i++) {
         buffer[i] = (T*) malloc(bufferCapacity*sizeof(T));
-    fillBuffer(0);
+        for(int j=0;j<nbits;j++)
+            bvec[i*nbits+j]->inflateNextWord(buffer[i]+j,bufferStart);
+        transpose(buffer[i]);
+    }
+//    fillBuffer(0);
 }
 
 
@@ -138,6 +142,7 @@ void BitSlicedIndex<T>::fillBuffer(size_t idx) {
         }
     }
     else { // assume random access
+        // fprintf(stderr,"fillBuffer(%zi)\n",idx);
         bufferStart = idx & ~(nbits - 1);
         for(int i=0;i<nwords;i++) {
             for(int j=0;j<nbits;j++)

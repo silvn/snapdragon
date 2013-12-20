@@ -1174,23 +1174,23 @@ void Kmerizer::filterBin(size_t bin, char* colname, uint32_t min, uint32_t max) 
 
 void Kmerizer::dump(vector<char *> &columns) { // write tab delimited text to stdout
     // TODO: named columns (seq, count, <user supplied column names>)
+    char fname[100];
+    kword_t *kmer;
+    char *kmerStr;
+    uint32_t count;
+    kmer = (kword_t *) malloc(nwords * sizeof(kword_t));
+    kmerStr = (char *) malloc(k+5);
+    kmerStr[k+4] = '\0';
     for(size_t bin=0;bin < NBINS; bin++) {
-        char fname[100];
-        sprintf(fname,"%s/%zi-mer.count.%zi",outdir,k,bin);
-        LCBitSlicedIndex<uint32_t> *lcbsi;
-        lcbsi = new LCBitSlicedIndex<uint32_t>(fname);
-        sprintf(fname,"%s/%zi-mer.seq.%zi",outdir,k,bin);
-        BitSlicedIndex<kword_t> *bsi;
-        bsi = new BitSlicedIndex<kword_t>(fname);
-        kword_t *kmer;
-        char *kmerStr;
-        uint32_t count;
-        kmer = (kword_t *) malloc(nwords * sizeof(kword_t));
-        kmerStr = (char *) malloc(k+5);
-        kmerStr[k+4] = '\0';
         // fprintf(stderr,"dump() bin %zi BitMask[bin]->getCount() %u\n",bin,BitMask[bin]->getCount());
         if (filtered[bin]) {
             if (BitMask[bin]->getCount() > 0) {
+                sprintf(fname,"%s/%zi-mer.count.%zi",outdir,k,bin);
+                LCBitSlicedIndex<uint32_t> *lcbsi;
+                lcbsi = new LCBitSlicedIndex<uint32_t>(fname);
+                sprintf(fname,"%s/%zi-mer.seq.%zi",outdir,k,bin);
+                BitSlicedIndex<kword_t> *bsi;
+                bsi = new BitSlicedIndex<kword_t>(fname);
                 // iterate over the set bits and decode from each column
                 size_t i=0;
                 BitMask[bin]->rewind();
@@ -1205,6 +1205,12 @@ void Kmerizer::dump(vector<char *> &columns) { // write tab delimited text to st
         }
         else {
             // iterate over all positions and decode from each column
+            sprintf(fname,"%s/%zi-mer.count.%zi",outdir,k,bin);
+            LCBitSlicedIndex<uint32_t> *lcbsi;
+            lcbsi = new LCBitSlicedIndex<uint32_t>(fname);
+            sprintf(fname,"%s/%zi-mer.seq.%zi",outdir,k,bin);
+            BitSlicedIndex<kword_t> *bsi;
+            bsi = new BitSlicedIndex<kword_t>(fname);
             for(size_t i=0;i < bsi->size(); i++) {
                 bsi->decode(i,kmer);
                 unpack(kmer,bin,kmerStr);

@@ -72,7 +72,7 @@ int main(int argc, char *argv[])
                 fprintf(stderr,"histo -d <index dir> -k <kmer length>\n");
                 break;
             case 'f': // filter help
-                fprintf(stderr,"filter -d <index dir> -k <kmer length> -l <lower count> -u <upper count> -c <columns>\n");
+                fprintf(stderr,"filter -d <index dir> -k <kmer length> -l <lower count> -u <upper count> -c <columns> -t <number of threads>\n");
                 break;
             case 'q': // query help
                 fprintf(stderr,"query -d <index dir> -k <kmer length> -f <fast[aq] input> -c <columns>\n");

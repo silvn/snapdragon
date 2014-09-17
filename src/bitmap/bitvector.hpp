@@ -35,6 +35,7 @@ public:
     void flip();
     void andYes(BitVector<T>* rhs);
     void andNot(BitVector<T>* rhs);
+    void firstActiveWord(); // jump to first word
 
 
 private:
@@ -61,7 +62,6 @@ private:
     void seek(size_t wordStart); // locate the activeWord that contains wordStart (randomAccess)
     void scan(size_t wordStart); // sequential scan
 
-    void firstActiveWord(); // jump to first word
     void nextActiveWord();  // advance to next word
 
 };

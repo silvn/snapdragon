@@ -142,9 +142,10 @@ LCBitSlicedIndex<T>::LCBitSlicedIndex(char* fname) {
     this->bufferOffset=0;
     this->bufferStart=0;
 
-    this->buffer = (T*) malloc(bufferCapacity*sizeof(T));
+    buffer = (T*) malloc(bufferCapacity*sizeof(T));
     for(int j=0;j<nbits;j++)
         bvec[j]->inflateNextWord(buffer+j,bufferStart);
+    transpose(buffer);
     // fillBuffer(0);
 }
 

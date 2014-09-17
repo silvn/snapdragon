@@ -59,7 +59,8 @@ public:
     Kmerizer(const size_t klength,
              const size_t nthreads,
              const char * outdir,
-             const char   mode);
+             const char   mode,
+             const char   state);
 
     ~Kmerizer() {};
 
@@ -78,7 +79,6 @@ public:
 
     // query functions
     void filter(char *colname, uint32_t min, uint32_t max); // results are stored in BitMask
-    void query(const char* seq, const int length); // extracts kmers, queries indexes, stores results in BitMask
     void intersect(const char * lhs, const char * rhs); // for MANY kmers, intersect databases
 
     // BitMask is used by all of these functions
@@ -121,6 +121,8 @@ private:
     // specialization for nwords==1
     uint32_t sortCount1(kword_t *kb, uint32_t kbt, vector<uint32_t> &tally);
     void sortCount1(vector<kword_t> &kb, vector<uint32_t> &tally);
+    void sortQuery1(vector<kword_t> &kb, BitSlicedIndex<kword_t> *kmerIdx, BitVector<uint32_t> *mask, size_t bin);
+    void sortQuery2(kword_t *kb, uint32_t kbt, BitSlicedIndex<kword_t> *kmerIdx, BitVector<uint32_t> *mask);
     // partition kmers into bins before calling sortCount1()
     uint32_t binSortCount1(kword_t *kb, uint32_t kbt, vector<uint32_t> &tally);
     void binSortCount1(vector<kword_t> &kb, vector<uint32_t> &tally);
@@ -129,7 +131,7 @@ private:
 
     void writeBatch(size_t bin, vector<uint32_t> &tally);
     void sortwriteBatch(size_t bin);
-    
+    void sortQuery(size_t bin);
     // call uniqify again and write lookup table to disk
     void saveBin(size_t bin);
     

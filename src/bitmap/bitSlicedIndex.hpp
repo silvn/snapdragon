@@ -28,7 +28,8 @@ public:
     bool decode(size_t idx, T *value);
     size_t size() {return nValues;}
     
-    BitVector<T>* operator==(T *value);
+    // search index for referenced value, if found set pos and return true
+    bool find(T *value, size_t *pos);
     
 
 private:
@@ -197,12 +198,29 @@ void BitSlicedIndex<T>::saveIndex(char *fname) {
 }
 
 template <class T>
-BitVector<T>* BitSlicedIndex<T>::operator==(T *value) {
-    // for each set bit in value, AND the corresponding bitvectors (while count>0)
-    // for each unset bit in value, OR the corresponding bitvectors (while count < size-1) and then flip
-    // finally AND the results
+bool BitSlicedIndex<T>::find(T *value, size_t *pos) {
+    // The BitSlicedIndex holds sorted distinct values (for kmerizer)
+    // initially value could be anywhere in the index
+    BitVector<T> *range = new BitVector<T>();
+    if (*pos > 0) {
+        range->appendFill0(*pos);
+        range->appendFill1(nValues - *pos);
+    }
+    else
+        range->appendFill1(nValues);
+    // refine the range
+    for(int w=0;w<nwords;w++) {
+        for(int b=0; b<nbits; b++) {
+            // fprintf(stderr,"find() w %i b %i bit %c nwords %zi\n",w,b,((value[w] >> (nbits - b - 1)) & 1)?'1':'0', bvec[w*nbits + b]->getNWords());
+            if ((value[w] >> (nbits - b - 1)) & 1) // value has a 1 here
+                range->andYes(bvec[w*nbits + b]);
+            else
+                range->andNot(bvec[w*nbits + b]);
+            if (range->getCount() == 0) return false;
+        }
+    }
+    range->firstActiveWord(); // this fixed a seg fault that was probably a symptom of some other bug...
+    return range->nextSetBit(pos);
 }
-
-
 
 #endif

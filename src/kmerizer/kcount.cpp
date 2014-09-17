@@ -86,7 +86,7 @@ int main(int argc, char *argv[])
 
     switch (program[0]) {
         case 'c': { // count
-            Kmerizer *counter = new Kmerizer(k, t, o, m);
+            Kmerizer *counter = new Kmerizer(k, t, o, m, 'C');
         	mkdir(o,0755);
 
         	int rc = counter->allocate(s);
@@ -118,28 +118,33 @@ int main(int argc, char *argv[])
             break;
         }
         case 's': { // stats
-            Kmerizer *counter = new Kmerizer(k, t, d, m);
+            Kmerizer *counter = new Kmerizer(k, t, d, m, 'Q');
             // for(int i=0;i<columns.size();i++)
             //     counter->stats(columns[i]);
             counter->stats("count");
             break;
         }
         case 'h': { // histo
-            Kmerizer *counter = new Kmerizer(k, t, d, m);
+            Kmerizer *counter = new Kmerizer(k, t, d, m, 'Q');
             // for(int i=0;i<columns.size();i++)
             //     counter->histo(columns[i]);
             counter->histo("count");
             break;
         }
         case 'f': { // filter
-            Kmerizer *counter = new Kmerizer(k, t, d, m);
+            Kmerizer *counter = new Kmerizer(k, t, d, m, 'Q');
             if (u>0)
                 counter->filter("count",l,u); // TODO: arbitrary where clause
             counter->dump(columns);
             break;
         }
         case 'q': { // query
-            Kmerizer *counter = new Kmerizer(k, t, d, m);
+            Kmerizer *counter = new Kmerizer(k, t, d, m, 'Q');
+        	int rc = counter->allocate(s);
+        	if (rc != 0) {
+        		fprintf(stderr,"failed to allocate %zi bytes\n",s);
+        		exit(1);
+        	}
         	// read seq from input and call query()
             // on each subsequence of [ACGT]*
             // multiple calls to query() OR the results (internal to kmerizer)
@@ -157,12 +162,13 @@ int main(int argc, char *argv[])
                     while (offset2 < length && seq->seq.s[offset2] != 'N') offset2++;
                     // offset2 is end of seq or next N
                     if (offset2 - offset >= k)
-                        counter->query(seq->seq.s + offset, offset2 - offset);
+                        counter->addSequence(seq->seq.s + offset, offset2 - offset);
                     offset = offset2;
                 }
             }
         	kseq_destroy(seq);
         	gzclose(fp);
+            counter->save();
             counter->dump(columns);
             break;
         }

@@ -15,7 +15,7 @@ public:
     BitVector(T *buf); // reconstructor
     size_t dump(T **buf); // serialize
 
-    void appendWord(T word); // append uncompressed bits in word 
+    void appendWord(T word); // append uncompressed bits in word
     void appendFill0(size_t length); // extend the bitvector by length 0 bits
     void appendFill1(size_t length); // extend the bitvector by length 1 bits
     void inflateWord(T *word, size_t wordStart); // fills a word with uncompressed bits starting at wordStart (for random access)
@@ -26,47 +26,53 @@ public:
     
     uint64_t getSize() { return size; }
     uint64_t getCount() { return count; }
+    size_t getNWords() { return words.size(); }
 
     BitVector<T>* operator&(BitVector<T>* rhs);
     BitVector<T>* operator|(BitVector<T>* rhs);
     void operator&=(BitVector<T>* rhs);
     void operator|=(BitVector<T>* rhs);
     void flip();
+    void andYes(BitVector<T>* rhs);
+    void andNot(BitVector<T>* rhs);
+
 
 private:
-    vector<T> words;  // a mix of literal and fill words. MSB of fill words indicate the type of fill
+    vector<T> words;  // a mix of literal and fill words. MSB of fill words is the type of fill
     vector<T> isFill; // uncompressed bitvector indicating which words are fills
-    // extra to enable random access
-    bool randomAccess;
-    vector<T> fillStart; // start positions of fill words in uncompressed bitvector
-    vector<T> fillIdx;   // words[fillIdx[i]] is the ith fill word
-    void setupRandomAccess();
-
-    uint64_t count;   // cache the number of set bits
+    uint64_t count;   // the number of set bits
     uint64_t size;    // bits in the uncompressed bitvector
     int nbits;        // number of bits per LITERAL word sizeof(T)*8
     int shiftby;      // log base 2 of nbits
     T onefill1;       // e.g., 1000000000000000001
 
-    // active word used for iterating
-    
-    size_t   activeWordIdx;   // offset in to words vector
+    // extras to enable random access
+    bool randomAccess;   // flag indicating whether we have setupRandomAccess()
+    vector<T> fillStart; // start positions of fill words in uncompressed bitvector
+    vector<T> fillIdx;   // words[fillIdx[i]] is the ith fill word
+    void setupRandomAccess();
+
+    // used for iterating    
+    size_t   activeWordIdx;   // offset in words vector
     char     activeWordType;  // {ONEFILL, ZEROFILL, LITERAL, NONEOFTHEABOVE}
     uint64_t activeWordStart; // uncompressed bit position at start of word
     uint64_t activeWordEnd;   // uncompressed bit position after last bit in a word
 
-    void seek(size_t wordStart); // locate the activeWord that contains wordStart
-    void scan(size_t wordStart);
-    void firstActiveWord(); // jump directly to first word
-    void nextActiveWord(); // advance to next word
+    void seek(size_t wordStart); // locate the activeWord that contains wordStart (randomAccess)
+    void scan(size_t wordStart); // sequential scan
+
+    void firstActiveWord(); // jump to first word
+    void nextActiveWord();  // advance to next word
+
 };
 
+// overloading find first set bit and count leading zeros gcc functions
 int my_ffs(unsigned long long x) { return __builtin_ffsll(x); }
-int my_ffs(unsigned long      x) { return __builtin_ffsl(x); }
-int my_ffs(unsigned int       x) { return __builtin_ffs(x); }
+int my_ffs(unsigned long      x) { return __builtin_ffsl (x); }
+int my_ffs(unsigned int       x) { return __builtin_ffs  (x); }
 int my_clz(unsigned long long x) { return __builtin_clzll(x); }
-int my_clz(unsigned long      x) { return __builtin_clzl(x); }
-int my_clz(unsigned int       x) { return __builtin_clz(x); }
+int my_clz(unsigned long      x) { return __builtin_clzl (x); }
+int my_clz(unsigned int       x) { return __builtin_clz  (x); }
 
 // template <class T>
 // void LCBitSlicedIndex<T>::transpose(uint64_t A[64]) {
@@ -119,21 +125,18 @@ void printBits(size_t const size, void const * const ptr) {
     unsigned char byte;
     int i, j;
     for (i=size-1;i>=0;i--)
-        for (j=7;j>=0;j--){
+        for (j=7;j>=0;j--) {
             byte = b[i] & (1<<j);
             byte >>= j;
-           fprintf(stderr,"%u", byte);
+            fprintf(stderr,"%u", byte);
         }
 }
 
 template <class T>
 BitVector<T>::BitVector() {
     nbits = sizeof(T)*8;
+    shiftby = __builtin_ctz(nbits);
     onefill1 = ((T)1 << (nbits-1)) | (T)1;
-    if      (nbits == 64) shiftby = 6;
-    else if (nbits == 32) shiftby = 5;
-    else if (nbits == 16) shiftby = 4;
-    else shiftby = 3;
     count = 0;
     size  = 0;
     activeWordIdx   = 0;
@@ -147,11 +150,8 @@ BitVector<T>::BitVector() {
 template <class T>
 BitVector<T>::BitVector(T *buf) {
     nbits = sizeof(T)*8;
+    shiftby = __builtin_ctz(nbits);
     onefill1 = ((T)1 << (nbits-1)) | (T)1;
-    if      (nbits == 64) shiftby = 6;
-    else if (nbits == 32) shiftby = 5;
-    else if (nbits == 16) shiftby = 4;
-    else shiftby = 3;
     size_t nwords = buf[0];
     size_t nfills = buf[1];
     size  = buf[2];
@@ -277,8 +277,8 @@ void BitVector<T>::appendWord(T word) {
 
 template <class T>
 void BitVector<T>::scan(size_t wordStart) {
-    if ((activeWordStart <= wordStart) && (wordStart < activeWordEnd)) return; // already here
     // fprintf(stderr,"scan(%zi) aw: %zi %llu %llu\n",wordStart,activeWordIdx,activeWordStart,activeWordEnd);
+    if ((activeWordStart <= wordStart) && (wordStart < activeWordEnd)) return; // already here
     while (activeWordEnd <= wordStart) { // seek forward
         activeWordIdx++;
         activeWordStart = activeWordEnd;
@@ -292,6 +292,7 @@ void BitVector<T>::scan(size_t wordStart) {
         activeWordIdx--;
         activeWordEnd = activeWordStart;
         // check if this word is a fill
+        // fprintf(stderr,"activeWordIdx: %zi %llu %llu\n",activeWordIdx,activeWordStart,activeWordEnd);
         if (isFill[activeWordIdx >> shiftby] & ((T)1 << (activeWordIdx & (nbits-1))))
             activeWordStart -= (words[activeWordIdx] << shiftby);
         else
@@ -401,7 +402,7 @@ void BitVector<T>::inflateNextWord(T *word, size_t wordStart) {
 
 template <class T>
 bool BitVector<T>::nextSetBit(size_t *idx) {
-    // fprintf(stderr,"nextSetBit(%zi)\n",*idx);
+    // fprintf(stderr,"nextSetBit(%zi) %zi\n",*idx,size);
     if (*idx >= size) return false;
     scan(*idx);
     if (activeWordType == LITERAL) {
@@ -532,6 +533,132 @@ void BitVector<T>::appendFill1(size_t length) {
 }
 
 template <class T>
+void BitVector<T>::andYes(BitVector<T>* rhs) {
+    // fprintf(stderr,"andYes size %zi count %zi\n",size,count);
+    BitVector<T> *res = new BitVector<T>();
+    size_t pos=0;
+    this->firstActiveWord();
+    if (this->nextSetBit(&pos)) {
+        // fprintf(stderr,"nextSetBit() pos: %zi aws %zi %zi\n",pos,activeWordStart,rhs->activeWordStart);
+        if (activeWordStart>0) res->appendFill0(activeWordStart);
+        // There are set bits in this bitvector
+        rhs->seek(activeWordStart);
+        while (activeWordIdx<words.size() and rhs->activeWordIdx < rhs->words.size()) {
+            // advance until words overlap
+            while (activeWordEnd <= rhs->activeWordStart) nextActiveWord();
+            while (rhs->activeWordEnd <= activeWordStart) rhs->nextActiveWord();
+            // compare overlapping words
+            if (activeWordType == LITERAL) {
+                if (rhs->activeWordType == LITERAL)
+                    res->appendWord(words[activeWordIdx] & rhs->words[rhs->activeWordIdx]);
+                else if (rhs->activeWordType == ONEFILL)
+                    res->appendWord(words[activeWordIdx]);
+                else
+                    res->appendFill0(rhs->activeWordEnd - activeWordStart);
+                nextActiveWord();
+            }
+            else if (activeWordType == ONEFILL) {
+                if (rhs->activeWordType == LITERAL) {
+                    res->appendWord(rhs->words[rhs->activeWordIdx]);
+                    rhs->nextActiveWord();
+                }
+                else if (rhs->activeWordType == ONEFILL) {
+                    if (activeWordEnd <= rhs->activeWordEnd) {
+                        res->appendFill1(activeWordEnd - res->size);
+                        nextActiveWord();
+                    }
+                    else {
+                        res->appendFill1(rhs->activeWordEnd - res->size);
+                        rhs->nextActiveWord();
+                    }
+                }
+                else {
+                    res->appendFill0(rhs->activeWordEnd - res->size);
+                    rhs->nextActiveWord();
+                }
+            }
+            else { // ZEROFILL
+                if (activeWordEnd <= rhs->activeWordEnd) {
+                    res->appendFill0(activeWordEnd - res->size);
+                    nextActiveWord();
+                }
+                else {
+                    res->appendFill0(rhs->activeWordEnd - res->size);
+                    rhs->nextActiveWord();
+                }
+            }
+        }        
+    }
+    words.swap(res->words);
+    isFill.swap(res->isFill);
+    count = res->count;
+    size = res->size;
+}
+
+template <class T>
+void BitVector<T>::andNot(BitVector<T>* rhs) {
+    // fprintf(stderr,"andNot size %zi count %zi\n",size,count);
+    BitVector<T> *res = new BitVector<T>();
+    size_t pos=0;
+    this->firstActiveWord();
+    if (this->nextSetBit(&pos)) {
+        // fprintf(stderr,"nextSetBit() pos: %zi aws %zi %zi\n",pos,activeWordStart,rhs->activeWordStart);
+        if (activeWordStart>0) res->appendFill0(activeWordStart);
+        // There are set bits in this bitvector
+        rhs->seek(activeWordStart);
+        while (activeWordIdx<words.size() and rhs->activeWordIdx < rhs->words.size()) {
+            // advance until words overlap
+            while (activeWordEnd <= rhs->activeWordStart) nextActiveWord();
+            while (rhs->activeWordEnd <= activeWordStart) rhs->nextActiveWord();
+            // compare overlapping words
+            if (activeWordType == LITERAL) {
+                if (rhs->activeWordType == LITERAL)
+                    res->appendWord(words[activeWordIdx] & ~(rhs->words[rhs->activeWordIdx]));
+                else if (rhs->activeWordType == ZEROFILL)
+                    res->appendWord(words[activeWordIdx]);
+                else
+                    res->appendFill0(rhs->activeWordEnd - activeWordStart);
+                nextActiveWord();
+            }
+            else if (activeWordType == ONEFILL) {
+                if (rhs->activeWordType == LITERAL) {
+                    res->appendWord(~(rhs->words[rhs->activeWordIdx]));
+                    rhs->nextActiveWord();
+                }
+                else if (rhs->activeWordType == ZEROFILL) {
+                    if (activeWordEnd <= rhs->activeWordEnd) {
+                        res->appendFill1(activeWordEnd - res->size);
+                        nextActiveWord();
+                    }
+                    else {
+                        res->appendFill1(rhs->activeWordEnd - res->size);
+                        rhs->nextActiveWord();
+                    }
+                }
+                else {
+                    res->appendFill0(rhs->activeWordEnd - res->size);
+                    rhs->nextActiveWord();
+                }
+            }
+            else { // ZEROFILL
+                if (activeWordEnd <= rhs->activeWordEnd) {
+                    res->appendFill0(activeWordEnd - res->size);
+                    nextActiveWord();
+                }
+                else {
+                    res->appendFill0(rhs->activeWordEnd - res->size);
+                    rhs->nextActiveWord();
+                }
+            }
+        }        
+    }
+    words.swap(res->words);
+    isFill.swap(res->isFill);
+    count = res->count;
+    size = res->size;
+}
+
+template <class T>
 BitVector<T>* BitVector<T>::operator&(BitVector<T>* rhs) {
     BitVector<T> *res = new BitVector<T>();
     firstActiveWord();
@@ -637,14 +764,24 @@ void BitVector<T>::operator&=(BitVector<T>* rhs) {
     words.swap(res->words);
     isFill.swap(res->isFill);
     count = res->count;
+    size = res->size;
 }
 
 template <class T>
 void BitVector<T>::operator|=(BitVector<T>* rhs) {
+    if (rhs->getSize() == 0) return;
+    if (this->getSize() == 0) {
+        words.swap(rhs->words);
+        isFill.swap(rhs->isFill);
+        count = rhs->count;
+        size = rhs->size;
+        return;
+    }
     BitVector<T>* res = *this | rhs;
     words.swap(res->words);
     isFill.swap(res->isFill);
     count = res->count;
+    size = res->size;
 }
 
 template <class T>

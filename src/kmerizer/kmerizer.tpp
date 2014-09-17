@@ -9,12 +9,14 @@
 Kmerizer::Kmerizer(const size_t klength,
                    const size_t nthreads,
                    const char * outdir,
-                   const char   mode)
+                   const char   mode,
+                   const char   state)
 {
     this->k            = klength-4;
     this->outdir       = new char[strlen(outdir)]; strcpy(this->outdir, outdir);
     this->mode         = mode;
     this->nthreads     = nthreads;
+    this->state        = state;
 
     this->kmask       = (kword_t)~(kword_t)0;
     this->shiftlastby = 62;
@@ -32,6 +34,11 @@ Kmerizer::Kmerizer(const size_t klength,
     tp.size_controller().resize(nthreads);
 
     memset(filtered,0,NBINS);
+    if(state == QUERY)
+        for(size_t bin=0;bin<NBINS;bin++) {
+            filtered[bin] = 1;
+            BitMask[bin] = new BitVector<uint32_t>();
+        }
 }
 
 int Kmerizer::allocate(const size_t maximem) {
@@ -64,7 +71,6 @@ int Kmerizer::allocate(const size_t maximem) {
         else
             kmerBuf[i] = (kword_t *) calloc(capacity, kmerSize);
     }
-    state = COUNT;
 
     gettimeofday(&t2, NULL);
     elapsedTime = t2.tv_sec - t1.tv_sec + (t2.tv_usec - t1.tv_usec) / 1000000.0;   // us to ms
@@ -480,13 +486,16 @@ bool kmerless(kword_t *a, kword_t *b, int s) {
 
 
 void Kmerizer::uniqify(size_t bin) {
-    if (state == SAVE || kmerBufTally[bin] > 0.9*(float)kmerBufSize[bin]) {
+    if (state == SAVE || state == QUERY || kmerBufTally[bin] > 0.9*(float)kmerBufSize[bin]) {
         vector<uint32_t> tally;
         kmerBufTally[bin] = sortCount(kmerBuf[bin],kmerBufTally[bin],tally);
         // output distinct kmers
         if (kmerBufTally[bin] > 0) {
             batches[bin]++;
-            writeBatch(bin, tally);
+            if (state == QUERY)
+                sortQuery(bin);
+            else
+                writeBatch(bin, tally);
             // declare the buffer empty
             kmerBufTally[bin]=0;
         }
@@ -502,19 +511,23 @@ void Kmerizer::uniqify1(size_t bin) {
     // copy them into the LUT
 
     // if (state == SAVE || kmerBufTally[bin] > 0.9*(float)kmerBufSize[bin]) {
-    if (state == SAVE || kmerBuf1[bin].size() > floor(0.9*(float)kmerBufSize[bin])) {
+    if (state == SAVE || state == QUERY || kmerBuf1[bin].size() > floor(0.9*(float)kmerBufSize[bin])) {
         vector<uint32_t> tally;
         // output distinct kmers
         // if (kmerBufTally[bin] > 0) {
         if (kmerBuf1[bin].size() > 0) {
+            batches[bin]++;
+            if (state == QUERY)
+                sortQuery(bin);
+            else
+                sortwriteBatch(bin);
+
             // fprintf(stderr,"%zi\t%zi\n",bin,kmerBuf1[bin].size());
             // binSortCount1(kmerBuf1[bin],tally);
             // sortCountKmers(kmerBuf1[bin],tally);
             // sortCount1(kmerBuf1[bin],tally);
-            batches[bin]++;
 
             // writeBatch(bin, tally);
-            sortwriteBatch(bin);
             // declare the buffer empty
             // kmerBufTally[bin]=0;
             kmerBuf1[bin].clear();
@@ -585,6 +598,71 @@ void Kmerizer::sortCount1(vector<kword_t> &kb, BitSlicedIndex<kword_t> *kmerIdx,
     }
     kmerIdx->append(&kmer);
     countIdx->append(&tally);
+}
+
+void Kmerizer::sortQuery1(vector<kword_t> &kb, BitSlicedIndex<kword_t> *kmerIdx, BitVector<uint32_t> *mask, size_t bin) {
+    // fprintf(stderr,"sortQuery1() mask size %llu count %llu idx size %llu\n",mask->getSize(),mask->getCount(),kmerIdx->size());
+    sort(kb.begin(), kb.end());
+    // uniq -c
+
+    char *kmerStr;
+    kmerStr = (char *) malloc(k+5);
+    kmerStr[k+4] = '\0';
+
+
+    kword_t kmer = ~kb[0]; // force kmer to be different from the first kmer in kb
+    size_t pos=0;
+    size_t prevPos=0;
+    BitVector<uint32_t> *res = new BitVector<uint32_t>;
+    for(vector<kword_t>::iterator it = kb.begin(); it < kb.end(); it++) {
+        if(*it != kmer) {
+            // search kmerIdx for *it
+            kmer = *it;
+            // unpack(&kmer,bin,kmerStr);
+            // fprintf(stdout,"find(%s,%zi) ",kmerStr,pos);
+            if (kmerIdx->find(&kmer,&pos)) {
+                // fprintf(stdout,"found at %zi\n",pos);
+                // found it at position pos
+                // fill in zeros since prevPos
+                if (pos > prevPos)
+                    res->appendFill0(pos - prevPos);
+                res->appendFill1(1);
+                prevPos = pos+1; 
+            }
+            // else
+                // fprintf(stdout,"not found\n");
+        }
+    }
+    *mask |= res;
+}
+
+void Kmerizer::sortQuery2(kword_t *kb, uint32_t kbt, BitSlicedIndex<kword_t> *kmerIdx, BitVector<uint32_t> *mask) {
+    if      (nwords == 1) sort((kmer1_t*)kb, (kmer1_t*)(kb + kbt));
+    else if (nwords == 2) sort((kmer2_t*)kb, (kmer2_t*)(kb + kbt));
+    else if (nwords == 3) sort((kmer3_t*)kb, (kmer3_t*)(kb + kbt));
+    else if (nwords == 4) sort((kmer4_t*)kb, (kmer4_t*)(kb + kbt));
+    else if (nwords == 5) sort((kmer5_t*)kb, (kmer5_t*)(kb + kbt));
+    else if (nwords == 6) sort((kmer6_t*)kb, (kmer6_t*)(kb + kbt));
+    else if (nwords == 7) sort((kmer7_t*)kb, (kmer7_t*)(kb + kbt));
+    else if (nwords == 8) sort((kmer8_t*)kb, (kmer8_t*)(kb + kbt));
+    // uniq -c
+    uint32_t prevKmer = 0;
+    size_t pos=0;
+    uint32_t prevPos=0;
+    BitVector<uint32_t> *res = new BitVector<uint32_t>;
+    for (size_t i=0;i<kbt;i++) {
+        kword_t *ith = kb + i*nwords;
+        if(i==0 || kmercmp(kb + prevKmer*nwords, ith, nwords) != 0) {
+            prevKmer=i;
+            if (kmerIdx->find(ith,&pos)) {
+                if (pos > prevPos)
+                    res->appendFill0(pos - prevPos);
+                res->appendFill1(1);
+                prevPos = pos+1;
+            }
+        }
+    }
+    *mask |= res;
 }
 
 void Kmerizer::binSortCount1(vector<kword_t> &kb, BitSlicedIndex<kword_t> *kmerIdx, LCBitSlicedIndex<uint32_t> *countIdx) {
@@ -683,7 +761,6 @@ void Kmerizer::binSortCount1(vector<kword_t> &kb, vector<uint32_t> &tally) {
     free(histogram);
 }
 
-
 void Kmerizer::writeBatch(size_t bin, vector<uint32_t> &tally) {
     // if (bin != 0) return;
     if (0) {
@@ -763,9 +840,29 @@ void Kmerizer::sortwriteBatch(size_t bin) {
     }
 }
 
+void Kmerizer::sortQuery(size_t bin) {
+    // if (bin != 0) return;
+    if (1) {
+        char kmer_file[100];
+        sprintf(kmer_file,"%s/%zi-mer.seq.%zi",outdir,k,bin);
+        BitSlicedIndex<kword_t> *bsi = new BitSlicedIndex<kword_t>(kmer_file);
+        if (nwords == 1)
+            sortQuery1(kmerBuf1[bin],bsi,BitMask[bin],bin);
+        else
+            sortQuery2(kmerBuf[bin], kmerBufTally[bin], bsi, BitMask[bin]);
+    }
+}
+
 void Kmerizer::save() {
-    state = SAVE;
     fprintf(stderr,"counting finished, scheduling saveBin()\n");
+    if (state == QUERY) {
+        for(size_t bin=0; bin < NBINS; bin++)
+            tp.schedule( boost::bind( &Kmerizer::saveBin, this, bin ) );
+        tp.wait();
+        return;
+    }
+    
+    state = SAVE;
     for(size_t bin=0; bin < NBINS; bin++)
         tp.schedule( boost::bind( &Kmerizer::saveBin, this, bin ) );
 
@@ -1211,6 +1308,7 @@ void Kmerizer::dump(vector<char *> &columns) { // write tab delimited text to st
             sprintf(fname,"%s/%zi-mer.seq.%zi",outdir,k,bin);
             BitSlicedIndex<kword_t> *bsi;
             bsi = new BitSlicedIndex<kword_t>(fname);
+            // fprintf(stderr,"dump() bin %zi sizes: %zi %zi\n",bin,bsi->size(),lcbsi->size());
             for(size_t i=0;i < bsi->size(); i++) {
                 bsi->decode(i,kmer);
                 unpack(kmer,bin,kmerStr);
@@ -1219,10 +1317,5 @@ void Kmerizer::dump(vector<char *> &columns) { // write tab delimited text to st
             }
         }
     }
-}
-
-void Kmerizer::query(const char* seq, const int length) { // extracts kmers, queries indexes, stores results in BitMask
-    // the BitMask is initially all 0's and is OR'ed with query results. Subsequent calls only extend the result set
-    
 }
 

@@ -50,6 +50,11 @@ AC_PROG_LIBTOOL
 AC_CHECK_LIB([z], [deflateInit])
 AC_CHECK_LIB([boost_serialization], [serialize])
 
+AC_CHECK_LIB([gtest_main],
+             [main],
+             AM_CONDITIONAL(HAVE_SHARED_LIBGTEST, [true]),
+             AM_CONDITIONAL(HAVE_SHARED_LIBGTEST, [false]))
+
 AC_MSG_CHECKING(whether to enable extra optimization)
 AC_ARG_ENABLE(xopt,
 	[AS_HELP_STRING([--enable-xopt],
@@ -113,7 +118,6 @@ AC_CONFIG_FILES([
 ])
 AC_CONFIG_SUBDIRS([
 	vendor/fastbit
-	vendor/googletest
 ])
 LT_INIT
 AC_OUTPUT

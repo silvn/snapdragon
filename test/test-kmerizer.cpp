@@ -2,11 +2,11 @@
 #include "kmerizer/kmerizer.h"
 
 Kmerizer * initKmerizer() {
-    return new Kmerizer(1, 1, "/tmp", CANONICAL);
+    return new Kmerizer(1, 1, "/tmp", CANONICAL, QUERY);
 }
 
 namespace {
-    
+
 class KmerizerTest : public ::testing::Test {
 };
 

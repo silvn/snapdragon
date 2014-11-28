@@ -1,6 +1,8 @@
 [submodule "vendor/fastbit"]
-	path = vendor/fastbit
-	url = https://github.com/gingi/fastbit
+    path = vendor/fastbit
+    url = https://github.com/gingi/fastbit
+    ignore = untracked
 [submodule "vendor/googletest"]
-	path = vendor/googletest
-	url = https://github.com/liquid-mirror/googletest.git
+    path = vendor/googletest
+    url = https://github.com/liquid-mirror/googletest.git
+    ignore = untracked

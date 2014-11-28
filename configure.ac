@@ -1,7 +1,7 @@
-AC_COPYRIGHT((c) 2013 Cold Spring Harbor Laboratory)
+AC_COPYRIGHT((c) 2012-2014 Cold Spring Harbor Laboratory)
 
 AC_PREREQ([2.68])
-AC_INIT([snapdragon],[0.0.1],[olson@warelab.org])
+AC_INIT([snapdragon],[0.0.2],[olson@warelab.org])
 AC_CONFIG_AUX_DIR([test])
 AC_REQUIRE_AUX_FILE([tap-driver.sh])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
@@ -49,6 +49,11 @@ AC_PROG_LIBTOOL
 # Checks for libraries.
 AC_CHECK_LIB([z], [deflateInit])
 AC_CHECK_LIB([boost_serialization], [serialize])
+
+AC_CHECK_LIB([gtest_main],
+             [main],
+             AM_CONDITIONAL(HAVE_SHARED_LIBGTEST, [true]),
+             AM_CONDITIONAL(HAVE_SHARED_LIBGTEST, [false]))
 
 AC_MSG_CHECKING(whether to enable extra optimization)
 AC_ARG_ENABLE(xopt,
@@ -113,7 +118,6 @@ AC_CONFIG_FILES([
 ])
 AC_CONFIG_SUBDIRS([
 	vendor/fastbit
-	vendor/googletest
 ])
 LT_INIT
 AC_OUTPUT

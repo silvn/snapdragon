@@ -1,12 +1,12 @@
+bin_PROGRAMS = kcount
+kcount_SOURCES = kcount.cpp
+noinst_LTLIBRARIES = libkmerizer.la
+libkmerizer_la_SOURCES = kmerizer.tpp kmerizer.h packmers64.cpp
+AM_DEFAULT_SOURCE_EXT = .tpp
+CC = g++
 if MACOS
     suff=-mt
 endif
-AM_CPPFLAGS = -I../bvec
+AM_CPPFLAGS = -I../bitmap
 
-bin_PROGRAMS = packmers
-packmers_SOURCES = packmers64.cpp kmerizer.h
-packmers_LDFLAGS  = -L../bvec/.libs -lz -lboost_thread$(suff) \
-	-lboost_system$(suff) -lboost_serialization$(suff)
-
-noinst_LTLIBRARIES = libkmerizer.la
-libkmerizer_la_SOURCES = kmerizer.cpp kmerizer.h
+AM_LDFLAGS = -lz -lboost_system$(suff) -lboost_thread$(suff)

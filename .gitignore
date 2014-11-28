@@ -4,6 +4,7 @@ stamp-h1
 config.*
 !config.sub
 !config.h.in
+*.a
 *.la
 *.o
 *.lo
@@ -23,3 +24,9 @@ libtool
 /src/fastbit/join_once
 /src/fastbit/gwas2go
 /src/fastbit/fbsql
+/src/bitmap/transpose
+/src/kmerizer/kcount
+/src/preprocessing/split_nt
+/test/test-bvec
+/test/test-freqmap
+/test/test-kmerizer

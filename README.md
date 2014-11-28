@@ -8,11 +8,24 @@ Biological analytics made fast and easy.
 
 ##Installation
 
-	git submodule update --init
-	./configure
-	make
+    git submodule update --init
+    ./configure
+    make
     make check
-	make install
+    make install
+
+##Development Notes
+
+###Releases
+
+We use `git flow` for managing releases. To create a new release, the following actions must be taken:
+
+ 1. `git flow release start X.Y.Z`
+ 2. Increment version at the top of this `README.md` file
+ 3. Increment version in `configure.ac` (AC_INIT directive)
+ 4. Run `autoreconf -vfi` to regenerated `configure`
+ 5. Commit changes
+ 6. `git flow release finish X.Y.Z`
 
 ##License
 

@@ -1,5 +1,7 @@
 #Snapdragon
 
+Version 0.0.2
+
 [![Build Status](https://travis-ci.org/silvn/snapdragon.png)](https://travis-ci.org/silvn/snapdragon)
 
 Biological analytics made fast and easy.
@@ -11,12 +13,12 @@ Biological analytics made fast and easy.
 	make
     make check
 	make install
-    
+
 ##License
 
-    Copyright (c) 2012-2013 Jer-Ming Chia <jermth at gmail.com>
-    Copyright (c) 2012-2013 Andrew Olson <aolson at me.com>
-    Copyright (c) 2012-2013 Shiran Pasternak <shiranpasternak at gmail.com>
+    Copyright (c) 2012-2014 Jer-Ming Chia <jermth at gmail.com>
+    Copyright (c) 2012-2014 Andrew Olson <aolson at me.com>
+    Copyright (c) 2012-2014 Shiran Pasternak <shiranpasternak at gmail.com>
 
     Permission is hereby granted, free of charge, to any person obtaining a copy
     of this software and associated documentation files (the "Software"), to
